@@ -5,6 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 description = "Procedural macros for Resuma: view!, #[component], #[server], #[island], js!"
+readme = "../../README.md"
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
