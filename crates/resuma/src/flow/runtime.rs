@@ -187,14 +187,7 @@ pub fn current_request() -> Option<FlowRequest> {
 
 /// First loader error recorded during this render, if any.
 pub fn first_load_error() -> Option<LoaderError> {
-    FLOW.with(|cell| {
-        cell.borrow()
-            .as_ref()?
-            .load_errors
-            .values()
-            .next()
-            .cloned()
-    })
+    FLOW.with(|cell| cell.borrow().as_ref()?.load_errors.values().next().cloned())
 }
 
 /// Set a cache-control hint for a loader (used by `#[load(cache = "...")]`).

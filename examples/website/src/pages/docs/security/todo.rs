@@ -1,5 +1,5 @@
-use resuma::prelude::*;
 use crate::site::code_block;
+use resuma::prelude::*;
 
 pub fn page(_req: FlowRequest) -> View {
     view! {

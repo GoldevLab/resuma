@@ -96,7 +96,9 @@ pub fn demo_users() -> &'static [&'static str] {
 pub fn is_allowed_user(user: &str) -> bool {
     !user.is_empty()
         && user.len() <= 32
-        && user.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        && user
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
         && demo_users().contains(&user)
 }
 

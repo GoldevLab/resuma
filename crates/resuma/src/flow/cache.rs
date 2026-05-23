@@ -65,10 +65,7 @@ pub fn merge_cache_control(hints: &BTreeMap<String, String>) -> Option<String> {
 fn parse_max_age(value: &str) -> Option<u64> {
     value.split(',').find_map(|part| {
         let part = part.trim();
-        part.strip_prefix("max-age=")?
-            .trim()
-            .parse()
-            .ok()
+        part.strip_prefix("max-age=")?.trim().parse().ok()
     })
 }
 

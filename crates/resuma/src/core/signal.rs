@@ -39,7 +39,9 @@ pub struct Signal<T> {
 
 impl<T> Clone for Signal<T> {
     fn clone(&self) -> Self {
-        Self { inner: self.inner.clone() }
+        Self {
+            inner: self.inner.clone(),
+        }
     }
 }
 
@@ -131,7 +133,9 @@ where
     /// Split into a read-only and a write-only handle.
     pub fn split(self) -> (ReadSignal<T>, WriteSignal<T>) {
         (
-            ReadSignal { signal: self.clone() },
+            ReadSignal {
+                signal: self.clone(),
+            },
             WriteSignal { signal: self },
         )
     }
@@ -144,9 +148,15 @@ pub struct ReadSignal<T> {
 }
 
 impl<T: Clone + Serialize + 'static> ReadSignal<T> {
-    pub fn id(&self) -> SignalId { self.signal.id() }
-    pub fn get(&self) -> T { self.signal.get() }
-    pub fn peek(&self) -> T { self.signal.peek() }
+    pub fn id(&self) -> SignalId {
+        self.signal.id()
+    }
+    pub fn get(&self) -> T {
+        self.signal.get()
+    }
+    pub fn peek(&self) -> T {
+        self.signal.peek()
+    }
 }
 
 /// Write half of a signal returned by [`Signal::split`].
@@ -156,9 +166,18 @@ pub struct WriteSignal<T> {
 }
 
 impl<T: Clone + Serialize + 'static> WriteSignal<T> {
-    pub fn id(&self) -> SignalId { self.signal.id() }
-    pub fn set(&self, value: T) { self.signal.set(value) }
-    pub fn update<F>(&self, f: F) where F: FnOnce(&mut T) { self.signal.update(f) }
+    pub fn id(&self) -> SignalId {
+        self.signal.id()
+    }
+    pub fn set(&self, value: T) {
+        self.signal.set(value)
+    }
+    pub fn update<F>(&self, f: F)
+    where
+        F: FnOnce(&mut T),
+    {
+        self.signal.update(f)
+    }
 }
 
 /// Idiomatic constructor: `let count = use_signal(0);`.

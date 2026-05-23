@@ -1,11 +1,11 @@
 //! Resuma official documentation site — landing + docs (Resuma¹ + Flow²).
 
-mod site;
 mod pages;
+mod site;
 
-use resuma::prelude::*;
-use resuma::current_request;
 use pages::PagesRegistry;
+use resuma::current_request;
+use resuma::prelude::*;
 
 #[layout("/")]
 fn SiteLayout() -> View {
@@ -55,9 +55,7 @@ fn DocsLayout() -> View {
 async fn main() -> std::io::Result<()> {
     let pages_root = std::env::var("RESUMA_PAGES_ROOT")
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| {
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/pages")
-        });
+        .unwrap_or_else(|_| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/pages"));
 
     let site_url = site::site_url();
     let json_ld = site::json_ld(&site_url);

@@ -24,8 +24,11 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
     let return_ty = match output {
         ReturnType::Type(_, ty) => ty.clone(),
         ReturnType::Default => {
-            return syn::Error::new(Span::call_site(), "#[middleware] must return FlowRequest or Result")
-                .to_compile_error();
+            return syn::Error::new(
+                Span::call_site(),
+                "#[middleware] must return FlowRequest or Result",
+            )
+            .to_compile_error();
         }
     };
 

@@ -4,9 +4,9 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use crate::core::Result;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
-use crate::core::Result;
 
 use super::request::FlowRequest;
 
@@ -14,8 +14,7 @@ pub type MiddlewareFuture = Pin<Box<dyn Future<Output = Result<FlowRequest>> + S
 pub type MiddlewareFn = fn(FlowRequest) -> MiddlewareFuture;
 
 static ORDER: AtomicUsize = AtomicUsize::new(0);
-static MIDDLEWARE: Lazy<RwLock<Vec<(usize, MiddlewareFn)>>> =
-    Lazy::new(|| RwLock::new(Vec::new()));
+static MIDDLEWARE: Lazy<RwLock<Vec<(usize, MiddlewareFn)>>> = Lazy::new(|| RwLock::new(Vec::new()));
 
 /// Register a middleware handler. Order follows registration (via `#[ctor]` link order).
 pub fn register_middleware(f: MiddlewareFn) {

@@ -17,7 +17,7 @@ use std::fmt::Write;
 use std::rc::Rc;
 
 use crate::core::{
-    context::{RenderContext, RenderMode, ResumePayload, page_needs_client},
+    context::{page_needs_client, RenderContext, RenderMode, ResumePayload},
     handler::HandlerRef,
     serialize::encode_payload,
     view::{Attr, AttrValue, Child, Element, Fragment, Island, View},
@@ -30,7 +30,10 @@ pub mod seo;
 pub mod stream;
 use escape::{escape_attr, escape_text};
 
-pub use stream::{build_page_stream, render_stream_parts, render_to_stream, stream_head, stream_tail, stream_placeholder, StreamChunk};
+pub use stream::{
+    build_page_stream, render_stream_parts, render_to_stream, stream_head, stream_placeholder,
+    stream_tail, StreamChunk,
+};
 
 /// PWA install / theming options injected into `<head>`.
 #[derive(Debug, Clone, Default)]
@@ -108,7 +111,11 @@ fn loader_src(opts: &PageOptions) -> &str {
     }
 }
 
-pub(crate) fn client_scripts(opts: &PageOptions, body_html: &str, payload: &ResumePayload) -> String {
+pub(crate) fn client_scripts(
+    opts: &PageOptions,
+    body_html: &str,
+    payload: &ResumePayload,
+) -> String {
     if !page_needs_client(payload, body_html) {
         return String::new();
     }
@@ -158,8 +165,17 @@ pub fn render_with_context(ctx: Rc<RenderContext>, view: &View) -> String {
     })
 }
 
-fn wrap_document(opts: &PageOptions, body_html: &str, payload: &ResumePayload, path: &str) -> String {
-    let lang = if opts.lang.is_empty() { "en" } else { &opts.lang };
+fn wrap_document(
+    opts: &PageOptions,
+    body_html: &str,
+    payload: &ResumePayload,
+    path: &str,
+) -> String {
+    let lang = if opts.lang.is_empty() {
+        "en"
+    } else {
+        &opts.lang
+    };
     let title = seo::page_title(opts, path);
     let description = seo::page_description(opts, path);
     let seo_tags = seo::seo_head_tags(opts, path);
@@ -214,11 +230,18 @@ fn write_view(buf: &mut String, view: &View) {
                 Some(fmt) => fmt.replace("{}", &value),
                 None => value,
             };
-            let _ = write!(buf, r#"<resuma-dyn data-r-signal="{}">{}</resuma-dyn>"#, d.signal, escape_text(&formatted));
+            let _ = write!(
+                buf,
+                r#"<resuma-dyn data-r-signal="{}">{}</resuma-dyn>"#,
+                d.signal,
+                escape_text(&formatted)
+            );
         }
         View::Element(el) => write_element(buf, el),
         View::Fragment(Fragment { children }) => {
-            for c in children { write_child(buf, c); }
+            for c in children {
+                write_child(buf, c);
+            }
         }
         View::Component(c) => write_view(buf, &c.view),
         View::Island(island) => write_island(buf, island),
@@ -253,7 +276,9 @@ fn write_element(buf: &mut String, el: &Element) {
     }
 
     let _ = write!(buf, ">");
-    for c in &el.children { write_child(buf, c); }
+    for c in &el.children {
+        write_child(buf, c);
+    }
     let _ = write!(buf, "</{}>", el.tag);
 }
 
@@ -269,7 +294,14 @@ fn write_attr(buf: &mut String, attr: &Attr) {
         AttrValue::Bool(false) => {}
         AttrValue::Dynamic { signal, format } => {
             let f = format.as_deref().unwrap_or("{}");
-            let _ = write!(buf, r#" {}="" data-r-bind:{}="{}|{}""#, name, name, signal, escape_attr(f));
+            let _ = write!(
+                buf,
+                r#" {}="" data-r-bind:{}="{}|{}""#,
+                name,
+                name,
+                signal,
+                escape_attr(f)
+            );
         }
         AttrValue::Handler(h) => write_handler_attr(buf, h),
         AttrValue::PreventDefault(ev) => {
@@ -300,7 +332,12 @@ fn write_handler_attr(buf: &mut String, h: &HandlerRef) {
             .map(|c| format!("{}:{}", c.name, c.id))
             .collect::<Vec<_>>()
             .join(",");
-        let _ = write!(buf, r#" data-r-cap:{ev}="{cap}""#, ev = h.event, cap = captures);
+        let _ = write!(
+            buf,
+            r#" data-r-cap:{ev}="{cap}""#,
+            ev = h.event,
+            cap = captures
+        );
     }
 
     // Handler source lives only in the resumability JSON payload — not duplicated
@@ -330,7 +367,18 @@ fn write_island(buf: &mut String, island: &Island) {
 fn is_void_element(tag: &str) -> bool {
     matches!(
         tag,
-        "area" | "base" | "br" | "col" | "embed" | "hr" | "img" | "input"
-            | "link" | "meta" | "source" | "track" | "wbr"
+        "area"
+            | "base"
+            | "br"
+            | "col"
+            | "embed"
+            | "hr"
+            | "img"
+            | "input"
+            | "link"
+            | "meta"
+            | "source"
+            | "track"
+            | "wbr"
     )
 }

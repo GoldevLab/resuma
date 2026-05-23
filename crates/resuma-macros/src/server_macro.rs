@@ -113,19 +113,13 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
     }
 }
 
-fn split_request_arg(
-    idents: &[syn::Ident],
-    types: &[Type],
-) -> (Vec<syn::Ident>, bool) {
+fn split_request_arg(idents: &[syn::Ident], types: &[Type]) -> (Vec<syn::Ident>, bool) {
     if idents.is_empty() {
         return (Vec::new(), false);
     }
     let last_ty = &types[types.len() - 1];
     if is_flow_request_ref(last_ty) {
-        (
-            idents[..idents.len() - 1].to_vec(),
-            true,
-        )
+        (idents[..idents.len() - 1].to_vec(), true)
     } else {
         (idents.to_vec(), false)
     }
@@ -156,8 +150,5 @@ fn return_type_is_result(output: &ReturnType) -> bool {
     let Type::Path(p) = &**ty else {
         return false;
     };
-    p.path
-        .segments
-        .last()
-        .is_some_and(|s| s.ident == "Result")
+    p.path.segments.last().is_some_and(|s| s.ident == "Result")
 }

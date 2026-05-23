@@ -42,7 +42,11 @@ static LOADER: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_ass
 static CORE: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::CORE_JS));
 static RUNTIME: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::RUNTIME_JS));
 
-pub(crate) fn serve_js(headers: &HeaderMap, asset: &'static EncodedAsset, raw: &'static str) -> Response<Body> {
+pub(crate) fn serve_js(
+    headers: &HeaderMap,
+    asset: &'static EncodedAsset,
+    raw: &'static str,
+) -> Response<Body> {
     let accept = headers
         .get(header::ACCEPT_ENCODING)
         .and_then(|v| v.to_str().ok())
@@ -64,10 +68,7 @@ pub(crate) fn serve_js(headers: &HeaderMap, asset: &'static EncodedAsset, raw: &
         HeaderValue::from_static("application/javascript; charset=utf-8"),
     );
     if encoding != "identity" {
-        h.insert(
-            header::CONTENT_ENCODING,
-            HeaderValue::from_static(encoding),
-        );
+        h.insert(header::CONTENT_ENCODING, HeaderValue::from_static(encoding));
         h.insert(header::VARY, HeaderValue::from_static("Accept-Encoding"));
     }
     h.insert(
@@ -92,8 +93,18 @@ pub(crate) fn runtime_asset() -> &'static EncodedAsset {
 /// Report bundle sizes for diagnostics / benchmark pages.
 pub fn asset_sizes() -> [(&'static str, usize, usize, usize); 3] {
     [
-        ("loader.js", LOADER.raw_len, LOADER.gzip.len(), LOADER.brotli.len()),
+        (
+            "loader.js",
+            LOADER.raw_len,
+            LOADER.gzip.len(),
+            LOADER.brotli.len(),
+        ),
         ("core.js", CORE.raw_len, CORE.gzip.len(), CORE.brotli.len()),
-        ("runtime.js (legacy)", RUNTIME.raw_len, RUNTIME.gzip.len(), RUNTIME.brotli.len()),
+        (
+            "runtime.js (legacy)",
+            RUNTIME.raw_len,
+            RUNTIME.gzip.len(),
+            RUNTIME.brotli.len(),
+        ),
     ]
 }

@@ -13,16 +13,16 @@
 //! `resuma-rs2js` to produce a JS chunk. The Rust side only stores a
 //! `HandlerRef` pointing at that chunk so SSR can emit `data-r-on:click=…`.
 
-mod rs2js;
-mod view_macro;
 mod component_macro;
-mod server_macro;
 mod island_macro;
 mod js_macro;
-mod load_macro;
-mod submit_macro;
 mod layout_macro;
+mod load_macro;
 mod middleware_macro;
+mod rs2js;
+mod server_macro;
+mod submit_macro;
+mod view_macro;
 
 use proc_macro::TokenStream;
 

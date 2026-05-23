@@ -69,12 +69,12 @@ pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
             canonical = escape_attr(&canonical),
         ));
 
-        let og_image = if opts.og_image.starts_with("http://") || opts.og_image.starts_with("https://")
-        {
-            opts.og_image.clone()
-        } else {
-            format!("{base}{}", opts.og_image)
-        };
+        let og_image =
+            if opts.og_image.starts_with("http://") || opts.og_image.starts_with("https://") {
+                opts.og_image.clone()
+            } else {
+                format!("{base}{}", opts.og_image)
+            };
 
         let og_type = if opts.og_type.is_empty() {
             "website"

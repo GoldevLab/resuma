@@ -3,21 +3,18 @@
 use std::collections::HashSet;
 use std::pin::Pin;
 
+use crate::core::stream_chunk;
+use crate::core::view::View;
+use crate::ssr::{render_body_and_payload, stream_head, stream_tail, PageOptions, StreamChunk};
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
-use crate::core::view::View;
-use crate::core::stream_chunk;
-use crate::ssr::{
-    render_body_and_payload, stream_head, stream_tail, PageOptions, StreamChunk,
-};
 use serde_json::Value;
 
 use super::cache::loader_cache;
 use super::registry::dispatch_load;
 use super::runtime::{take_deferred_stream_plan, DeferredStreamPlan};
 
-static STREAM_LOADERS: Lazy<RwLock<HashSet<String>>> =
-    Lazy::new(|| RwLock::new(HashSet::new()));
+static STREAM_LOADERS: Lazy<RwLock<HashSet<String>>> = Lazy::new(|| RwLock::new(HashSet::new()));
 
 pub type StreamChunkFn = fn(&Value) -> View;
 

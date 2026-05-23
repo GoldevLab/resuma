@@ -43,8 +43,11 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
                 .to_compile_error();
         };
         let Pat::Ident(pi) = &*pt.pat else {
-            return syn::Error::new(Span::call_site(), "component arguments must be plain identifiers")
-                .to_compile_error();
+            return syn::Error::new(
+                Span::call_site(),
+                "component arguments must be plain identifiers",
+            )
+            .to_compile_error();
         };
         let ident = pi.ident.clone();
         let ty: &Type = &pt.ty;

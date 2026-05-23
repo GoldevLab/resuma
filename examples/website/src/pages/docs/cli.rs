@@ -1,5 +1,5 @@
-use resuma::prelude::*;
 use crate::site::code_block;
+use resuma::prelude::*;
 
 pub fn page(_req: FlowRequest) -> View {
     view! {
@@ -32,7 +32,7 @@ resuma dev --skip-runtime"#)}
             <h2>"resuma routes"</h2>
             <p>"Discover file-based routes under a pages directory. With " <code>"--generate"</code> ", writes " <code>"mod.rs"</code> " and " <code>"_registry.rs"</code>"."</p>
             {code_block(r#"resuma routes --path src/pages
-resuma routes --generate --path src/pages"#)}
+    resuma routes --generate --path src/pages"#)}
 
             <h2>"Without the CLI"</h2>
             <p>"All commands map to plain Cargo workflows:"</p>

@@ -6,12 +6,10 @@ use super::view::{Attr, AttrValue, Child, Element, View};
 pub fn portal(target: impl Into<String>, children: Vec<Child>) -> View {
     View::Element(Element {
         tag: "template".into(),
-        attrs: vec![
-            Attr {
-                name: "data-r-portal".into(),
-                value: AttrValue::Static(target.into()),
-            },
-        ],
+        attrs: vec![Attr {
+            name: "data-r-portal".into(),
+            value: AttrValue::Static(target.into()),
+        }],
         children,
         dom_id: None,
     })

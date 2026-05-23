@@ -1,5 +1,5 @@
-use resuma::prelude::*;
 use crate::site::code_block;
+use resuma::prelude::*;
 
 pub fn page(_req: FlowRequest) -> View {
     view! {
@@ -29,7 +29,7 @@ pub fn page(_req: FlowRequest) -> View {
 
             <h2>"LoaderError"</h2>
             {code_block(r#"LoaderError::new(404, "User not found")
-LoaderError::new(500, "Database unavailable")"#)}
+    LoaderError::new(500, "Database unavailable")"#)}
 
             <h2>"Status codes"</h2>
             <p>"FlowError::status() returns the HTTP status — 404 for NotFound, the loader status for Loader errors, 500 for Render."</p>

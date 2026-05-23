@@ -23,7 +23,9 @@ where
     T: Clone + Serialize + for<'de> Deserialize<'de> + 'static,
 {
     pub fn new(initial: T) -> Self {
-        Self { signal: Signal::new(initial) }
+        Self {
+            signal: Signal::new(initial),
+        }
     }
 
     pub fn id(&self) -> SignalId {

@@ -142,7 +142,9 @@ impl RenderContext {
 
     pub fn register_visible_task(&self, source: &str) -> u32 {
         let id = self.next_visible_task.fetch_add(1, Ordering::Relaxed);
-        self.visible_tasks.borrow_mut().insert(id, source.to_string());
+        self.visible_tasks
+            .borrow_mut()
+            .insert(id, source.to_string());
         id
     }
 
@@ -153,7 +155,10 @@ impl RenderContext {
                 .state
                 .borrow()
                 .iter()
-                .map(|(id, v)| SignalSnapshot { id: *id, value: v.clone() })
+                .map(|(id, v)| SignalSnapshot {
+                    id: *id,
+                    value: v.clone(),
+                })
                 .collect(),
             handlers: self.handler_chunks.borrow().clone(),
             islands: self.islands.borrow().clone(),

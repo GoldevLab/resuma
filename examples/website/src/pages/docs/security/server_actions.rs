@@ -1,5 +1,5 @@
-use resuma::prelude::*;
 use crate::site::code_block;
+use resuma::prelude::*;
 
 pub fn page(_req: FlowRequest) -> View {
     view! {
@@ -32,7 +32,7 @@ impl AddTodoInput {
             <h2>"3. FlowRequest for auth & audit"</h2>
             <p>"Add " <code>"req: &FlowRequest"</code> " as the last parameter."</p>
             {code_block(r#"let uid = req.user_id().ok_or(ResumaError::Unauthorized)?;
-security::assert_owner(&todo.owner_id, req)?;"#)}
+    security::assert_owner(&todo.owner_id, req)?;"#)}
 
             <h2>"4. Action middleware (ResumaApp guard)"</h2>
             {code_block(r#"pub fn install() {

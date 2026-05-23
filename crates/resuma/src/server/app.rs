@@ -4,30 +4,30 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::body::Body;
-use axum::extract::{Path, State};
-use axum::http::{header, HeaderMap, HeaderValue, Request, StatusCode, Uri};
-use axum::extract::DefaultBodyLimit;
-use axum::middleware::{self, Next};
-use axum::response::{Html, IntoResponse, Response};
-use axum::routing::{get, post};
-use axum::extract::ConnectInfo;
-use axum::{Json, Router};
-use parking_lot::RwLock;
 use crate::core::view::View;
 use crate::core::{FlowRequest, ResumaError};
 use crate::ssr::PageOptions;
+use axum::body::Body;
+use axum::extract::ConnectInfo;
+use axum::extract::DefaultBodyLimit;
+use axum::extract::{Path, State};
+use axum::http::{header, HeaderMap, HeaderValue, Request, StatusCode, Uri};
+use axum::middleware::{self, Next};
+use axum::response::{Html, IntoResponse, Response};
+use axum::routing::{get, post};
+use axum::{Json, Router};
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use super::actions::dispatch as dispatch_action;
+use super::compressed_asset::{self, core_asset, loader_asset, runtime_asset, serve_js};
 use super::deferred_stream::try_deferred_stream;
 use super::page_cache::take_response_cache_control;
-use super::compressed_asset::{self, core_asset, loader_asset, runtime_asset, serve_js};
 use super::runtime_asset::{CORE_JS, LOADER_JS, RUNTIME_JS};
 use super::security::{
-    self, client_ip_from_parts, csrf_set_cookie, csrf_token, guard_mutation, http_status, random_token,
-    request_is_https, CspNonce, SecurityConfig, SecurityHeaderOptions,
+    self, client_ip_from_parts, csrf_set_cookie, csrf_token, guard_mutation, http_status,
+    random_token, request_is_https, CspNonce, SecurityConfig, SecurityHeaderOptions,
 };
 
 /// User-facing builder.
@@ -147,14 +147,18 @@ impl ResumaApp {
     /// Register a precompiled handler chunk to be served at
     /// `/_resuma/handler/<chunk>.js`.
     pub fn handler_chunk(self, chunk_id: &str, source: impl Into<String>) -> Self {
-        self.handler_chunks.write().insert(chunk_id.to_string(), source.into());
+        self.handler_chunks
+            .write()
+            .insert(chunk_id.to_string(), source.into());
         self
     }
 
     /// Register a precompiled island chunk to be served at
     /// `/_resuma/island/<chunk>.js`.
     pub fn island_chunk(self, chunk_id: &str, source: impl Into<String>) -> Self {
-        self.island_chunks.write().insert(chunk_id.to_string(), source.into());
+        self.island_chunks
+            .write()
+            .insert(chunk_id.to_string(), source.into());
         self
     }
 
@@ -228,7 +232,9 @@ pub async fn security_headers_middleware(req: Request<Body>, next: Next) -> Resp
 }
 
 impl Default for ResumaApp {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 struct AppState {
@@ -253,7 +259,8 @@ fn attach_page_security(mut res: Response, opts: &PageOptions, https: bool) -> R
         res.headers_mut()
             .insert(header::SET_COOKIE, csrf_set_cookie(&opts.csrf_token, https));
     }
-    res.extensions_mut().insert(CspNonce(opts.csp_nonce.clone()));
+    res.extensions_mut()
+        .insert(CspNonce(opts.csp_nonce.clone()));
     res
 }
 
@@ -273,7 +280,9 @@ fn render_page_response(state: &AppState, view: View, path: &str, https: bool) -
         };
 
         let stream = stream.map(|chunk| {
-            chunk.map(axum::body::Bytes::from).map_err(std::io::Error::other)
+            chunk
+                .map(axum::body::Bytes::from)
+                .map_err(std::io::Error::other)
         });
         let mut builder = Response::builder()
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
@@ -290,8 +299,11 @@ fn render_page_response(state: &AppState, view: View, path: &str, https: bool) -
         let html = crate::ssr::render_to_string_at_path(&opts, path, move || view);
         let mut res = Html(html).into_response();
         if let Some(cache) = cache {
-            res.headers_mut()
-                .insert(header::CACHE_CONTROL, HeaderValue::from_str(&cache).unwrap_or_else(|_| HeaderValue::from_static("no-store")));
+            res.headers_mut().insert(
+                header::CACHE_CONTROL,
+                HeaderValue::from_str(&cache)
+                    .unwrap_or_else(|_| HeaderValue::from_static("no-store")),
+            );
         }
         res.headers_mut().insert(
             header::HeaderName::from_static("x-robots-tag"),
@@ -301,11 +313,7 @@ fn render_page_response(state: &AppState, view: View, path: &str, https: bool) -
     }
 }
 
-async fn serve_page(
-    uri: Uri,
-    State(state): State<Arc<AppState>>,
-    req: Request<Body>,
-) -> Response {
+async fn serve_page(uri: Uri, State(state): State<Arc<AppState>>, req: Request<Body>) -> Response {
     let path = uri.path().to_string();
     let factory = match state.pages.get(&path) {
         Some(f) => f.clone(),
@@ -426,7 +434,11 @@ async fn serve_action(
         format!("/_resuma/action/{name}"),
         headers
             .iter()
-            .filter_map(|(k, v)| v.to_str().ok().map(|s| (k.as_str().to_string(), s.to_string())))
+            .filter_map(|(k, v)| {
+                v.to_str()
+                    .ok()
+                    .map(|s| (k.as_str().to_string(), s.to_string()))
+            })
             .collect(),
         std::collections::BTreeMap::from([(String::from("name"), name.clone())]),
         std::collections::BTreeMap::new(),
@@ -468,8 +480,10 @@ async fn serve_handler_chunk(
     match state.handler_chunks.read().get(&key).cloned() {
         Some(src) => {
             let mut res = Response::new(src.into());
-            res.headers_mut()
-                .insert(header::CONTENT_TYPE, HeaderValue::from_static("application/javascript; charset=utf-8"));
+            res.headers_mut().insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/javascript; charset=utf-8"),
+            );
             res
         }
         None => (StatusCode::NOT_FOUND, "handler chunk not found").into_response(),
@@ -484,8 +498,10 @@ async fn serve_island_chunk(
     match state.island_chunks.read().get(&key).cloned() {
         Some(src) => {
             let mut res = Response::new(src.into());
-            res.headers_mut()
-                .insert(header::CONTENT_TYPE, HeaderValue::from_static("application/javascript; charset=utf-8"));
+            res.headers_mut().insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/javascript; charset=utf-8"),
+            );
             res
         }
         None => (StatusCode::NOT_FOUND, "island chunk not found").into_response(),

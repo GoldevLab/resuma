@@ -13,8 +13,16 @@ pub struct RouteMatch {
 ///   * `/users/:id` — named param
 ///   * `/docs/*rest` — catch-all suffix
 pub fn match_route(pattern: &str, path: &str) -> Option<RouteMatch> {
-    let pattern_parts: Vec<&str> = pattern.trim_matches('/').split('/').filter(|s| !s.is_empty()).collect();
-    let path_parts: Vec<&str> = path.trim_matches('/').split('/').filter(|s| !s.is_empty()).collect();
+    let pattern_parts: Vec<&str> = pattern
+        .trim_matches('/')
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .collect();
+    let path_parts: Vec<&str> = path
+        .trim_matches('/')
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .collect();
 
     if pattern == "/" && (path == "/" || path.is_empty()) {
         return Some(RouteMatch::default());
@@ -26,13 +34,13 @@ pub fn match_route(pattern: &str, path: &str) -> Option<RouteMatch> {
 
     while pi < pattern_parts.len() && ui < path_parts.len() {
         let seg = pattern_parts[pi];
-        if seg.starts_with(':') {
-            params.insert(seg[1..].to_string(), path_parts[ui].to_string());
+        if let Some(name) = seg.strip_prefix(':') {
+            params.insert(name.to_string(), path_parts[ui].to_string());
             pi += 1;
             ui += 1;
-        } else if seg.starts_with('*') {
+        } else if let Some(name) = seg.strip_prefix('*') {
             let rest = path_parts[ui..].join("/");
-            params.insert(seg[1..].to_string(), rest);
+            params.insert(name.to_string(), rest);
             return Some(RouteMatch { params });
         } else if seg == path_parts[ui] {
             pi += 1;

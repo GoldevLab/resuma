@@ -22,24 +22,33 @@ pub trait Component {
 /// `view!{}` macro. The trait takes `&self` so interpolating `{count}` does
 /// not move `count` out of the surrounding scope — important because the
 /// same signal is typically referenced from multiple event handlers.
+#[allow(clippy::wrong_self_convention)]
 pub trait IntoView {
     fn into_view(&self) -> View;
 }
 
 impl IntoView for View {
-    fn into_view(&self) -> View { self.clone() }
+    fn into_view(&self) -> View {
+        self.clone()
+    }
 }
 
 impl IntoView for str {
-    fn into_view(&self) -> View { View::text(self) }
+    fn into_view(&self) -> View {
+        View::text(self)
+    }
 }
 
 impl IntoView for String {
-    fn into_view(&self) -> View { View::text(self.clone()) }
+    fn into_view(&self) -> View {
+        View::text(self.clone())
+    }
 }
 
 impl IntoView for &str {
-    fn into_view(&self) -> View { View::text(*self) }
+    fn into_view(&self) -> View {
+        View::text(*self)
+    }
 }
 
 macro_rules! impl_into_view_display {
@@ -52,7 +61,9 @@ macro_rules! impl_into_view_display {
     }
 }
 
-impl_into_view_display!(i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f32, f64, bool, char);
+impl_into_view_display!(
+    i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f32, f64, bool, char
+);
 
 impl<T: IntoView> IntoView for Option<T> {
     fn into_view(&self) -> View {
@@ -65,10 +76,7 @@ impl<T: IntoView> IntoView for Option<T> {
 
 impl<T: IntoView> IntoView for Vec<T> {
     fn into_view(&self) -> View {
-        let children: Vec<Child> = self
-            .iter()
-            .map(|v| Child::View(v.into_view()))
-            .collect();
+        let children: Vec<Child> = self.iter().map(|v| Child::View(v.into_view())).collect();
         View::fragment(children)
     }
 }

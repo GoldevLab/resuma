@@ -48,7 +48,10 @@ struct ContactResult {
 }
 
 #[submit]
-async fn contact(data: ContactForm, _req: &FlowRequest) -> std::result::Result<ContactResult, SubmitError> {
+async fn contact(
+    data: ContactForm,
+    _req: &FlowRequest,
+) -> std::result::Result<ContactResult, SubmitError> {
     if data.name.trim().is_empty() {
         return Err(SubmitError::new("Fix the errors below.").field("name", "Name is required"));
     }

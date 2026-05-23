@@ -8,12 +8,12 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::core::Result;
+use crate::core::ResumaError;
 use axum::http::{header, HeaderMap, HeaderValue, Request};
 use axum::response::Response;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
-use crate::core::ResumaError;
-use crate::core::Result;
 
 /// Per-request CSP nonce stored in response extensions after HTML render.
 #[derive(Clone, Debug)]
@@ -26,8 +26,7 @@ pub const CSRF_HEADER: &str = "x-resuma-csrf";
 /// Form field name for progressive-enhancement submits.
 pub const CSRF_FIELD: &str = "_csrf";
 
-static CONFIG: Lazy<RwLock<SecurityConfig>> =
-    Lazy::new(|| RwLock::new(SecurityConfig::from_env()));
+static CONFIG: Lazy<RwLock<SecurityConfig>> = Lazy::new(|| RwLock::new(SecurityConfig::from_env()));
 
 static RATE_BUCKETS: Lazy<RwLock<HashMap<String, Vec<Instant>>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
@@ -129,7 +128,11 @@ pub fn csrf_token() -> String {
 pub fn request_is_https<B>(req: &Request<B>) -> bool {
     let cfg = config();
     if cfg.trust_proxy {
-        if let Some(proto) = req.headers().get("x-forwarded-proto").and_then(|v| v.to_str().ok()) {
+        if let Some(proto) = req
+            .headers()
+            .get("x-forwarded-proto")
+            .and_then(|v| v.to_str().ok())
+        {
             if proto.eq_ignore_ascii_case("https") {
                 return true;
             }
@@ -215,10 +218,12 @@ pub fn validate_csrf(headers: &HeaderMap, form_csrf: Option<&str>) -> Result<()>
     if !cfg.csrf {
         return Ok(());
     }
-    let cookie = cookie_value(headers, CSRF_COOKIE)
-        .ok_or(ResumaError::InvalidCsrf)?;
+    let cookie = cookie_value(headers, CSRF_COOKIE).ok_or(ResumaError::InvalidCsrf)?;
     let header = header_str(headers, CSRF_HEADER);
-    let token = header.as_deref().or(form_csrf).ok_or(ResumaError::InvalidCsrf)?;
+    let token = header
+        .as_deref()
+        .or(form_csrf)
+        .ok_or(ResumaError::InvalidCsrf)?;
     if token != cookie || token.len() < 16 {
         return Err(ResumaError::InvalidCsrf);
     }
@@ -253,7 +258,10 @@ fn origin_matches_host(origin: &str, host: &str) -> bool {
         .strip_prefix("http://")
         .or_else(|| origin.strip_prefix("https://"))
         .and_then(|rest| rest.split('/').next())
-        .map(|h| h.eq_ignore_ascii_case(host) || h.strip_prefix("www.").unwrap_or(h) == host.strip_prefix("www.").unwrap_or(host))
+        .map(|h| {
+            h.eq_ignore_ascii_case(host)
+                || h.strip_prefix("www.").unwrap_or(h) == host.strip_prefix("www.").unwrap_or(host)
+        })
         .unwrap_or(false)
 }
 
@@ -294,7 +302,11 @@ pub fn apply_security_headers(mut response: Response, opts: &SecurityHeaderOptio
     }
     insert_header(headers, header::X_FRAME_OPTIONS, "DENY");
     insert_header(headers, header::X_CONTENT_TYPE_OPTIONS, "nosniff");
-    insert_header(headers, header::REFERRER_POLICY, "strict-origin-when-cross-origin");
+    insert_header(
+        headers,
+        header::REFERRER_POLICY,
+        "strict-origin-when-cross-origin",
+    );
     insert_header(
         headers,
         header::HeaderName::from_static("permissions-policy"),
@@ -350,7 +362,8 @@ pub fn guard_mutation(
 
 /// Map [`ResumaError`] to an HTTP status code.
 pub fn http_status(err: &ResumaError) -> axum::http::StatusCode {
-    axum::http::StatusCode::from_u16(err.status_code()).unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+    axum::http::StatusCode::from_u16(err.status_code())
+        .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 /// Shared state for security-aware routers.

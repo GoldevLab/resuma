@@ -1,8 +1,8 @@
 //! Form submissions — `#[submit]` handlers with progressive enhancement.
 
-use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 
 /// Result of a `#[submit]` handler.
 #[derive(Debug, Clone, Serialize, Deserialize)]

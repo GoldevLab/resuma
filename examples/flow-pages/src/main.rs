@@ -2,8 +2,8 @@
 
 mod pages;
 
-use resuma::prelude::*;
 use pages::PagesRegistry;
+use resuma::prelude::*;
 
 #[middleware]
 async fn log_requests(req: FlowRequest) -> resuma::Result<FlowRequest> {

@@ -2,9 +2,9 @@
 
 use std::pin::Pin;
 
-use futures_util::Stream;
 use crate::core::context::{RenderContext, RenderMode, ResumePayload};
 use crate::core::{with_context, View};
+use futures_util::Stream;
 
 use super::escape::escape_text;
 use super::seo;
@@ -12,7 +12,11 @@ use crate::{render_view, PageOptions};
 
 /// Head + open body sent before streamed content.
 pub fn stream_head(opts: &PageOptions, path: &str) -> String {
-    let lang = if opts.lang.is_empty() { "en" } else { &opts.lang };
+    let lang = if opts.lang.is_empty() {
+        "en"
+    } else {
+        &opts.lang
+    };
     let title = seo::page_title(opts, path);
     let description = seo::page_description(opts, path);
     let seo_tags = seo::seo_head_tags(opts, path);
@@ -88,7 +92,11 @@ pub fn build_page_stream(
 }
 
 /// Render a view and split it into streamable parts (head, body HTML, tail).
-pub fn render_stream_parts<F>(opts: &PageOptions, path: &str, build_view: F) -> (String, String, String)
+pub fn render_stream_parts<F>(
+    opts: &PageOptions,
+    path: &str,
+    build_view: F,
+) -> (String, String, String)
 where
     F: FnOnce() -> View,
 {
@@ -106,7 +114,11 @@ where
 
 /// Full streaming page: head is sent before body rendering completes when used
 /// with an async wrapper; this helper returns the three chunks synchronously.
-pub fn render_to_stream<F>(opts: &PageOptions, path: &str, build_view: F) -> Pin<Box<dyn Stream<Item = StreamChunk> + Send>>
+pub fn render_to_stream<F>(
+    opts: &PageOptions,
+    path: &str,
+    build_view: F,
+) -> Pin<Box<dyn Stream<Item = StreamChunk> + Send>>
 where
     F: FnOnce() -> View + Send + 'static,
 {
@@ -119,4 +131,3 @@ where
         yield Ok(tail);
     })
 }
-

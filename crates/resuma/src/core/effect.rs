@@ -37,7 +37,7 @@ impl Effect {
 
 /// Schedule a side effect. The closure runs once immediately and then again
 /// whenever any tracked signal changes.
-pub fn use_effect<F>(mut callback: F) -> Effect
+pub fn use_effect<F>(callback: F) -> Effect
 where
     F: FnMut() + Send + Sync + 'static,
 {
@@ -45,8 +45,7 @@ where
         .map(|c| EffectId(c.next_effect_id()))
         .unwrap_or(EffectId(0));
 
-    let cb: Arc<RwLock<Box<dyn FnMut() + Send + Sync>>> =
-        Arc::new(RwLock::new(Box::new(move || callback())));
+    let cb: Arc<RwLock<Box<dyn FnMut() + Send + Sync>>> = Arc::new(RwLock::new(Box::new(callback)));
 
     if let Some(ctx) = current_context() {
         let cb_clone = cb.clone();
@@ -68,9 +67,15 @@ pub struct Computed<T: Clone + Serialize + Send + Sync + 'static> {
 }
 
 impl<T: Clone + Serialize + Send + Sync + 'static> Computed<T> {
-    pub fn id(&self) -> SignalId { self.signal.id() }
-    pub fn get(&self) -> T { self.signal.get() }
-    pub fn peek(&self) -> T { self.signal.peek() }
+    pub fn id(&self) -> SignalId {
+        self.signal.id()
+    }
+    pub fn get(&self) -> T {
+        self.signal.get()
+    }
+    pub fn peek(&self) -> T {
+        self.signal.peek()
+    }
 }
 
 pub fn use_computed<T, F>(mut compute: F) -> Computed<T>

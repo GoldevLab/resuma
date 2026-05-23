@@ -38,8 +38,11 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
     let (data_ident, rest_idents): (syn::Ident, Vec<syn::Ident>) = match arg_idents.split_first() {
         Some((first, rest)) => (first.clone(), rest.to_vec()),
         None => {
-            return syn::Error::new(Span::call_site(), "#[submit] needs at least a data argument")
-                .to_compile_error();
+            return syn::Error::new(
+                Span::call_site(),
+                "#[submit] needs at least a data argument",
+            )
+            .to_compile_error();
         }
     };
 
@@ -99,8 +102,12 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 fn is_result_type(output: &ReturnType) -> bool {
-    let ReturnType::Type(_, ty) = output else { return false };
-    let Type::Path(tp) = ty.as_ref() else { return false };
+    let ReturnType::Type(_, ty) = output else {
+        return false;
+    };
+    let Type::Path(tp) = ty.as_ref() else {
+        return false;
+    };
     tp.path
         .segments
         .last()

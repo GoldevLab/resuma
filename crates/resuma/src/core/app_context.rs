@@ -28,6 +28,12 @@ pub struct ContextId<T: 'static> {
     _marker: std::marker::PhantomData<T>,
 }
 
+impl<T: 'static> Default for ContextId<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: 'static> ContextId<T> {
     pub const fn new() -> Self {
         Self {

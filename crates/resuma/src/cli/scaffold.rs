@@ -96,11 +96,8 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
         "basic" => {
             fs::write(dir.join("Cargo.toml"), CARGO_BASIC.replace("%NAME%", name))
                 .context("write Cargo.toml")?;
-            fs::write(
-                dir.join("src/main.rs"),
-                BASIC_MAIN.replace("%NAME%", name),
-            )
-            .context("write src/main.rs")?;
+            fs::write(dir.join("src/main.rs"), BASIC_MAIN.replace("%NAME%", name))
+                .context("write src/main.rs")?;
         }
         "todo" => {
             fs::write(dir.join("Cargo.toml"), CARGO_TODO.replace("%NAME%", name))
@@ -109,14 +106,13 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
                 .replace("Resuma · Todo", name)
                 .replace("example-todo", name);
             fs::write(dir.join("src/main.rs"), main_rs).context("write src/main.rs")?;
-            fs::write(dir.join("src/security.rs"), TODO_SECURITY).context("write src/security.rs")?;
-            fs::write(dir.join("src/todo_store.rs"), TODO_STORE).context("write src/todo_store.rs")?;
+            fs::write(dir.join("src/security.rs"), TODO_SECURITY)
+                .context("write src/security.rs")?;
+            fs::write(dir.join("src/todo_store.rs"), TODO_STORE)
+                .context("write src/todo_store.rs")?;
         }
         other => {
-            return Err(anyhow!(
-                "unknown template `{}` (try: basic, todo)",
-                other
-            ));
+            return Err(anyhow!("unknown template `{}` (try: basic, todo)", other));
         }
     }
 

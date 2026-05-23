@@ -4,9 +4,9 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 
+use crate::core::{Result, ResumaError};
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
-use crate::core::{ResumaError, Result};
 use serde_json::Value;
 
 use super::request::FlowRequest;

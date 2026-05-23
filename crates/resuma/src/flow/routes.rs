@@ -2,13 +2,13 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use crate::core::view::View;
+use crate::core::ResumaError;
+use crate::ssr::{render_to_string, PageOptions};
 use axum::extract::{ConnectInfo, Form, Path};
 use axum::http::{header, HeaderMap, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::Router;
-use crate::core::ResumaError;
-use crate::ssr::{render_to_string, PageOptions};
-use crate::core::view::View;
 use std::net::SocketAddr;
 
 use super::middleware::run_middleware;
@@ -202,11 +202,17 @@ fn sitemap_xml(seo: &FlowSeoConfig) -> String {
 }
 
 async fn serve_og_image() -> impl IntoResponse {
-    ([(header::CONTENT_TYPE, "image/svg+xml; charset=utf-8")], OG_SVG)
+    (
+        [(header::CONTENT_TYPE, "image/svg+xml; charset=utf-8")],
+        OG_SVG,
+    )
 }
 
 async fn serve_favicon() -> impl IntoResponse {
-    ([(header::CONTENT_TYPE, "image/svg+xml; charset=utf-8")], FAVICON_SVG)
+    (
+        [(header::CONTENT_TYPE, "image/svg+xml; charset=utf-8")],
+        FAVICON_SVG,
+    )
 }
 
 pub fn attach_flow_routes(router: Router, seo: FlowSeoConfig) -> Router {
@@ -225,7 +231,12 @@ pub fn attach_flow_routes(router: Router, seo: FlowSeoConfig) -> Router {
             "/sitemap.xml",
             axum::routing::get(move || {
                 let body = sitemap_xml(&sitemap_seo);
-                async move { ([(header::CONTENT_TYPE, "application/xml; charset=utf-8")], body) }
+                async move {
+                    (
+                        [(header::CONTENT_TYPE, "application/xml; charset=utf-8")],
+                        body,
+                    )
+                }
             }),
         )
         .route("/og.svg", axum::routing::get(serve_og_image))

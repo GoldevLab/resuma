@@ -12,41 +12,43 @@
 //! dependencies, event handler references and serialized state travel inside
 //! the HTML payload. A tiny JS runtime then resumes execution, no hydration.
 
-pub mod signal;
-pub mod effect;
-pub mod view;
+pub mod app_context;
 pub mod component;
 pub mod context;
-pub mod handler;
-pub mod serialize;
+pub mod effect;
 pub mod error;
-pub mod store;
-pub mod slot;
-pub mod app_context;
-pub mod task;
-pub mod nav;
-pub mod handler_combine;
-pub mod portal;
-pub mod view_transition;
-pub mod theme;
-pub mod stream;
 pub mod flow_request;
+pub mod handler;
+pub mod handler_combine;
+pub mod nav;
+pub mod portal;
+pub mod serialize;
+pub mod signal;
+pub mod slot;
+pub mod store;
+pub mod stream;
+pub mod task;
+pub mod theme;
+pub mod view;
+pub mod view_transition;
 
-pub use signal::{Signal, ReadSignal, WriteSignal, use_signal, SignalId};
-pub use effect::{Effect, Computed, use_effect, use_computed};
-pub use view::{View, Element, Attr, AttrValue, Child, Fragment, SlotView};
+pub use app_context::{provide_context, push_context_frame, use_context, ContextGuard, ContextId};
 pub use component::{Component, IntoView};
-pub use context::{RenderContext, RenderMode, ResumePayload, page_needs_client, with_context, current_context};
-pub use handler::{HandlerRef, HandlerCapture, ServerActionRef, IslandRef};
-pub use error::{ResumaError, Result};
-pub use store::{Store, use_store, NoSerialize, no_serialize};
-pub use slot::{SlottedChild, push_slots, resolve_slot, SlotGuard, with_default_slot};
-pub use app_context::{ContextId, provide_context, use_context, push_context_frame, ContextGuard};
-pub use task::{use_task, use_visible_task, use_debounce, VisibleTaskId, visible_task_js};
-pub use nav::nav_link;
-pub use handler_combine::combine_js;
-pub use portal::portal;
-pub use view_transition::with_view_transition;
-pub use theme::{Theme, provide_theme, use_theme, theme_css_vars};
-pub use stream::{stream_slot, stream_chunk};
+pub use context::{
+    current_context, page_needs_client, with_context, RenderContext, RenderMode, ResumePayload,
+};
+pub use effect::{use_computed, use_effect, Computed, Effect};
+pub use error::{Result, ResumaError};
 pub use flow_request::FlowRequest;
+pub use handler::{HandlerCapture, HandlerRef, IslandRef, ServerActionRef};
+pub use handler_combine::combine_js;
+pub use nav::nav_link;
+pub use portal::portal;
+pub use signal::{use_signal, ReadSignal, Signal, SignalId, WriteSignal};
+pub use slot::{push_slots, resolve_slot, with_default_slot, SlotGuard, SlottedChild};
+pub use store::{no_serialize, use_store, NoSerialize, Store};
+pub use stream::{stream_chunk, stream_slot};
+pub use task::{use_debounce, use_task, use_visible_task, visible_task_js, VisibleTaskId};
+pub use theme::{provide_theme, theme_css_vars, use_theme, Theme};
+pub use view::{Attr, AttrValue, Child, Element, Fragment, SlotView, View};
+pub use view_transition::with_view_transition;

@@ -1,5 +1,5 @@
-use resuma::prelude::*;
 use crate::site::code_block;
+use resuma::prelude::*;
 
 pub fn page(_req: FlowRequest) -> View {
     view! {
@@ -30,7 +30,7 @@ CMD ["/app/website"]"##)}
 
             <h2>"Build and run locally"</h2>
             {code_block(r#"docker build -t resuma-docs .
-docker run -p 3000:3000 -e HOST=0.0.0.0 -e PORT=3000 resuma-docs"#)}
+    docker run -p 3000:3000 -e HOST=0.0.0.0 -e PORT=3000 resuma-docs"#)}
 
             <h2>"Fly.io"</h2>
             <p>"A " <code>"fly.toml"</code> " is included at the repo root (same pattern as other apps in your Fly org)."</p>

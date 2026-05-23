@@ -278,7 +278,10 @@ const OFFLINE_HTML: &str = r##"<!doctype html>
 
 fn js_headers() -> [(header::HeaderName, &'static str); 2] {
     [
-        (header::CONTENT_TYPE, "application/javascript; charset=utf-8"),
+        (
+            header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        ),
         (header::CACHE_CONTROL, "no-cache"),
     ]
 }
@@ -293,7 +296,13 @@ pub fn attach_pwa_routes(router: Router, cfg: FlowPwaConfig) -> Router {
             axum::routing::get(move || {
                 let body = manifest_json(&manifest_cfg);
                 async move {
-                    ([(header::CONTENT_TYPE, "application/manifest+json; charset=utf-8")], body)
+                    (
+                        [(
+                            header::CONTENT_TYPE,
+                            "application/manifest+json; charset=utf-8",
+                        )],
+                        body,
+                    )
                 }
             }),
         )
@@ -311,7 +320,10 @@ pub fn attach_pwa_routes(router: Router, cfg: FlowPwaConfig) -> Router {
         .route(
             "/offline.html",
             axum::routing::get(|| async move {
-                ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], OFFLINE_HTML)
+                (
+                    [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+                    OFFLINE_HTML,
+                )
             }),
         )
         .route(

@@ -92,7 +92,7 @@ cd my-app"#)}
             <h2>"Start the development server"</h2>
             <p>"Inside your project directory:"</p>
             {code_block(r#"resuma dev
-# hot reload at http://127.0.0.1:3000"#)}
+    # hot reload at http://127.0.0.1:3000"#)}
             <p>"Without the CLI, plain Cargo works too:"</p>
             {code_block("cargo run")}
 

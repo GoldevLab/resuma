@@ -2,9 +2,9 @@
 
 use std::pin::Pin;
 
-use futures_util::Stream;
 use crate::core::view::View;
 use crate::ssr::{PageOptions, StreamChunk};
+use futures_util::Stream;
 
 type DeferredStreamHook =
     fn(View, &PageOptions, &str) -> Option<Pin<Box<dyn Stream<Item = StreamChunk> + Send>>>;

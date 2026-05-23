@@ -7,45 +7,39 @@
 //! Users typically depend on this crate only; `resuma-macros` is a separate proc-macro crate.
 
 pub mod core;
-pub mod ssr;
-pub mod server;
-pub mod router;
 pub mod flow;
+pub mod router;
+pub mod server;
+pub mod ssr;
 
 #[cfg(feature = "cli")]
 pub mod cli;
 
-pub use resuma_macros::{component, server, island, view, js, load, submit, layout, middleware};
+pub use resuma_macros::{component, island, js, layout, load, middleware, server, submit, view};
 
 pub use crate::core::{
-    Signal, ReadSignal, WriteSignal, use_signal,
-    Effect, Computed, use_effect, use_computed,
-    View, IntoView, Component, Child,
-    RenderContext, RenderMode, ResumaError, Result,
-    Store, use_store, NoSerialize, no_serialize,
-    SlottedChild, push_slots, resolve_slot, SlotGuard, with_default_slot,
-    ContextId, provide_context, use_context,
-    use_task, use_visible_task, use_debounce, visible_task_js,
-    nav_link, combine_js,
-    portal, with_view_transition, stream_slot, stream_chunk,
-    Theme, provide_theme, use_theme, theme_css_vars,
-    FlowRequest,
+    combine_js, nav_link, no_serialize, portal, provide_context, provide_theme, push_slots,
+    resolve_slot, stream_chunk, stream_slot, theme_css_vars, use_computed, use_context,
+    use_debounce, use_effect, use_signal, use_store, use_task, use_theme, use_visible_task,
+    visible_task_js, with_default_slot, with_view_transition, Child, Component, Computed,
+    ContextId, Effect, FlowRequest, IntoView, NoSerialize, ReadSignal, RenderContext, RenderMode,
+    Result, ResumaError, Signal, SlotGuard, SlottedChild, Store, Theme, View, WriteSignal,
 };
 
 pub use crate::server::{
-    ResumaApp, ServeOptions, register_server_action, set_action_middleware,
-    SecurityConfig, configure_security, CSRF_HEADER, CSRF_FIELD,
+    configure_security, register_server_action, set_action_middleware, ResumaApp, SecurityConfig,
+    ServeOptions, CSRF_FIELD, CSRF_HEADER,
 };
 
-pub use crate::ssr::{render_to_string, render_view, PageOptions, render_to_stream};
+pub use crate::ssr::{render_to_stream, render_to_string, render_view, PageOptions};
 
 pub use crate::flow::{
-    FlowApp, FlowServeOptions, FlowPwaConfig, LoadValue, SubmitValue, LoaderError, SubmitError,
-    register_loader, register_submit, register_layout, register_middleware,
-    register_loader_cache, register_stream_loader, register_stream_chunk,
-    use_load, try_use_load, try_use_load_value, with_request, current_request, form, encode_submit_result,
-    discover_pages, DiscoveredPage, FlowPageRegistry, apply_layouts,
-    FlowError, error_page, not_found_page,
+    apply_layouts, current_request, discover_pages, encode_submit_result, error_page, form,
+    not_found_page, register_layout, register_loader, register_loader_cache, register_middleware,
+    register_stream_chunk, register_stream_loader, register_submit, try_use_load,
+    try_use_load_value, use_load, with_request, DiscoveredPage, FlowApp, FlowError,
+    FlowPageRegistry, FlowPwaConfig, FlowServeOptions, LoadValue, LoaderError, SubmitError,
+    SubmitValue,
 };
 
 /// CLI entry point (`cargo install resuma`).
@@ -57,51 +51,44 @@ pub fn run() -> anyhow::Result<()> {
 pub mod prelude {
     //! Glob-friendly re-exports.
     pub use super::{
-        Signal, ReadSignal, WriteSignal, use_signal,
-        Effect, Computed, use_effect, use_computed,
-        View, IntoView, Component,
-        ResumaApp, ServeOptions, PageOptions,
-        SecurityConfig, configure_security, set_action_middleware,
-        CSRF_HEADER, CSRF_FIELD,
-        component, server, island, view, js, load, submit, layout, middleware,
-        render_to_string, render_view,
-        FlowApp, FlowRequest, FlowServeOptions, use_load, try_use_load, try_use_load_value, form,
-        current_request,
-        LoadValue,
-        Store, use_store, provide_context, use_context,
-        use_task, use_visible_task, use_debounce, push_slots, resolve_slot, SlottedChild,
-        nav_link, combine_js, SubmitError, LoaderError,
-        FlowError, error_page, not_found_page,
-        portal, with_view_transition, stream_slot,
-        Theme, provide_theme, use_theme, theme_css_vars,
-        ResumaError, Result,
-        FlowPageRegistry, Child,
+        combine_js, component, configure_security, current_request, error_page, form, island, js,
+        layout, load, middleware, nav_link, not_found_page, portal, provide_context, provide_theme,
+        push_slots, render_to_string, render_view, resolve_slot, server, set_action_middleware,
+        stream_slot, submit, theme_css_vars, try_use_load, try_use_load_value, use_computed,
+        use_context, use_debounce, use_effect, use_load, use_signal, use_store, use_task,
+        use_theme, use_visible_task, view, with_view_transition, Child, Component, Computed,
+        Effect, FlowApp, FlowError, FlowPageRegistry, FlowRequest, FlowServeOptions, IntoView,
+        LoadValue, LoaderError, PageOptions, ReadSignal, Result, ResumaApp, ResumaError,
+        SecurityConfig, ServeOptions, Signal, SlottedChild, Store, SubmitError, Theme, View,
+        WriteSignal, CSRF_FIELD, CSRF_HEADER,
     };
 }
 
 #[doc(hidden)]
 pub mod __private {
     //! Re-exports used by the macro-generated code.
-    pub use ctor;
-    pub use serde_json;
+    pub use crate::core::{combine_js, nav_link};
     pub use crate::core::{
-        Signal, ReadSignal, WriteSignal,
-        View, IntoView, Component, Child,
-        view::{AttrValue, Element, Fragment, Island as IslandView},
-        handler::{HandlerRef, HandlerCapture},
-        signal::SignalId,
         context::{current_context, RenderContext, RenderMode},
-        ResumaError, Result,
-        slot::{SlottedChild, push_slots, resolve_slot, with_default_slot},
+        handler::{HandlerCapture, HandlerRef},
+        signal::SignalId,
+        slot::{push_slots, resolve_slot, with_default_slot, SlottedChild},
+        view::{AttrValue, Element, Fragment, Island as IslandView},
+        Child, Component, IntoView, ReadSignal, Result, ResumaError, Signal, View, WriteSignal,
     };
     pub use crate::flow::form as flow_form;
-    pub use crate::core::{combine_js, nav_link};
     pub use crate::server::register_server_action;
+    pub use ctor;
+    pub use serde_json;
 
     #[derive(Debug, Clone)]
     pub enum HandlerSource {
         Inline(String),
-        Chunk { chunk: String, symbol: String, source: String },
+        Chunk {
+            chunk: String,
+            symbol: String,
+            source: String,
+        },
     }
 
     #[derive(Debug, Clone)]
@@ -241,8 +228,8 @@ pub mod __private {
         })
     }
 
-    pub use crate::core::view::ElementBuilder;
     pub use crate::core::view as view_mod;
+    pub use crate::core::view::ElementBuilder;
 
     pub fn fragment(children: Vec<Child>) -> View {
         View::fragment(children)

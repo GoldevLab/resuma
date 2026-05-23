@@ -17,7 +17,11 @@ pub fn from_http(
         path,
         headers
             .iter()
-            .filter_map(|(k, v)| v.to_str().ok().map(|s| (k.as_str().to_string(), s.to_string())))
+            .filter_map(|(k, v)| {
+                v.to_str()
+                    .ok()
+                    .map(|s| (k.as_str().to_string(), s.to_string()))
+            })
             .collect(),
         params,
         query,

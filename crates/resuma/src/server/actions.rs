@@ -4,9 +4,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use std::pin::Pin;
 
+use crate::core::{FlowRequest, Result, ResumaError};
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
-use crate::core::{FlowRequest, ResumaError, Result};
 use serde_json::Value;
 
 pub type ActionFuture = Pin<Box<dyn Future<Output = Result<Value>> + Send>>;
@@ -15,7 +15,8 @@ pub type ActionFn = fn(Vec<Value>, FlowRequest) -> ActionFuture;
 pub type ActionMiddlewareFuture = Pin<Box<dyn Future<Output = Result<FlowRequest>> + Send>>;
 pub type ActionMiddlewareFn = fn(FlowRequest) -> ActionMiddlewareFuture;
 
-static REGISTRY: Lazy<RwLock<HashMap<String, ActionFn>>> = Lazy::new(|| RwLock::new(HashMap::new()));
+static REGISTRY: Lazy<RwLock<HashMap<String, ActionFn>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 static ACTION_MIDDLEWARE: Lazy<RwLock<Option<ActionMiddlewareFn>>> =
     Lazy::new(|| RwLock::new(None));
 

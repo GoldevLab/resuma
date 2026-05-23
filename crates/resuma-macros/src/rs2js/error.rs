@@ -10,6 +10,9 @@ pub struct Rs2JsError {
 
 impl Rs2JsError {
     pub fn unsupported(what: &str, span: Span) -> Self {
-        Self { message: what.to_string(), span }
+        Self {
+            message: what.to_string(),
+            span,
+        }
     }
 }

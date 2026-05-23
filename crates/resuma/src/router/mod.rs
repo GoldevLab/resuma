@@ -33,15 +33,24 @@ pub struct DiscoveredRoute {
 pub fn discover<P: AsRef<Path>>(routes_root: P) -> Vec<DiscoveredRoute> {
     let root = routes_root.as_ref();
     let mut out = Vec::new();
-    if !root.exists() { return out; }
+    if !root.exists() {
+        return out;
+    }
 
     for entry in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
-        if !path.is_file() { continue; }
+        if !path.is_file() {
+            continue;
+        }
         let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-        if ext != "rs" { continue; }
+        if ext != "rs" {
+            continue;
+        }
 
-        let rel = match path.strip_prefix(root) { Ok(r) => r.to_path_buf(), Err(_) => continue };
+        let rel = match path.strip_prefix(root) {
+            Ok(r) => r.to_path_buf(),
+            Err(_) => continue,
+        };
         if let Some(route) = parse_route(rel.clone(), path.to_path_buf()) {
             out.push(route);
         }
@@ -76,11 +85,11 @@ fn layout_applies(layout_pattern: &str, page_pattern: &str) -> bool {
 }
 
 fn parse_route(rel: PathBuf, abs: PathBuf) -> Option<DiscoveredRoute> {
-        let stem = rel.file_stem()?.to_str()?;
-        if stem == "mod" || stem == "_registry" {
-            return None;
-        }
-        let parent = rel.parent().unwrap_or(Path::new("")).to_path_buf();
+    let stem = rel.file_stem()?.to_str()?;
+    if stem == "mod" || stem == "_registry" {
+        return None;
+    }
+    let parent = rel.parent().unwrap_or(Path::new("")).to_path_buf();
     let is_layout = stem == "layout" || stem == "_layout";
 
     let mut segments: Vec<String> = parent
@@ -96,10 +105,7 @@ fn parse_route(rel: PathBuf, abs: PathBuf) -> Option<DiscoveredRoute> {
     let pattern = if segments.is_empty() {
         "/".to_string()
     } else {
-        let url_segments: Vec<String> = segments
-            .iter()
-            .map(|s| convert_segment(s))
-            .collect();
+        let url_segments: Vec<String> = segments.iter().map(|s| convert_segment(s)).collect();
         format!("/{}", url_segments.join("/"))
     };
 
@@ -108,12 +114,17 @@ fn parse_route(rel: PathBuf, abs: PathBuf) -> Option<DiscoveredRoute> {
     } else {
         segments
             .iter()
-            .map(|s| s.replace('[', "_").replace(']', "_").replace("...", "rest_"))
+            .map(|s| s.replace(['[', ']'], "_").replace("...", "rest_"))
             .collect::<Vec<_>>()
             .join("::")
     };
 
-    Some(DiscoveredRoute { file: abs, pattern, module, is_layout })
+    Some(DiscoveredRoute {
+        file: abs,
+        pattern,
+        module,
+        is_layout,
+    })
 }
 
 fn convert_segment(seg: &str) -> String {

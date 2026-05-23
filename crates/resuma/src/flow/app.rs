@@ -9,8 +9,8 @@ use axum::middleware;
 use crate::core::view::View;
 use crate::server::ResumaApp;
 
-use super::errors::{error_page, FlowError};
 use super::cache::{loader_cache, merge_cache_control};
+use super::errors::{error_page, FlowError};
 use super::layout::apply_layouts;
 use super::match_route::match_route;
 use super::middleware::run_middleware;
@@ -192,10 +192,8 @@ impl FlowApp {
                 reg.render(&module, req)
                     .unwrap_or_else(|| View::text(format!("missing page module `{module}`")))
             });
-            self.pages.insert(
-                meta.pattern.clone(),
-                PageEntry { handler, layouts },
-            );
+            self.pages
+                .insert(meta.pattern.clone(), PageEntry { handler, layouts });
         }
         self
     }
@@ -236,9 +234,8 @@ impl FlowApp {
         if !dynamic_pages.is_empty() {
             let ds = deferred_streaming;
             app = app.fallback(move |path| {
-                dispatch_dynamic(&dynamic_pages, path, ds).or_else(|| {
-                    not_found.as_ref().map(|f| f())
-                })
+                dispatch_dynamic(&dynamic_pages, path, ds)
+                    .or_else(|| not_found.as_ref().map(|f| f()))
             });
         } else if let Some(nf) = not_found {
             app = app.fallback(move |_path| Some(nf()));
@@ -257,7 +254,9 @@ impl FlowApp {
         use axum::extract::DefaultBodyLimit;
         let router = router
             .layer(DefaultBodyLimit::max(opts.security.body_limit_bytes))
-            .layer(middleware::from_fn(crate::server::security_headers_middleware));
+            .layer(middleware::from_fn(
+                crate::server::security_headers_middleware,
+            ));
         let listener = tokio::net::TcpListener::bind(opts.addr).await?;
         println!("resuma flow listening on http://{}", opts.addr);
         axum::serve(
@@ -309,13 +308,14 @@ fn render_with_flow(mut req: FlowRequest, entry: PageEntry, deferred_streaming: 
         }
     }
 
-    let (view, final_req, deferred) = with_request_deferred(req.clone(), deferred_streaming, || {
-        let page = (entry.handler)(req.clone());
-        if let Some(err) = first_load_error() {
-            return error_page(&FlowError::Loader(err));
-        }
-        apply_layouts(&req, page, &entry.layouts)
-    });
+    let (view, final_req, deferred) =
+        with_request_deferred(req.clone(), deferred_streaming, || {
+            let page = (entry.handler)(req.clone());
+            if let Some(err) = first_load_error() {
+                return error_page(&FlowError::Loader(err));
+            }
+            apply_layouts(&req, page, &entry.layouts)
+        });
 
     if deferred_streaming && !deferred.is_empty() {
         stage_deferred_stream_plan(deferred.clone(), final_req.clone());

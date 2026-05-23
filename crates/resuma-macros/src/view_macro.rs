@@ -98,7 +98,11 @@ fn parse_nodes(iter: &mut TokenIter, in_element: bool) -> Result<Vec<Node>, Stri
                 nodes.push(Node::Text(id.to_string()));
             }
             _ => {
-                if in_element { iter.next(); } else { break; }
+                if in_element {
+                    iter.next();
+                } else {
+                    break;
+                }
             }
         }
     }
@@ -134,7 +138,7 @@ fn parse_element(iter: &mut TokenIter) -> Result<Node, String> {
     }
 
     let tag = parse_ident_path(iter)?;
-    let is_component = tag.chars().next().map_or(false, |c| c.is_uppercase());
+    let is_component = tag.chars().next().is_some_and(|c| c.is_uppercase());
 
     let mut attrs = Vec::new();
     loop {
@@ -142,7 +146,13 @@ fn parse_element(iter: &mut TokenIter) -> Result<Node, String> {
             Some(TokenTree::Punct(p)) if p.as_char() == '/' => {
                 iter.next();
                 expect_punct(iter, '>')?;
-                return Ok(Node::Element { tag, attrs, children: vec![], is_component, self_closing: true });
+                return Ok(Node::Element {
+                    tag,
+                    attrs,
+                    children: vec![],
+                    is_component,
+                    self_closing: true,
+                });
             }
             Some(TokenTree::Punct(p)) if p.as_char() == '>' => {
                 iter.next();
@@ -163,11 +173,20 @@ fn parse_element(iter: &mut TokenIter) -> Result<Node, String> {
     expect_punct(iter, '/')?;
     let close_tag = parse_ident_path(iter)?;
     if close_tag != tag {
-        return Err(format!("mismatched closing tag: expected </{}>, got </{}>", tag, close_tag));
+        return Err(format!(
+            "mismatched closing tag: expected </{}>, got </{}>",
+            tag, close_tag
+        ));
     }
     expect_punct(iter, '>')?;
 
-    Ok(Node::Element { tag, attrs, children, is_component, self_closing: false })
+    Ok(Node::Element {
+        tag,
+        attrs,
+        children,
+        is_component,
+        self_closing: false,
+    })
 }
 
 fn parse_attr(iter: &mut TokenIter) -> Result<Attr, String> {
@@ -210,16 +229,17 @@ fn parse_attr(iter: &mut TokenIter) -> Result<Attr, String> {
                 Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Brace => {
                     AttrVal::Expr(g.stream())
                 }
-                Some(TokenTree::Ident(id)) => {
-                    AttrVal::Expr(quote!(#id))
-                }
+                Some(TokenTree::Ident(id)) => AttrVal::Expr(quote!(#id)),
                 other => return Err(format!("expected attribute value, got {:?}", other)),
             }
         }
         _ => AttrVal::Bool,
     };
 
-    Ok(Attr { name: full_name, value })
+    Ok(Attr {
+        name: full_name,
+        value,
+    })
 }
 
 fn parse_ident_path(iter: &mut TokenIter) -> Result<String, String> {
@@ -232,7 +252,9 @@ fn parse_ident_path(iter: &mut TokenIter) -> Result<String, String> {
     // Allow `Foo::Bar` for components.
     loop {
         let mut peeker = iter.clone();
-        if let (Some(TokenTree::Punct(p1)), Some(TokenTree::Punct(p2))) = (peeker.next(), peeker.next()) {
+        if let (Some(TokenTree::Punct(p1)), Some(TokenTree::Punct(p2))) =
+            (peeker.next(), peeker.next())
+        {
             if p1.as_char() == ':' && p2.as_char() == ':' {
                 iter.next();
                 iter.next();
@@ -275,7 +297,13 @@ fn emit_node(node: Node) -> TokenStream {
             let cs = children.into_iter().map(emit_child);
             quote! { ::resuma::__private::View::fragment(vec![ #(#cs),* ]) }
         }
-        Node::Element { tag, attrs, children, is_component, self_closing } => {
+        Node::Element {
+            tag,
+            attrs,
+            children,
+            is_component,
+            self_closing,
+        } => {
             if tag == "Slot" {
                 emit_slot(attrs)
             } else if tag == "Form" {
@@ -304,15 +332,12 @@ fn emit_child(node: Node) -> TokenStream {
 fn emit_slot(attrs: Vec<Attr>) -> TokenStream {
     let mut name: Option<String> = None;
     for a in attrs {
-        match a.name.as_str() {
-            "name" => {
-                if let AttrVal::StaticStr(s) = a.value {
-                    name = Some(s);
-                } else if let AttrVal::Expr(ts) = a.value {
-                    return quote! { ::resuma::__private::resolve_slot(Some({ #ts }.to_string().as_str())) };
-                }
+        if a.name.as_str() == "name" {
+            if let AttrVal::StaticStr(s) = a.value {
+                name = Some(s);
+            } else if let AttrVal::Expr(ts) = a.value {
+                return quote! { ::resuma::__private::resolve_slot(Some({ #ts }.to_string().as_str())) };
             }
-            _ => {}
         }
     }
     match name {
@@ -324,7 +349,12 @@ fn emit_slot(attrs: Vec<Attr>) -> TokenStream {
     }
 }
 
-fn emit_html_element(tag: String, attrs: Vec<Attr>, children: Vec<Node>, _self_closing: bool) -> TokenStream {
+fn emit_html_element(
+    tag: String,
+    attrs: Vec<Attr>,
+    children: Vec<Node>,
+    _self_closing: bool,
+) -> TokenStream {
     let attr_pushes = attrs.into_iter().map(emit_attr);
     let child_pushes = children.into_iter().map(emit_child);
     quote! {
@@ -342,8 +372,8 @@ fn emit_component(tag: String, attrs: Vec<Attr>, children: Vec<Node>) -> TokenSt
         let name = syn::Ident::new(&a.name, Span::call_site());
         match a.value {
             AttrVal::StaticStr(s) => quote! { .#name(#s) },
-            AttrVal::Expr(ts)     => quote! { .#name({ #ts }) },
-            AttrVal::Bool         => quote! { .#name(true) },
+            AttrVal::Expr(ts) => quote! { .#name({ #ts }) },
+            AttrVal::Bool => quote! { .#name(true) },
         }
     });
 
@@ -456,7 +486,13 @@ fn emit_form(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
 
 fn emit_slotted_child(node: Node) -> TokenStream {
     match node {
-        Node::Element { mut attrs, children, is_component, self_closing, tag } => {
+        Node::Element {
+            mut attrs,
+            children,
+            is_component,
+            self_closing,
+            tag,
+        } => {
             let slot_name = take_slot_attr(&mut attrs);
             let child = if tag == "Slot" {
                 emit_slot(attrs)
@@ -494,11 +530,10 @@ fn emit_slotted_child(node: Node) -> TokenStream {
 }
 
 fn take_slot_attr(attrs: &mut Vec<Attr>) -> Option<AttrVal> {
-    if let Some(idx) = attrs.iter().position(|a| a.name == "slot") {
-        Some(attrs.remove(idx).value)
-    } else {
-        None
-    }
+    attrs
+        .iter()
+        .position(|a| a.name == "slot")
+        .map(|idx| attrs.remove(idx).value)
 }
 
 fn emit_attr(attr: Attr) -> TokenStream {
@@ -576,7 +611,12 @@ fn emit_event_handler(attr_name: String, value: AttrVal) -> TokenStream {
                             t.captures.into_iter().collect(),
                             t.actions.into_iter().collect(),
                         ),
-                        Err(e) => return compile_err(&format!("rs2js cannot translate handler: {}", e.message)),
+                        Err(e) => {
+                            return compile_err(&format!(
+                                "rs2js cannot translate handler: {}",
+                                e.message
+                            ))
+                        }
                     },
                     Ok(other) => match rs2js::translate_expr(&other) {
                         Ok(t) => (
@@ -584,7 +624,12 @@ fn emit_event_handler(attr_name: String, value: AttrVal) -> TokenStream {
                             t.captures.into_iter().collect(),
                             t.actions.into_iter().collect(),
                         ),
-                        Err(e) => return compile_err(&format!("rs2js cannot translate handler: {}", e.message)),
+                        Err(e) => {
+                            return compile_err(&format!(
+                                "rs2js cannot translate handler: {}",
+                                e.message
+                            ))
+                        }
                     },
                     Err(e) => return compile_err(&format!("invalid handler expression: {}", e)),
                 }
@@ -598,16 +643,19 @@ fn emit_event_handler(attr_name: String, value: AttrVal) -> TokenStream {
     let symbol = stable_symbol(&attr_name, &js_source);
     let chunk = "__page__".to_string();
 
-    let captures_lits: Vec<TokenStream> = captures.iter().map(|c| {
-        let id = syn::Ident::new(c, Span::call_site());
-        let name_lit = c.clone();
-        quote! {
-            ::resuma::__private::ResumeCapture::Signal {
-                name: #name_lit.to_string(),
-                id: #id.id(),
+    let captures_lits: Vec<TokenStream> = captures
+        .iter()
+        .map(|c| {
+            let id = syn::Ident::new(c, Span::call_site());
+            let name_lit = c.clone();
+            quote! {
+                ::resuma::__private::ResumeCapture::Signal {
+                    name: #name_lit.to_string(),
+                    id: #id.id(),
+                }
             }
-        }
-    }).collect();
+        })
+        .collect();
     let action_lits: Vec<TokenStream> = actions.iter().map(|a| quote! { #a.to_string() }).collect();
 
     quote! {
@@ -639,10 +687,16 @@ fn scan_state_refs(src: &str) -> Vec<String> {
             let prev_ok = i == 0 || !is_ident_byte(bytes[i - 1]);
             if prev_ok {
                 let mut j = i + 6;
-                while j < bytes.len() && is_ident_byte(bytes[j]) { j += 1; }
+                while j < bytes.len() && is_ident_byte(bytes[j]) {
+                    j += 1;
+                }
                 if j > i + 6 {
-                    let name = std::str::from_utf8(&bytes[i + 6..j]).unwrap_or("").to_string();
-                    if !out.contains(&name) { out.push(name); }
+                    let name = std::str::from_utf8(&bytes[i + 6..j])
+                        .unwrap_or("")
+                        .to_string();
+                    if !out.contains(&name) {
+                        out.push(name);
+                    }
                 }
                 i = j;
                 continue;
@@ -665,18 +719,26 @@ fn extract_js_macro(ts: &TokenStream) -> Option<String> {
     let mut iter = tokens.into_iter();
     let first = iter.next()?;
     let ident = match first {
-        TokenTree::Ident(i) if i.to_string() == "js" => i,
+        TokenTree::Ident(i) if i == "js" => i,
         _ => return None,
     };
     let _ = ident;
     let bang = iter.next()?;
-    if let TokenTree::Punct(p) = &bang { if p.as_char() != '!' { return None; } } else { return None; }
+    if let TokenTree::Punct(p) = &bang {
+        if p.as_char() != '!' {
+            return None;
+        }
+    } else {
+        return None;
+    }
     let group = iter.next()?;
     if let TokenTree::Group(g) = group {
         if g.delimiter() != Delimiter::Brace && g.delimiter() != Delimiter::Parenthesis {
             return None;
         }
-        if iter.next().is_some() { return None; }
+        if iter.next().is_some() {
+            return None;
+        }
         return Some(g.stream().to_string());
     }
     None

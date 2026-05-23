@@ -56,7 +56,11 @@ pub struct Translation {
 pub fn translate_handler(closure: &ExprClosure) -> Result<Translation, Rs2JsError> {
     let mut t = Translator::default();
     let body = t.translate_closure(closure, true)?;
-    Ok(Translation { js: body, captures: t.captures, actions: t.actions })
+    Ok(Translation {
+        js: body,
+        captures: t.captures,
+        actions: t.actions,
+    })
 }
 
 /// Translate an arbitrary expression — used by the `js!{}` escape hatch and
@@ -64,7 +68,11 @@ pub fn translate_handler(closure: &ExprClosure) -> Result<Translation, Rs2JsErro
 pub fn translate_expr(expr: &Expr) -> Result<Translation, Rs2JsError> {
     let mut t = Translator::default();
     let body = t.expr(expr)?;
-    Ok(Translation { js: body, captures: t.captures, actions: t.actions })
+    Ok(Translation {
+        js: body,
+        captures: t.captures,
+        actions: t.actions,
+    })
 }
 
 #[derive(Default)]
@@ -91,7 +99,11 @@ impl Translator {
         // helpers like `Signal.update(c => c + 1)` actually get the new value.
         let body_is_block = matches!(&*c.body, Expr::Block(_));
         let body = self.expr(&c.body)?;
-        let body = if body_is_block { body } else { format!("return {};", body) };
+        let body = if body_is_block {
+            body
+        } else {
+            format!("return {};", body)
+        };
 
         self.locals.pop();
 
@@ -106,7 +118,11 @@ impl Translator {
             // Normalise leading `_` so the linter doesn't complain about
             // unused `event` if the handler ignores it (the runtime always
             // passes one).
-            let event_alias = if event_param == "_" { "_event".to_string() } else { event_param };
+            let event_alias = if event_param == "_" {
+                "_event".to_string()
+            } else {
+                event_param
+            };
             Ok(format!(
                 "async ({event}, state, __resuma) => {{ {body} }}",
                 event = event_alias,
@@ -136,10 +152,13 @@ impl Translator {
                 Ok(format!("{}{}", op, inner))
             }
 
-            Expr::Binary(ExprBinary { left, op, right, .. }) => {
+            Expr::Binary(ExprBinary {
+                left, op, right, ..
+            }) => {
                 let l = self.expr(left)?;
                 let r = self.expr(right)?;
-                let op = bin_op_to_js(*op).ok_or_else(|| Rs2JsError::unsupported("binary op", e.span()))?;
+                let op = bin_op_to_js(*op)
+                    .ok_or_else(|| Rs2JsError::unsupported("binary op", e.span()))?;
                 Ok(format!("({} {} {})", l, op, r))
             }
 
@@ -198,18 +217,27 @@ impl Translator {
             match s {
                 Stmt::Local(Local { pat, init, .. }) => {
                     let (name, _ty) = pat_to_param(pat)?;
-                    if let Some(scope) = self.locals.last_mut() { scope.insert(name.clone()); }
+                    if let Some(scope) = self.locals.last_mut() {
+                        scope.insert(name.clone());
+                    }
                     let value = if let Some(init) = init {
                         self.expr(&init.expr)?
-                    } else { "undefined".into() };
+                    } else {
+                        "undefined".into()
+                    };
                     out.push(format!("let {} = {};", name, value));
                 }
                 Stmt::Expr(e, semi) => {
                     let js = self.expr(e)?;
-                    if last && semi.is_none() { out.push(format!("return {};", js)); }
-                    else { out.push(format!("{};", js)); }
+                    if last && semi.is_none() {
+                        out.push(format!("return {};", js));
+                    } else {
+                        out.push(format!("{};", js));
+                    }
                 }
-                Stmt::Item(_) => return Err(Rs2JsError::unsupported("item statement", Span::call_site())),
+                Stmt::Item(_) => {
+                    return Err(Rs2JsError::unsupported("item statement", Span::call_site()))
+                }
                 Stmt::Macro(m) => {
                     let js = self.macro_call(&m.mac)?;
                     out.push(format!("{};", js));
@@ -221,12 +249,18 @@ impl Translator {
 
     fn lit(&self, lit: &Lit) -> Result<String, Rs2JsError> {
         match lit {
-            Lit::Int(i)   => Ok(i.base10_digits().to_string()),
+            Lit::Int(i) => Ok(i.base10_digits().to_string()),
             Lit::Float(f) => Ok(f.base10_digits().to_string()),
-            Lit::Bool(b)  => Ok(b.value.to_string()),
-            Lit::Str(s)   => Ok(format!("\"{}\"", s.value().replace('\\', "\\\\").replace('"', "\\\""))),
-            Lit::Char(c)  => Ok(format!("\"{}\"", c.value())),
-            other => Err(Rs2JsError::unsupported(&format!("literal: {:?}", other), Span::call_site())),
+            Lit::Bool(b) => Ok(b.value.to_string()),
+            Lit::Str(s) => Ok(format!(
+                "\"{}\"",
+                s.value().replace('\\', "\\\\").replace('"', "\\\"")
+            )),
+            Lit::Char(c) => Ok(format!("\"{}\"", c.value())),
+            other => Err(Rs2JsError::unsupported(
+                &format!("literal: {:?}", other),
+                Span::call_site(),
+            )),
         }
     }
 
@@ -238,8 +272,9 @@ impl Translator {
             [s] if s == "true" || s == "false" => Ok(s.clone()),
 
             [name] => {
-                if self.is_local(name) { Ok(name.clone()) }
-                else {
+                if self.is_local(name) {
+                    Ok(name.clone())
+                } else {
                     self.captures.insert(name.clone());
                     Ok(format!("state.{}", name))
                 }
@@ -252,7 +287,10 @@ impl Translator {
 
             [a, b, name] if a == "js" && b == "bridge" => Ok(name.clone()),
 
-            other => Err(Rs2JsError::unsupported(&format!("path {:?}", other), path.span())),
+            other => Err(Rs2JsError::unsupported(
+                &format!("path {:?}", other),
+                path.span(),
+            )),
         }
     }
 
@@ -270,26 +308,31 @@ impl Translator {
 
             // Common Rust → JS sugar.
             "to_string" => format!("String({})", receiver),
-            "len"       => format!("{}.length", receiver),
-            "is_empty"  => format!("({}.length === 0)", receiver),
-            "push"      => format!("{}.push({})", receiver, args.join(", ")),
-            "push_str"  => format!("({} += {})", receiver, args.join(", ")),
-            "pop"       => format!("{}.pop()", receiver),
-            "clone"     => receiver,
-            "as_str"    => receiver,
-            "into"      => receiver,
+            "len" => format!("{}.length", receiver),
+            "is_empty" => format!("({}.length === 0)", receiver),
+            "push" => format!("{}.push({})", receiver, args.join(", ")),
+            "push_str" => format!("({} += {})", receiver, args.join(", ")),
+            "pop" => format!("{}.pop()", receiver),
+            "clone" => receiver,
+            "as_str" => receiver,
+            "into" => receiver,
             "iter" | "into_iter" | "iter_mut" => receiver,
-            "map"       => format!("{}.map({})", receiver, args.join(", ")),
-            "filter"    => format!("{}.filter({})", receiver, args.join(", ")),
-            "collect"   => receiver,
-            "trim"      => format!("{}.trim()", receiver),
+            "map" => format!("{}.map({})", receiver, args.join(", ")),
+            "filter" => format!("{}.filter({})", receiver, args.join(", ")),
+            "collect" => receiver,
+            "trim" => format!("{}.trim()", receiver),
             "to_lowercase" => format!("{}.toLowerCase()", receiver),
             "to_uppercase" => format!("{}.toUpperCase()", receiver),
-            "contains"  => format!("{}.includes({})", receiver, args.join(", ")),
+            "contains" => format!("{}.includes({})", receiver, args.join(", ")),
             "starts_with" => format!("{}.startsWith({})", receiver, args.join(", ")),
             "ends_with" => format!("{}.endsWith({})", receiver, args.join(", ")),
 
-            other => return Err(Rs2JsError::unsupported(&format!("method `.{}()`", other), call.span())),
+            other => {
+                return Err(Rs2JsError::unsupported(
+                    &format!("method `.{}()`", other),
+                    call.span(),
+                ))
+            }
         };
         Ok(js)
     }
@@ -300,7 +343,11 @@ impl Translator {
         let args = args?;
         // actions::foo(arg) → await __resuma.action('foo', arg)
         if let Some(name) = func.strip_prefix("__resuma_action_") {
-            return Ok(format!("(await __resuma.action('{}', [{}]))", name, args.join(", ")));
+            return Ok(format!(
+                "(await __resuma.action('{}', [{}]))",
+                name,
+                args.join(", ")
+            ));
         }
         Ok(format!("{}({})", func, args.join(", ")))
     }
@@ -326,12 +373,19 @@ impl Translator {
                 let fmt_lit = iter
                     .next()
                     .ok_or_else(|| Rs2JsError::unsupported("empty format!", mac.span()))?;
-                let fmt = if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = &fmt_lit {
+                let fmt = if let Expr::Lit(ExprLit {
+                    lit: Lit::Str(s), ..
+                }) = &fmt_lit
+                {
                     s.value()
-                } else { return Err(Rs2JsError::unsupported("format! needs literal", mac.span())); };
+                } else {
+                    return Err(Rs2JsError::unsupported("format! needs literal", mac.span()));
+                };
 
                 let mut args = Vec::new();
-                for a in iter { args.push(self.expr(&a)?); }
+                for a in iter {
+                    args.push(self.expr(&a)?);
+                }
 
                 let mut out = String::from("`");
                 let mut arg_iter = args.into_iter();
@@ -369,7 +423,10 @@ impl Translator {
                 Ok(format!("console.log({})", tokens))
             }
 
-            other => Err(Rs2JsError::unsupported(&format!("macro `{}!`", other), mac.span())),
+            other => Err(Rs2JsError::unsupported(
+                &format!("macro `{}!`", other),
+                mac.span(),
+            )),
         }
     }
 
@@ -379,8 +436,13 @@ impl Translator {
         let else_part = if let Some((_, else_b)) = &if_expr.else_branch {
             let e = self.expr(else_b)?;
             format!(" else {{ {} }}", e)
-        } else { String::new() };
-        Ok(format!("(() => {{ if ({}) {{ {} }}{} }})()", cond, then, else_part))
+        } else {
+            String::new()
+        };
+        Ok(format!(
+            "(() => {{ if ({}) {{ {} }}{} }})()",
+            cond, then, else_part
+        ))
     }
 
     fn is_local(&self, name: &str) -> bool {
@@ -390,10 +452,13 @@ impl Translator {
 
 fn pat_to_param(p: &Pat) -> Result<(String, Option<String>), Rs2JsError> {
     match p {
-        Pat::Ident(i)    => Ok((i.ident.to_string(), None)),
-        Pat::Wild(_)     => Ok(("_".into(), None)),
-        Pat::Type(t)     => pat_to_param(&t.pat),
-        other            => Err(Rs2JsError::unsupported(&format!("pattern {:?}", other), Span::call_site())),
+        Pat::Ident(i) => Ok((i.ident.to_string(), None)),
+        Pat::Wild(_) => Ok(("_".into(), None)),
+        Pat::Type(t) => pat_to_param(&t.pat),
+        other => Err(Rs2JsError::unsupported(
+            &format!("pattern {:?}", other),
+            Span::call_site(),
+        )),
     }
 }
 
@@ -404,16 +469,16 @@ fn bin_op_to_js(op: BinOp) -> Option<&'static str> {
         BinOp::Mul(_) => "*",
         BinOp::Div(_) => "/",
         BinOp::Rem(_) => "%",
-        BinOp::Eq(_)  => "===",
-        BinOp::Ne(_)  => "!==",
-        BinOp::Lt(_)  => "<",
-        BinOp::Le(_)  => "<=",
-        BinOp::Gt(_)  => ">",
-        BinOp::Ge(_)  => ">=",
+        BinOp::Eq(_) => "===",
+        BinOp::Ne(_) => "!==",
+        BinOp::Lt(_) => "<",
+        BinOp::Le(_) => "<=",
+        BinOp::Gt(_) => ">",
+        BinOp::Ge(_) => ">=",
         BinOp::And(_) => "&&",
-        BinOp::Or(_)  => "||",
+        BinOp::Or(_) => "||",
         BinOp::BitAnd(_) => "&",
-        BinOp::BitOr(_)  => "|",
+        BinOp::BitOr(_) => "|",
         BinOp::BitXor(_) => "^",
         BinOp::Shl(_) => "<<",
         BinOp::Shr(_) => ">>",
@@ -425,11 +490,10 @@ fn bin_op_to_js(op: BinOp) -> Option<&'static str> {
         BinOp::DivAssign(_) => "/=",
         BinOp::RemAssign(_) => "%=",
         BinOp::BitAndAssign(_) => "&=",
-        BinOp::BitOrAssign(_)  => "|=",
+        BinOp::BitOrAssign(_) => "|=",
         BinOp::BitXorAssign(_) => "^=",
         BinOp::ShlAssign(_) => "<<=",
         BinOp::ShrAssign(_) => ">>=",
         _ => return None,
     })
 }
-

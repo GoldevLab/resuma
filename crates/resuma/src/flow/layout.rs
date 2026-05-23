@@ -3,16 +3,15 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::core::view::View;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
-use crate::core::view::View;
 
 use super::request::FlowRequest;
 
 pub type LayoutFn = Arc<dyn Fn(FlowRequest, View) -> View + Send + Sync>;
 
-static LAYOUTS: Lazy<RwLock<HashMap<String, LayoutFn>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+static LAYOUTS: Lazy<RwLock<HashMap<String, LayoutFn>>> = Lazy::new(|| RwLock::new(HashMap::new()));
 
 /// Register a layout for a URL prefix (`/`, `/users`, …).
 pub fn register_layout(pattern: impl Into<String>, f: LayoutFn) {

@@ -80,13 +80,19 @@ pub enum Child {
 }
 
 impl From<View> for Child {
-    fn from(v: View) -> Self { Child::View(v) }
+    fn from(v: View) -> Self {
+        Child::View(v)
+    }
 }
 impl From<&str> for Child {
-    fn from(s: &str) -> Self { Child::Text(s.to_string()) }
+    fn from(s: &str) -> Self {
+        Child::Text(s.to_string())
+    }
 }
 impl From<String> for Child {
-    fn from(s: String) -> Self { Child::Text(s) }
+    fn from(s: String) -> Self {
+        Child::Text(s)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,7 +107,10 @@ pub enum AttrValue {
     /// Plain string attribute.
     Static(String),
     /// Reactive attribute bound to a signal.
-    Dynamic { signal: SignalId, format: Option<String> },
+    Dynamic {
+        signal: SignalId,
+        format: Option<String>,
+    },
     /// Event handler (`onClick`, `onInput`, …). Resolved at SSR time to a
     /// `HandlerRef` pointing at a JS chunk.
     Handler(HandlerRef),
@@ -124,12 +133,23 @@ pub struct Dynamic {
 }
 
 impl View {
-    pub fn text(s: impl Into<String>) -> Self { View::Text(s.into()) }
-    pub fn raw(html: impl Into<String>) -> Self { View::Raw(html.into()) }
-    pub fn empty() -> Self { View::Empty }
+    pub fn text(s: impl Into<String>) -> Self {
+        View::Text(s.into())
+    }
+    pub fn raw(html: impl Into<String>) -> Self {
+        View::Raw(html.into())
+    }
+    pub fn empty() -> Self {
+        View::Empty
+    }
 
     pub fn element(tag: impl Into<String>) -> ElementBuilder {
-        ElementBuilder { element: Element { tag: tag.into(), ..Default::default() } }
+        ElementBuilder {
+            element: Element {
+                tag: tag.into(),
+                ..Default::default()
+            },
+        }
     }
 
     pub fn fragment(children: Vec<Child>) -> Self {
@@ -148,7 +168,10 @@ pub struct ElementBuilder {
 
 impl ElementBuilder {
     pub fn attr(mut self, name: impl Into<String>, value: AttrValue) -> Self {
-        self.element.attrs.push(Attr { name: name.into(), value });
+        self.element.attrs.push(Attr {
+            name: name.into(),
+            value,
+        });
         self
     }
 
@@ -167,5 +190,7 @@ impl ElementBuilder {
         self
     }
 
-    pub fn build(self) -> View { View::Element(self.element) }
+    pub fn build(self) -> View {
+        View::Element(self.element)
+    }
 }
