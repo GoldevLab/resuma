@@ -12,16 +12,17 @@ pub fn page(_req: FlowRequest) -> View {
                 "Resuma Flow adds file-based pages, loads, and submits in one crate — like Qwik + Qwik City, unified."
             </p>
 
-            <h2>"Try it right away"</h2>
+            <h2>"Examples in this repo"</h2>
+            <p>"See " <a href="/docs/examples">"Examples"</a> " for all runnable crates and when to use each."</p>
             <p>
                 "Rust apps can't run in the browser like Qwik's StackBlitz playgrounds yet. "
                 "Instead, clone the repo and launch a live example in one command:"
             </p>
             <div class="playground-grid">
                 {playground_card(
-                    "Counter (core only)",
-                    "Minimal resumable button — see loader.js load on first click.",
-                    "cargo run -p example-counter",
+                    "Todo (full showcase)",
+                    "Signals, #[server], #[island], js!, theme — every Resuma feature in one app.",
+                    "cargo run -p example-todo",
                 )}
                 {playground_card(
                     "Flow demo (full-stack)",
@@ -65,28 +66,28 @@ resuma --help"#)}
             <h2>"Create an app using the CLI"</h2>
             <p>
                 "Use " <code>"resuma new"</code> " or " <code>"resuma create"</code> " to scaffold a starter. "
-                "Pick a template — counter for core-only, flow for full-stack:"
+                "Pick a template:"
             </p>
             <div class="template-grid">
                 <div class="template-pill">
-                    <strong>"counter"</strong>
-                    <span>"Single-page app · ResumaApp · great first project"</span>
+                    <strong>"basic"</strong>
+                    <span>"Static SSR page · zero client JS · clean starting point"</span>
                 </div>
                 <div class="template-pill">
-                    <strong>"flow"</strong>
-                    <span>"Multi-page · FlowApp · file-based pages · layouts"</span>
+                    <strong>"todo"</strong>
+                    <span>"Signals · #[server] · #[island] · js! — all Resuma features"</span>
                 </div>
             </div>
-            {code_block(r#"# Counter starter (default)
+            {code_block(r#"# Static page (default)
 resuma new my-app
-resuma new my-app --template counter
+resuma new my-app --template basic
 
-# Full-stack starter (Resuma + Flow)
-resuma new my-app --template flow
+# Full feature showcase
+resuma new my-app --template todo
 
 cd my-app"#)}
 
-            <p>"The CLI generates Cargo.toml, src/main.rs, and (for flow) a pages directory with a route registry."</p>
+            <p>"The CLI generates " <code>"Cargo.toml"</code> " and " <code>"src/main.rs"</code> "."</p>
 
             <h2>"Start the development server"</h2>
             <p>"Inside your project directory:"</p>
@@ -127,23 +128,22 @@ async fn greet(name: String) -> String {
 }"#)}
             <p>"From a handler, call " <code>"__resuma.action('greet', [name])"</code> " — RPC at " <code>"POST /_resuma/action/:name"</code>"."</p>
 
-            <h2>"Project structure (flow template)"</h2>
-            {code_block(r##"my-app/
+            <h2>"Project structure"</h2>
+            <p><strong>"basic / todo"</strong>" — single " <code>"main.rs"</code> " (+ security modules for todo). "<strong>"Flow"</strong>" — add " <code>"src/pages/"</code> " (see " <a href="/docs/project_structure">"Project structure"</a> ")."</p>
+            {code_block(r##"my-app/                  # resuma new --template todo
 ├── Cargo.toml
-├── src/
-│   ├── main.rs          (FlowApp, layouts, auto_pages)
-│   └── pages/
-│       ├── index.rs     (route: /)
-│       ├── layout.rs    (layout marker)
-│       ├── mod.rs       (generated)
-│       └── _registry.rs (resuma routes --generate)"##)}
+└── src/
+    ├── main.rs
+    ├── security.rs
+    └── todo_store.rs"##)}
 
             <h2>"Next steps"</h2>
             <ul>
-                <li><a href="/docs/package">"Resuma¹ + Flow² package map"</a></li>
-                <li><a href="/docs/flow">"Resuma Flow — loads, submits, middleware"</a></li>
-                <li><a href="/docs/benchmark">"Bundle benchmark vs Qwik"</a></li>
-                <li><a href="/docs/architecture">"Architecture deep dive"</a></li>
+                <li><a href="/docs/security/todo">"Todo example — full backend reference"</a></li>
+                <li><a href="/docs/flow">"Resuma Flow — multi-page apps"</a></li>
+                <li><a href="/docs/package">"Package map"</a></li>
+                <li><a href="/docs/architecture">"Architecture"</a></li>
+                <li><a href="/docs/cookbook/docker">"Docker deploy"</a></li>
             </ul>
         </>
     }

@@ -112,7 +112,8 @@ See [`docs/PACKAGE.md`](docs/PACKAGE.md) and [`docs/FLOW.md`](docs/FLOW.md).
 **Live docs site:** `cargo run -p example-website` → http://127.0.0.1:3000
 
 ```bash
-resuma new my-app --template flow
+resuma new my-app                    # static SSR (default)
+resuma new my-app --template todo    # full Resuma showcase
 ```
 
 ## Architecture
@@ -158,6 +159,14 @@ resuma new my-app --template flow
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for a deep dive.
 
+**Security:** [`docs/SECURITY.md`](docs/SECURITY.md) — CSRF, headers, rate limits, production checklist.
+
+**Backend patterns:** [`docs/BACKEND.md`](docs/BACKEND.md) — live in `examples/todo`.
+
+**All docs:** [`docs/README.md`](docs/README.md) · `cargo run -p example-website`
+
+**Publishing:** [`docs/PUBLISHING.md`](docs/PUBLISHING.md) — crates.io release checklist
+
 ## Project layout
 
 ```
@@ -173,31 +182,47 @@ Resuma/
 │   └── resuma/             # umbrella facade users depend on
 ├── runtime/                # TypeScript source for the ~3KB client runtime
 └── examples/
-    ├── counter/            # zero-server-state counter
-    └── todo/               # server-action backed todo list
+    ├── counter/            # minimal counter
+    ├── todo/               # full showcase + backend security reference
+    ├── flow-demo/          # FlowApp with loaders & streaming
+    ├── flow-pages/         # file-based routing
+    └── website/            # docs site (this documentation)
 ```
+
+**Docs:** [`docs/README.md`](docs/README.md) · live site: `cargo run -p example-website`
 
 ## Getting started
 
-> **Pre-requisites:** Rust 1.74+ (`https://rustup.rs`) and Node 18+.
+> **Pre-requisites:** Rust 1.74+ ([rustup](https://rustup.rs)).
+
+### Install from crates.io (recommended)
 
 ```sh
-# Build everything
-cargo build
-
-# Run the counter example
-cargo run -p example-counter
-# → http://127.0.0.1:3000
-
-# Try the todo example with server actions
-cargo run -p example-todo
-
-# Use the CLI (from source)
-cargo install --path crates/resuma --features cli
-# When published: cargo install resuma
-resuma new my-app
+cargo install resuma
+resuma new my-app --template todo
 cd my-app
 resuma dev
+```
+
+Library only (no CLI binary):
+
+```toml
+[dependencies]
+resuma = { version = "0.1", default-features = false }
+tokio = { version = "1", features = ["full"] }
+```
+
+### From source (development)
+
+```sh
+git clone https://github.com/resuma/resuma
+cd resuma
+cargo install --path crates/resuma --features cli
+
+# Examples
+cargo run -p example-counter   # http://127.0.0.1:3000
+cargo run -p example-todo      # full-stack + security showcase
+cargo run -p example-website   # docs site
 ```
 
 ## What works in v0.1
@@ -217,15 +242,15 @@ resuma dev
 
 ## Roadmap (v0.2+)
 
-- [ ] Streaming SSR (push body chunks as `routeLoader$` resolves)
 - [ ] Hot Module Reload via `resuma-cli` + websocket bridge
-- [ ] Layouts and nested routes
 - [ ] Build-time pre-rendering for static sites
-- [ ] Partial pre-rendering (PPR) — server-rendered shell + dynamic islands
-- [ ] `#[island(load = "visible")]` lazy hydration policies
-- [ ] Devtools extension to inspect the resumability payload
-- [ ] First-class TypeScript bindings for `js!{}` blocks (autocomplete on `state.*`)
+- [ ] Partial pre-rendering (PPR) — server shell + dynamic islands
+- [ ] `#[island(load = "visible")]` lazy load policies
+- [ ] Devtools extension for resumability payload inspection
+- [ ] First-class TypeScript bindings for `js!{}` blocks
 - [ ] WASM-backed islands for compute-heavy code (opt-in)
+
+Already shipped in v0.1: streaming SSR (Flow), layouts, file-based routing, security defaults.
 
 ## Why "Resuma"?
 

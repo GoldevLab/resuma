@@ -6,6 +6,12 @@ authors.workspace = true
 license.workspace = true
 description = "Resuma command-line interface — `resuma new`, `resuma dev`, `resuma build`."
 readme = "../../README.md"
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+include = ["src/**/*", "templates/**/*", "Cargo.toml"]
 
 [lib]
 name = "resuma_cli"

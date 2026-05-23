@@ -7,13 +7,15 @@ use std::sync::Arc;
 use axum::body::Body;
 use axum::extract::{Path, State};
 use axum::http::{header, HeaderMap, HeaderValue, Request, StatusCode, Uri};
+use axum::extract::DefaultBodyLimit;
 use axum::middleware::{self, Next};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
+use axum::extract::ConnectInfo;
 use axum::{Json, Router};
 use parking_lot::RwLock;
 use resuma_core::view::View;
-use resuma_core::FlowRequest;
+use resuma_core::{FlowRequest, ResumaError};
 use resuma_ssr::PageOptions;
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -23,6 +25,10 @@ use crate::deferred_stream::try_deferred_stream;
 use crate::page_cache::take_response_cache_control;
 use crate::compressed_asset::{self, core_asset, loader_asset, runtime_asset, serve_js};
 use crate::runtime_asset::{CORE_JS, LOADER_JS, RUNTIME_JS};
+use crate::security::{
+    self, client_ip_from_parts, csrf_set_cookie, csrf_token, guard_mutation, http_status, random_token,
+    request_is_https, CspNonce, SecurityConfig, SecurityHeaderOptions,
+};
 
 /// User-facing builder.
 pub struct ResumaApp {
@@ -42,12 +48,14 @@ type FallbackFactory = dyn Fn(&str) -> Option<View> + Send + Sync;
 #[derive(Debug, Clone)]
 pub struct ServeOptions {
     pub addr: SocketAddr,
+    pub security: SecurityConfig,
 }
 
 impl Default for ServeOptions {
     fn default() -> Self {
         Self {
             addr: ([127, 0, 0, 1], 3000).into(),
+            security: SecurityConfig::from_env(),
         }
     }
 }
@@ -90,6 +98,11 @@ impl ResumaApp {
 
     pub fn with_json_ld(mut self, json_ld: impl Into<String>) -> Self {
         self.page_options.json_ld = json_ld.into();
+        self
+    }
+
+    pub fn with_pwa(mut self, pwa: resuma_ssr::PwaOptions) -> Self {
+        self.page_options.pwa = Some(pwa);
         self
     }
 
@@ -146,16 +159,23 @@ impl ResumaApp {
     }
 
     pub async fn serve(self, opts: ServeOptions) -> std::io::Result<()> {
+        security::configure(opts.security.clone());
         let router = self
             .into_router()
+            .layer(DefaultBodyLimit::max(opts.security.body_limit_bytes))
             .layer(middleware::from_fn(security_headers_middleware));
         let listener = tokio::net::TcpListener::bind(opts.addr).await?;
         info!(addr = %opts.addr, "resuma server listening");
         println!("resuma listening on http://{}", opts.addr);
-        axum::serve(listener, router).await
+        axum::serve(
+            listener,
+            router.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
     }
 
     pub fn into_router(self) -> Router {
+        let security_cfg = security::config();
         let state = Arc::new(AppState {
             pages: self.page_factories,
             handler_chunks: self.handler_chunks,
@@ -163,6 +183,7 @@ impl ResumaApp {
             page_options: self.page_options,
             streaming: self.streaming,
             fallback: self.fallback,
+            hide_benchmark: security_cfg.hide_benchmark,
         });
 
         let mut router = Router::new();
@@ -173,8 +194,11 @@ impl ResumaApp {
 
         router = router.fallback(get(serve_fallback));
 
+        if !state.hide_benchmark {
+            router = router.route("/_resuma/benchmark.json", get(serve_benchmark));
+        }
+
         router
-            .route("/_resuma/benchmark.json", get(serve_benchmark))
             .route("/_resuma/loader.js", get(serve_loader))
             .route("/_resuma/core.js", get(serve_core))
             .route("/_resuma/runtime.js", get(serve_runtime))
@@ -186,29 +210,21 @@ impl ResumaApp {
 }
 
 /// Apply standard security headers to every HTTP response.
-pub fn apply_security_headers(mut response: Response) -> Response {
-    let headers = response.headers_mut();
-    insert_header(headers, header::STRICT_TRANSPORT_SECURITY, "max-age=31536000; includeSubDomains");
-    insert_header(headers, header::X_FRAME_OPTIONS, "DENY");
-    insert_header(headers, header::X_CONTENT_TYPE_OPTIONS, "nosniff");
-    insert_header(headers, header::REFERRER_POLICY, "strict-origin-when-cross-origin");
-    insert_header(headers, header::HeaderName::from_static("permissions-policy"), "camera=(), microphone=(), geolocation=()");
-    insert_header(
-        headers,
-        header::CONTENT_SECURITY_POLICY,
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
-    );
-    response
+pub fn apply_security_headers(response: Response, opts: &SecurityHeaderOptions) -> Response {
+    security::apply_security_headers(response, opts)
 }
 
 pub async fn security_headers_middleware(req: Request<Body>, next: Next) -> Response {
-    apply_security_headers(next.run(req).await)
-}
-
-fn insert_header(headers: &mut axum::http::HeaderMap, name: header::HeaderName, value: &str) {
-    if let Ok(v) = HeaderValue::from_str(value) {
-        headers.insert(name, v);
-    }
+    let https = request_is_https(&req);
+    let res = next.run(req).await;
+    let nonce = res.extensions().get::<CspNonce>().map(|n| n.0.clone());
+    apply_security_headers(
+        res,
+        &SecurityHeaderOptions {
+            csp_nonce: nonce,
+            https,
+        },
+    )
 }
 
 impl Default for ResumaApp {
@@ -222,10 +238,28 @@ struct AppState {
     page_options: PageOptions,
     streaming: bool,
     fallback: Option<Arc<FallbackFactory>>,
+    hide_benchmark: bool,
 }
 
-fn render_page_response(state: &AppState, view: View, path: &str) -> Response {
-    let opts = state.page_options.clone();
+fn page_security_opts(base: &PageOptions) -> PageOptions {
+    let mut opts = base.clone();
+    opts.csp_nonce = random_token();
+    opts.csrf_token = csrf_token();
+    opts
+}
+
+fn attach_page_security(mut res: Response, opts: &PageOptions, https: bool) -> Response {
+    if !opts.csrf_token.is_empty() {
+        res.headers_mut()
+            .insert(header::SET_COOKIE, csrf_set_cookie(&opts.csrf_token, https));
+    }
+    res.extensions_mut().insert(CspNonce(opts.csp_nonce.clone()));
+    res
+}
+
+fn render_page_response(state: &AppState, view: View, path: &str, https: bool) -> Response {
+    let opts = page_security_opts(&state.page_options);
+    crate::page_cache::stage_page_csrf(opts.csrf_token.clone());
     let cache = take_response_cache_control();
     if state.streaming {
         use axum::body::Body;
@@ -247,7 +281,11 @@ fn render_page_response(state: &AppState, view: View, path: &str) -> Response {
         if let Some(ref cache) = cache {
             builder = builder.header(header::CACHE_CONTROL, cache.as_str());
         }
-        builder.body(Body::from_stream(stream)).unwrap()
+        let res = builder
+            .header("x-robots-tag", "index, follow")
+            .body(Body::from_stream(stream))
+            .unwrap();
+        attach_page_security(res, &opts, https)
     } else {
         let html = resuma_ssr::render_to_string_at_path(&opts, path, move || view);
         let mut res = Html(html).into_response();
@@ -255,13 +293,18 @@ fn render_page_response(state: &AppState, view: View, path: &str) -> Response {
             res.headers_mut()
                 .insert(header::CACHE_CONTROL, HeaderValue::from_str(&cache).unwrap_or_else(|_| HeaderValue::from_static("no-store")));
         }
-        res
+        res.headers_mut().insert(
+            header::HeaderName::from_static("x-robots-tag"),
+            HeaderValue::from_static("index, follow"),
+        );
+        attach_page_security(res, &opts, https)
     }
 }
 
 async fn serve_page(
     uri: Uri,
     State(state): State<Arc<AppState>>,
+    req: Request<Body>,
 ) -> Response {
     let path = uri.path().to_string();
     let factory = match state.pages.get(&path) {
@@ -269,17 +312,18 @@ async fn serve_page(
         None => return (StatusCode::NOT_FOUND, "not found").into_response(),
     };
 
-    render_page_response(&state, factory(), &path)
+    render_page_response(&state, factory(), &path, request_is_https(&req))
 }
 
 async fn serve_fallback(
     uri: Uri,
     State(state): State<Arc<AppState>>,
+    req: Request<Body>,
 ) -> Response {
     let path = uri.path();
     if let Some(fb) = &state.fallback {
         if let Some(view) = fb(path) {
-            return render_page_response(&state, view, path);
+            return render_page_response(&state, view, path, request_is_https(&req));
         }
     }
     (StatusCode::NOT_FOUND, "not found").into_response()
@@ -362,8 +406,21 @@ async fn serve_action(
     State(_state): State<Arc<AppState>>,
     Path(name): Path<String>,
     headers: HeaderMap,
+    connect: ConnectInfo<SocketAddr>,
     Json(body): Json<ActionRequest>,
-) -> Json<ActionResponse> {
+) -> Response {
+    let cfg = security::config();
+    let host = headers
+        .get(header::HOST)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("localhost")
+        .to_string();
+    let ip = client_ip_from_parts(&headers, Some(connect.0));
+
+    if let Err(err) = guard_mutation(&headers, &host, &ip, "action", cfg.actions_per_minute, None) {
+        return action_error(err);
+    }
+
     let flow_req = FlowRequest::from_parts(
         "POST",
         format!("/_resuma/action/{name}"),
@@ -376,9 +433,31 @@ async fn serve_action(
     );
 
     match dispatch_action(&name, body.args, flow_req).await {
-        Ok(value) => Json(ActionResponse { ok: true, value: Some(value), error: None }),
-        Err(err) => Json(ActionResponse { ok: false, value: None, error: Some(err.to_string()) }),
+        Ok(value) => (
+            StatusCode::OK,
+            Json(ActionResponse {
+                ok: true,
+                value: Some(value),
+                error: None,
+            }),
+        )
+            .into_response(),
+        Err(err) => action_error(err),
     }
+}
+
+fn action_error(err: ResumaError) -> Response {
+    let cfg = security::config();
+    let status = http_status(&err);
+    (
+        status,
+        Json(ActionResponse {
+            ok: false,
+            value: None,
+            error: Some(err.client_message(cfg.production)),
+        }),
+    )
+        .into_response()
 }
 
 async fn serve_handler_chunk(

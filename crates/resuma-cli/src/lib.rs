@@ -23,8 +23,8 @@ enum Commands {
     New {
         /// Project directory name.
         name: String,
-        /// Template name (default: `counter`).
-        #[arg(long, default_value = "counter")]
+        /// Template: `basic` (static page) or `todo` (full Resuma showcase).
+        #[arg(long, default_value = "basic")]
         template: String,
     },
     /// Run the app with hot reload.

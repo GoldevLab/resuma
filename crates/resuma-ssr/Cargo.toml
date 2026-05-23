@@ -5,6 +5,11 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 description = "Server-side rendering engine for Resuma. Walks View trees, emits HTML, and embeds the resumability payload."
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
 
 [dependencies]
 resuma-core = { workspace = true }

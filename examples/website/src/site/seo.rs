@@ -1,8 +1,7 @@
 //! Site-wide SEO defaults (JSON-LD, copy).
 
 pub fn site_description() -> &'static str {
-    "Resuma is a resumable Rust web framework with SSR, islands, and server actions. \
-     Ship HTML plus a tiny loader — no hydration, no eager JS. Full-stack Flow included."
+    "Resumable Rust web framework: SSR, islands, and server actions. Ship HTML plus a tiny loader — no hydration. Full-stack Flow included."
 }
 
 pub fn json_ld(site_url: &str) -> String {

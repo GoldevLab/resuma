@@ -2,16 +2,19 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use axum::extract::{Form, Path};
+use axum::extract::{ConnectInfo, Form, Path};
 use axum::http::{header, HeaderMap, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::Router;
+use resuma_core::ResumaError;
 use resuma_ssr::{render_to_string, PageOptions};
 use resuma_core::view::View;
+use std::net::SocketAddr;
 
 use crate::middleware::run_middleware;
 use crate::registry::dispatch_submit;
 use crate::submit::SubmitError;
+use resuma_server::{guard_mutation, http_status, security::config, CSRF_FIELD};
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct SubmitResponse {
@@ -27,6 +30,11 @@ pub struct FlowSeoConfig {
     pub site_url: String,
     pub paths: Vec<String>,
 }
+
+const FAVICON_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Resuma">
+<rect width="32" height="32" rx="6" fill="#712cf9"/>
+<text x="16" y="22" text-anchor="middle" fill="#fff" font-family="Segoe UI, system-ui, sans-serif" font-size="18" font-weight="700">R</text>
+</svg>"##;
 
 const OG_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Resuma">
 <defs>
@@ -45,13 +53,34 @@ pub async fn handle_submit(
     Path(name): Path<String>,
     uri: Uri,
     headers: HeaderMap,
-    Form(form): Form<HashMap<String, String>>,
+    connect: ConnectInfo<SocketAddr>,
+    Form(mut form): Form<HashMap<String, String>>,
 ) -> Response {
     let wants_json = headers
         .get("accept")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.contains("application/json"))
         .unwrap_or(false);
+
+    let cfg = config();
+    let host = headers
+        .get(header::HOST)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("localhost")
+        .to_string();
+    let form_csrf = form.remove(CSRF_FIELD);
+    let ip = client_ip_from_connect(&headers, &connect);
+
+    if let Err(err) = guard_mutation(
+        &headers,
+        &host,
+        &ip,
+        "submit",
+        cfg.submits_per_minute,
+        form_csrf.as_deref(),
+    ) {
+        return submit_error(err, wants_json);
+    }
 
     let data = serde_json::to_value(&form).unwrap_or(serde_json::Value::Null);
     let mut req = crate::request::from_http(
@@ -62,8 +91,9 @@ pub async fn handle_submit(
         BTreeMap::new(),
     );
 
-    if let Ok(r) = run_middleware(req.clone()).await {
-        req = r;
+    match run_middleware(req.clone()).await {
+        Ok(r) => req = r,
+        Err(e) => return submit_error(e, wants_json),
     }
 
     match dispatch_submit(&name, data, req).await {
@@ -109,7 +139,32 @@ fn parse_submit_error(err: &resuma_core::ResumaError) -> (String, BTreeMap<Strin
             return (se.message, se.field_errors);
         }
     }
-    (err.to_string(), BTreeMap::new())
+    let cfg = config();
+    (err.client_message(cfg.production), BTreeMap::new())
+}
+
+fn submit_error(err: ResumaError, wants_json: bool) -> Response {
+    let status = http_status(&err);
+    let cfg = config();
+    let message = err.client_message(cfg.production);
+    if wants_json {
+        (
+            status,
+            axum::Json(SubmitResponse {
+                ok: false,
+                value: None,
+                error: Some(message),
+                field_errors: BTreeMap::new(),
+            }),
+        )
+            .into_response()
+    } else {
+        (status, message).into_response()
+    }
+}
+
+fn client_ip_from_connect(headers: &HeaderMap, connect: &ConnectInfo<SocketAddr>) -> String {
+    resuma_server::client_ip_from_parts(headers, Some(connect.0))
 }
 
 fn robots_body(seo: &FlowSeoConfig) -> String {
@@ -150,6 +205,10 @@ async fn serve_og_image() -> impl IntoResponse {
     ([(header::CONTENT_TYPE, "image/svg+xml; charset=utf-8")], OG_SVG)
 }
 
+async fn serve_favicon() -> impl IntoResponse {
+    ([(header::CONTENT_TYPE, "image/svg+xml; charset=utf-8")], FAVICON_SVG)
+}
+
 pub fn attach_flow_routes(router: Router, seo: FlowSeoConfig) -> Router {
     let robots_seo = seo.clone();
     let sitemap_seo = seo;
@@ -170,5 +229,7 @@ pub fn attach_flow_routes(router: Router, seo: FlowSeoConfig) -> Router {
             }),
         )
         .route("/og.svg", axum::routing::get(serve_og_image))
+        .route("/favicon.svg", axum::routing::get(serve_favicon))
+        .route("/favicon.ico", axum::routing::get(serve_favicon))
         .route("/_resuma/submit/:name", axum::routing::post(handle_submit))
 }

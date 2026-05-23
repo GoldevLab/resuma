@@ -5,6 +5,11 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 description = "Translates a safe subset of Rust expressions to JavaScript for Resuma's resumable event handlers"
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
 
 [dependencies]
 syn         = { workspace = true }

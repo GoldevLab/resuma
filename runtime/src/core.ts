@@ -14,6 +14,7 @@ interface ResumePayload {
   actions: string[];
   contexts?: Record<string, unknown>;
   visible_tasks?: Record<string, string>;
+  csrf_token?: string;
 }
 
 export interface ResumaGlobal {
@@ -36,6 +37,28 @@ declare global {
 
 const STATE_SCRIPT_ID = "resuma-state";
 const ROOT_ID = "resuma-root";
+
+let cachedCsrf: string | null = null;
+
+function csrfToken(): string {
+  if (cachedCsrf) return cachedCsrf;
+  const node = document.getElementById(STATE_SCRIPT_ID);
+  if (!node?.textContent) return "";
+  try {
+    const payload = JSON.parse(node.textContent) as ResumePayload;
+    cachedCsrf = payload.csrf_token ?? "";
+  } catch {
+    cachedCsrf = "";
+  }
+  return cachedCsrf;
+}
+
+function mutationHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const headers: Record<string, string> = { ...extra };
+  const token = csrfToken();
+  if (token) headers["x-resuma-csrf"] = token;
+  return headers;
+}
 
 const root = (): HTMLElement => document.getElementById(ROOT_ID) ?? document.body;
 
@@ -134,10 +157,11 @@ function attachFormEnhancement(): void {
       try {
         const res = await fetch(form.action || `/_resuma/submit/${encodeURIComponent(name)}`, {
           method: "POST",
-          headers: {
+          credentials: "same-origin",
+          headers: mutationHeaders({
             "content-type": "application/x-www-form-urlencoded",
             accept: "application/json",
-          },
+          }),
           body: params.toString(),
         });
         const data = await res.json();
@@ -265,7 +289,8 @@ function runVisibleTasks(
 async function callServerAction(name: string, args: unknown[]): Promise<unknown> {
   const res = await fetch(`/_resuma/action/${encodeURIComponent(name)}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    credentials: "same-origin",
+    headers: mutationHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({ args }),
   });
   if (!res.ok) throw new Error(`[resuma] action ${name} failed: ${res.status}`);

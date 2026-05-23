@@ -19,8 +19,20 @@ pub fn doc_sidebar(_active_path: &str) -> View {
             {nav!(
                 "/docs" => "Overview",
                 "/docs/getting_started" => "Getting Started",
+                "/docs/examples" => "Examples",
                 "/docs/project_structure" => "Project structure",
                 "/docs/faq" => "FAQ",
+            )}
+
+            <h4>"Security"</h4>
+            {nav!(
+                "/docs/security" => "Overview",
+                "/docs/security/configure" => "Configure server",
+                "/docs/security/server_actions" => "Server actions",
+                "/docs/security/middleware" => "Auth middleware",
+                "/docs/security/authorization" => "Authorization & RLS",
+                "/docs/security/backend_patterns" => "NestJS + Next.js",
+                "/docs/security/todo" => "Todo example",
             )}
 
             <h4>"Components"</h4>

@@ -36,10 +36,10 @@ pub fn page(_req: FlowRequest) -> View {
             </table>
 
             <h2>"Response shapes"</h2>
-            <p>"Submit JSON responses include " <code>"ok"</code> ", " <code>"value"</code> ", " <code>"error"</code> ", and " <code>"field_errors"</code> ". Action responses return the serialized Rust return value as JSON."</p>
+            <p>"Actions: " <code>"{ ok, value, error }"</code>". Submits add " <code>"field_errors"</code> " for validation."</p>
 
-            <h2>"Full API"</h2>
-            <p>"See " <a href="/docs/api">"API reference"</a> " for runtime asset endpoints (loader.js, handler chunks, islands)."</p>
+            <h2>"Full API reference"</h2>
+            <p><a href="/docs/api">"HTTP API reference"</a> " — runtime assets, CSRF, security headers, SEO routes."</p>
         </>
     }
 }

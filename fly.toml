@@ -16,6 +16,8 @@ primary_region = 'iad'
   PORT = '3000'
   RESUMA_PAGES_ROOT = '/app/pages'
   SITE_URL = 'https://resuma-docs.fly.dev'
+  RESUMA_ENV = 'production'
+  RESUMA_TRUST_PROXY = '1'
 
 [http_service]
   internal_port = 3000

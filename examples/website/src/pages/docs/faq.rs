@@ -28,7 +28,10 @@ pub fn page(_req: FlowRequest) -> View {
             <p>"The " <code>"Form"</code> " component renders a real HTML form with " <code>"POST /_resuma/submit/:name"</code> ". Progressive enhancement: the runtime intercepts submit when loaded, but forms work as plain POST without JS."</p>
 
             <h2>"Is Resuma production-ready?"</h2>
-            <p>"Resuma is under active development (v0.x). The architecture is stable, but APIs may evolve. Pin versions in Cargo.toml and follow the repo for release notes."</p>
+            <p>"v0.x — APIs may evolve. Security defaults (CSRF, headers, rate limits) are built in. See " <a href="/docs/security">"Security"</a> " and harden with the " <a href="/docs/security/todo">"todo reference"</a>"."</p>
+
+            <h2>"Where is the backend security reference?"</h2>
+            <p><code>"examples/todo"</code> " — guards, DTO validation, service layer, authorization. Docs: " <a href="/docs/security/todo">"/docs/security/todo"</a>"."</p>
         </>
     }
 }

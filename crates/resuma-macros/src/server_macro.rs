@@ -6,7 +6,7 @@
 
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{parse2, FnArg, ItemFn, Pat, Type};
+use syn::{parse2, FnArg, ItemFn, Pat, ReturnType, Type};
 
 pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
     let func: ItemFn = match parse2(input) {
@@ -64,6 +64,23 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
         (false, false) => quote!( #name( #(#call_idents),* ) ),
     };
 
+    let returns_result = return_type_is_result(output);
+
+    let serialize_result = if returns_result {
+        quote! {
+            match #call.await {
+                Ok(v) => ::resuma::__private::serde_json::to_value(&v)
+                    .map_err(::resuma::__private::ResumaError::from),
+                Err(e) => Err(e),
+            }
+        }
+    } else {
+        quote! {
+            ::resuma::__private::serde_json::to_value(&#call.await)
+                .map_err(::resuma::__private::ResumaError::from)
+        }
+    };
+
     quote! {
         #vis async fn #name ( #inputs ) #output #block
 
@@ -73,9 +90,7 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
             req: ::resuma::FlowRequest,
         ) -> ::resuma::__private::Result<::resuma::__private::serde_json::Value> {
             #(#json_extract)*
-            let res = #call.await;
-            ::resuma::__private::serde_json::to_value(&res)
-                .map_err(::resuma::__private::ResumaError::from)
+            #serialize_result
         }
 
         #[doc(hidden)]
@@ -132,4 +147,17 @@ fn is_flow_request_type(ty: &Type) -> bool {
             .is_some_and(|s| s.ident == "FlowRequest"),
         _ => false,
     }
+}
+
+fn return_type_is_result(output: &ReturnType) -> bool {
+    let ReturnType::Type(_, ty) = output else {
+        return false;
+    };
+    let Type::Path(p) = &**ty else {
+        return false;
+    };
+    p.path
+        .segments
+        .last()
+        .is_some_and(|s| s.ident == "Result")
 }

@@ -27,20 +27,25 @@ async fn list_items(req: &FlowRequest) -> Vec<Item> {
 }"#)}
 
             <h2>"HTTP endpoint"</h2>
-            <p>"Each action is exposed at " <code>"POST /_resuma/action/:name"</code> " with body " <code>"{ \"args\": [...] }"</code>"."</p>
+            <p>"Each action is exposed at " <code>"POST /_resuma/action/:name"</code> " with body " <code>"{ \"args\": [...] }"</code>". CSRF token required on mutations."</p>
+
+            <h2>"Return Result for errors"</h2>
+            {code_block(r#"#[server]
+async fn create(name: String) -> Result<Item> {
+    validate(&name)?;
+    Ok(db::create(name).await?)
+}"#)}
 
             <h2>"From handlers"</h2>
             {code_block(r#"view! {
     <button onClick={ js! {
-        const rows = await __resuma.action('search', [state.q.value]);
+        const rows = await __resuma.action("search", [state.q.value]);
         state.results.set(rows);
-    }}>
-        "Search"
-    </button>
+    }}>"Search"</button>
 }"#)}
 
-            <h2>"Registration"</h2>
-            <p>"The #[server] macro registers the handler at compile time. No manual route wiring is required."</p>
+            <h2>"Production patterns"</h2>
+            <p>"Validation, auth middleware, and fail-closed errors: " <a href="/docs/security/server_actions">"Secure server actions"</a> " · " <a href="/docs/security/todo">"Todo example"</a>"."</p>
         </>
     }
 }

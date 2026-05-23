@@ -5,7 +5,7 @@ pub fn page(_req: FlowRequest) -> View {
     view! {
         <>
             <h1>"Project Structure"</h1>
-            <p class="lead">"How a Resuma Flow app is laid out after scaffolding with the flow template."</p>
+            <p class="lead">"ResumaApp (basic/todo templates) and FlowApp (multi-page) project layouts."</p>
 
             <h2>"Top-level layout"</h2>
             <p>"A flow starter is a standard Rust binary crate. The CLI generates Cargo.toml, src/main.rs, and a pages directory for file-based routing."</p>
@@ -74,12 +74,19 @@ async fn main() -> std::io::Result<()> {
             <p>"Do not edit " <code>"mod.rs"</code> " or " <code>"_registry.rs"</code> " by hand — regenerate with:"</p>
             {code_block("resuma routes --generate --path src/pages")}
 
-            <h2>"Counter template (core only)"</h2>
-            <p>"The counter template skips the pages directory. Routes are registered inline with ResumaApp::page()."</p>
-            {code_block(r##"counter-app/
+            <h2>"CLI templates"</h2>
+            <p>"Scaffold with " <code>"resuma new --template basic"</code> " or " <code>"--template todo"</code>"."</p>
+
+            <h3>"basic / todo (ResumaApp)"</h3>
+            {code_block(r##"my-app/
 ├── Cargo.toml
 └── src/
-    └── main.rs       (ResumaApp + #[component] pages)"##)}
+    ├── main.rs          # ResumaApp + routes
+    ├── security.rs      # (todo template only)
+    └── todo_store.rs    # (todo template only)"##)}
+
+            <h3>"Flow (manual or flow-pages example)"</h3>
+            <p>"Multi-page apps use FlowApp and " <code>"src/pages/"</code> ". See " <code>"examples/flow-pages"</code> " in the repo."</p>
         </>
     }
 }

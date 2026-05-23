@@ -48,10 +48,11 @@ tokio  = { version = "1", features = ["full"] }"#)}
   Cargo.toml          # resuma + tokio only"#)}
 
             <h2>"CLI commands"</h2>
-            {code_block(r#"resuma new my-app --template flow
+            {code_block(r#"resuma new my-app                    # static SSR (default)
+resuma new my-app --template todo    # full showcase
 resuma dev
 resuma build
-resuma routes --generate --path src/pages"#)}
+resuma routes --generate --path src/pages   # Flow apps only"#)}
 
             <h2>"API map (Qwik → Resuma)"</h2>
             <table class="docs-table">

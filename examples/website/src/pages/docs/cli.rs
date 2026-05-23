@@ -16,8 +16,8 @@ cargo install --path crates/resuma --features cli"#)}
             <h2>"resuma new / resuma create"</h2>
             <p>"Scaffold a new project from a template. " <code>"create"</code> " is an alias for " <code>"new"</code>"."</p>
             {code_block(r#"resuma new my-app
-resuma new my-app --template counter   # single-page ResumaApp
-resuma new my-app --template flow      # multi-page FlowApp"#)}
+resuma new my-app --template basic   # static SSR page (default)
+resuma new my-app --template todo    # signals, server, islands"#)}
 
             <h2>"resuma dev"</h2>
             <p>"Run the app with hot reload. Binds to 127.0.0.1:3000 by default. Rebuilds the JS runtime unless " <code>"--skip-runtime"</code> " is passed."</p>

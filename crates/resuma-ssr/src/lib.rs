@@ -25,11 +25,23 @@ use resuma_core::{
 };
 
 mod escape;
+pub mod pwa;
 pub mod seo;
 pub mod stream;
 use escape::{escape_attr, escape_text};
 
 pub use stream::{build_page_stream, render_stream_parts, render_to_stream, stream_head, stream_tail, stream_placeholder, StreamChunk};
+
+/// PWA install / theming options injected into `<head>`.
+#[derive(Debug, Clone, Default)]
+pub struct PwaOptions {
+    pub enabled: bool,
+    pub name: String,
+    pub short_name: String,
+    pub description: String,
+    pub theme_color: String,
+    pub background_color: String,
+}
 
 /// Configuration for full-page rendering.
 #[derive(Debug, Clone, Default)]
@@ -47,11 +59,19 @@ pub struct PageOptions {
     pub json_ld: String,
     /// Override canonical URL (absolute). Defaults to `site_url + path`.
     pub canonical: Option<String>,
+    /// Progressive Web App options (`manifest`, service worker registration).
+    pub pwa: Option<PwaOptions>,
     /// Client bootstrap script. Defaults to `/_resuma/loader.js`.
     pub loader_src: String,
     /// Legacy alias for `loader_src` when set explicitly.
     pub runtime_src: String,
     pub stylesheet: Option<String>,
+    /// Per-request CSP nonce for inline resumability script.
+    #[doc(hidden)]
+    pub csp_nonce: String,
+    /// Per-request CSRF token embedded in the state payload.
+    #[doc(hidden)]
+    pub csrf_token: String,
 }
 
 /// Render a `View` produced by a component to a complete HTML document.
@@ -92,12 +112,22 @@ pub(crate) fn client_scripts(opts: &PageOptions, body_html: &str, payload: &Resu
     if !page_needs_client(payload, body_html) {
         return String::new();
     }
-    let payload_json = encode_payload(payload);
+    let mut payload = payload.clone();
+    if !opts.csrf_token.is_empty() {
+        payload.csrf_token = Some(opts.csrf_token.clone());
+    }
+    let payload_json = encode_payload(&payload);
+    let nonce_attr = if opts.csp_nonce.is_empty() {
+        String::new()
+    } else {
+        format!(r#" nonce="{}""#, escape_attr(&opts.csp_nonce))
+    };
     format!(
-        r#"<script type="resuma/state" id="resuma-state">{payload}</script>
+        r#"<script type="resuma/state" id="resuma-state"{nonce_attr}>{payload}</script>
 <script type="module" src="{loader}"></script>"#,
         payload = payload_json,
         loader = loader_src(opts),
+        nonce_attr = nonce_attr,
     )
 }
 

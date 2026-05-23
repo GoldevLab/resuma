@@ -30,6 +30,7 @@ pub mod docs {
         pub mod theme;
         pub mod view_transitions;
     }
+    pub mod examples;
     pub mod faq;
     pub mod flow {
         pub mod caching;
@@ -48,6 +49,15 @@ pub mod docs {
     pub mod index;
     pub mod package;
     pub mod project_structure;
+    pub mod security {
+        pub mod authorization;
+        pub mod backend_patterns;
+        pub mod configure;
+        pub mod index;
+        pub mod middleware;
+        pub mod server_actions;
+        pub mod todo;
+    }
 }
 pub mod index;
 

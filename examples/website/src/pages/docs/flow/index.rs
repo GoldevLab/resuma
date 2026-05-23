@@ -62,6 +62,8 @@ pub fn page(_req: FlowRequest) -> View {
     .not_found(|| not_found_page())
     .serve(FlowServeOptions::default())
     .await"#)}
+
+            <p>"Examples: " <a href="/docs/examples">"flow-pages"</a> ", " <a href="/docs/examples">"flow-demo"</a> ", " <a href="/docs/examples">"website"</a>"."</p>
         </>
     }
 }

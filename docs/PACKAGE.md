@@ -37,8 +37,8 @@ use resuma::prelude::*;
 ```bash
 cargo install resuma
 
-resuma new my-app                    # counter (core only)
-resuma new my-app --template flow    # Flow + file-based pages
+resuma new my-app                    # static SSR (default)
+resuma new my-app --template todo    # full Resuma showcase
 
 cd my-app && resuma dev
 ```

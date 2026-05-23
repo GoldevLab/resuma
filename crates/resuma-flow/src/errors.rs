@@ -1,15 +1,17 @@
 //! Error pages and boundary helpers for Resuma Flow.
 
 use resuma_core::view::{Attr, AttrValue, Child, Element, View};
+use resuma_core::ResumaError;
 
 use crate::load::LoaderError;
 
 /// Unified page-level error for Flow renders.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum FlowError {
     NotFound,
     Loader(LoaderError),
     Render(String),
+    Middleware(ResumaError),
 }
 
 impl FlowError {
@@ -18,6 +20,7 @@ impl FlowError {
             FlowError::NotFound => 404,
             FlowError::Loader(e) => e.status,
             FlowError::Render(_) => 500,
+            FlowError::Middleware(e) => e.status_code(),
         }
     }
 
@@ -26,7 +29,18 @@ impl FlowError {
             FlowError::NotFound => "Page not found",
             FlowError::Loader(e) => &e.message,
             FlowError::Render(m) => m,
+            FlowError::Middleware(e) => match e {
+                ResumaError::Unauthorized => "Unauthorized",
+                ResumaError::Forbidden(_) => "Forbidden",
+                ResumaError::InvalidCsrf => "Invalid CSRF token",
+                ResumaError::RateLimited => "Too many requests",
+                _ => "Request blocked",
+            },
         }
+    }
+
+    pub fn from_resuma(err: ResumaError) -> Self {
+        Self::Middleware(err)
     }
 }
 

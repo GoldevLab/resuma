@@ -33,11 +33,13 @@ pub struct FlowApp {
     pages: HashMap<String, PageEntry>,
     streaming: bool,
     not_found: Option<Arc<dyn Fn() -> View + Send + Sync>>,
+    pwa: Option<crate::pwa::FlowPwaConfig>,
 }
 
 #[derive(Debug, Clone)]
 pub struct FlowServeOptions {
     pub addr: SocketAddr,
+    pub security: resuma_server::SecurityConfig,
 }
 
 impl Default for FlowServeOptions {
@@ -49,9 +51,16 @@ impl Default for FlowServeOptions {
 impl FlowServeOptions {
     /// Read bind address from `RESUMA_ADDR` or `HOST` + `PORT` (Fly.io, Docker).
     pub fn from_env() -> Self {
+        Self {
+            addr: Self::addr_from_env(),
+            security: resuma_server::SecurityConfig::from_env(),
+        }
+    }
+
+    fn addr_from_env() -> SocketAddr {
         if let Ok(raw) = std::env::var("RESUMA_ADDR") {
             if let Ok(addr) = raw.parse() {
-                return Self { addr };
+                return addr;
             }
         }
 
@@ -60,11 +69,9 @@ impl FlowServeOptions {
             .ok()
             .and_then(|p| p.parse().ok())
             .unwrap_or(3000);
-        let addr = format!("{host}:{port}")
+        format!("{host}:{port}")
             .parse()
-            .unwrap_or_else(|_| SocketAddr::from(([127, 0, 0, 1], port)));
-
-        Self { addr }
+            .unwrap_or_else(|_| SocketAddr::from(([127, 0, 0, 1], port)))
     }
 }
 
@@ -75,6 +82,7 @@ impl FlowApp {
             pages: HashMap::new(),
             streaming: false,
             not_found: None,
+            pwa: None,
         }
     }
 
@@ -100,6 +108,13 @@ impl FlowApp {
 
     pub fn with_json_ld(mut self, json_ld: impl Into<String>) -> Self {
         self.inner = self.inner.with_json_ld(json_ld);
+        self
+    }
+
+    /// Enable installable PWA (manifest, service worker, icons) for Android/iOS/desktop.
+    pub fn with_pwa(mut self, config: crate::pwa::FlowPwaConfig) -> Self {
+        self.inner = self.inner.with_pwa(config.to_pwa_options());
+        self.pwa = Some(config);
         self
     }
 
@@ -229,14 +244,27 @@ impl FlowApp {
             app = app.fallback(move |_path| Some(nf()));
         }
 
-        let router = attach_flow_routes(
+        let mut router = attach_flow_routes(
             app.into_router(),
             crate::routes::FlowSeoConfig { site_url, paths },
-        )
-        .layer(middleware::from_fn(resuma_server::security_headers_middleware));
+        );
+
+        if let Some(pwa) = self.pwa {
+            router = crate::pwa::attach_pwa_routes(router, pwa);
+        }
+
+        resuma_server::configure_security(opts.security.clone());
+        use axum::extract::DefaultBodyLimit;
+        let router = router
+            .layer(DefaultBodyLimit::max(opts.security.body_limit_bytes))
+            .layer(middleware::from_fn(resuma_server::security_headers_middleware));
         let listener = tokio::net::TcpListener::bind(opts.addr).await?;
         println!("resuma flow listening on http://{}", opts.addr);
-        axum::serve(listener, router).await
+        axum::serve(
+            listener,
+            router.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
     }
 }
 
@@ -275,8 +303,9 @@ fn dispatch_dynamic(
 fn render_with_flow(mut req: FlowRequest, entry: PageEntry, deferred_streaming: bool) -> View {
     if let Ok(h) = tokio::runtime::Handle::try_current() {
         let updated = tokio::task::block_in_place(|| h.block_on(run_middleware(req.clone())));
-        if let Ok(r) = updated {
-            req = r;
+        match updated {
+            Ok(r) => req = r,
+            Err(e) => return error_page(&FlowError::from_resuma(e)),
         }
     }
 

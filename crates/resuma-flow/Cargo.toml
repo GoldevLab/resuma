@@ -5,6 +5,11 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 description = "Resuma Flow — full-stack app layer: pages, layouts, loads, submits, middleware"
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
 
 [dependencies]
 resuma-core   = { workspace = true }

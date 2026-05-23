@@ -6,6 +6,16 @@ authors.workspace = true
 license.workspace = true
 description = "Resuma — the first Rust framework with SSR + Resumability + Islands + Server Actions + JS Bridge. This is the umbrella crate users depend on."
 readme = "../../README.md"
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+categories.workspace = true
+keywords.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [[bin]]
 name = "resuma"
@@ -23,7 +33,7 @@ resuma-ssr     = { workspace = true }
 resuma-server  = { workspace = true }
 resuma-router  = { workspace = true }
 resuma-flow    = { workspace = true }
-resuma-cli     = { path = "../resuma-cli", version = "0.1.0", optional = true }
+resuma-cli     = { workspace = true, optional = true }
 serde          = { workspace = true }
 serde_json     = { workspace = true }
 ctor           = "0.2"

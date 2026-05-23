@@ -68,6 +68,7 @@ async fn main() -> std::io::Result<()> {
         .with_site_url(site_url)
         .with_og_image("/og.svg")
         .with_json_ld(json_ld)
+        .with_pwa(site::pwa_config())
         .with_head(site::SITE_CSS)
         .streaming(true)
         .not_found(|| not_found_page())

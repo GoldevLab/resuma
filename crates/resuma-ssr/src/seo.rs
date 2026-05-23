@@ -84,12 +84,17 @@ pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
 
         out.push_str(&format!(
             r#"
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/favicon.svg" />
 <meta property="og:type" content="{og_type}" />
 <meta property="og:site_name" content="{site}" />
 <meta property="og:title" content="{title}" />
 <meta property="og:description" content="{description}" />
 <meta property="og:url" content="{canonical}" />
 <meta property="og:image" content="{og_image}" />
+<meta name="og:title" content="{title}" />
+<meta name="og:description" content="{description}" />
+<meta name="og:image" content="{og_image}" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="{title}" />
 <meta name="twitter:description" content="{description}" />
@@ -110,6 +115,10 @@ pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
             r#"<script type="application/ld+json">{json_ld}</script>"#,
             json_ld = opts.json_ld,
         ));
+    }
+
+    if let Some(pwa) = &opts.pwa {
+        out.push_str(&crate::pwa::pwa_head_tags(pwa));
     }
 
     out

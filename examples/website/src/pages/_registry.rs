@@ -34,6 +34,7 @@ match module {
             "docs::cookbook::streaming_loaders" => Some(super::docs::cookbook::streaming_loaders::page(req)),
             "docs::cookbook::theme" => Some(super::docs::cookbook::theme::page(req)),
             "docs::cookbook::view_transitions" => Some(super::docs::cookbook::view_transitions::page(req)),
+            "docs::examples" => Some(super::docs::examples::page(req)),
             "docs::faq" => Some(super::docs::faq::page(req)),
             "docs::flow" => Some(super::docs::flow::index::page(req)),
             "docs::flow::caching" => Some(super::docs::flow::caching::page(req)),
@@ -49,6 +50,13 @@ match module {
             "docs::getting_started" => Some(super::docs::getting_started::page(req)),
             "docs::package" => Some(super::docs::package::page(req)),
             "docs::project_structure" => Some(super::docs::project_structure::page(req)),
+            "docs::security" => Some(super::docs::security::index::page(req)),
+            "docs::security::authorization" => Some(super::docs::security::authorization::page(req)),
+            "docs::security::backend_patterns" => Some(super::docs::security::backend_patterns::page(req)),
+            "docs::security::configure" => Some(super::docs::security::configure::page(req)),
+            "docs::security::middleware" => Some(super::docs::security::middleware::page(req)),
+            "docs::security::server_actions" => Some(super::docs::security::server_actions::page(req)),
+            "docs::security::todo" => Some(super::docs::security::todo::page(req)),
             _ => None,
 }
 }

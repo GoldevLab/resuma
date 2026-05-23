@@ -160,6 +160,7 @@ impl RenderContext {
             actions: self.actions.borrow().clone(),
             contexts: self.contexts.borrow().clone(),
             visible_tasks: self.visible_tasks.borrow().clone(),
+            csrf_token: None,
         }
     }
 }
@@ -175,6 +176,9 @@ pub struct ResumePayload {
     pub contexts: BTreeMap<String, Value>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
     pub visible_tasks: BTreeMap<u32, String>,
+    /// Double-submit CSRF token (sent as `X-Resuma-CSRF` on POST requests).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub csrf_token: Option<String>,
 }
 
 impl ResumePayload {

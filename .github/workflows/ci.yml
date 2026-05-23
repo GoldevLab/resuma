@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (library crates)
+        run: |
+          cargo clippy -p resuma-rs2js -p resuma-core -p resuma-macros -p resuma-ssr \
+            -p resuma-router -p resuma-server -p resuma-flow -p resuma-cli -p resuma \
+            -- -D warnings
+
+      - name: Check library crates
+        run: |
+          cargo check -p resuma-rs2js -p resuma-core -p resuma-macros -p resuma-ssr \
+            -p resuma-router -p resuma-server -p resuma-flow -p resuma-cli -p resuma
+
+      - name: Check examples
+        run: |
+          cargo check -p example-counter -p example-todo -p example-website
+
+  publish-dry-run:
+    runs-on: ubuntu-latest
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo publish --dry-run (first crate only)
+        run: cargo publish -p resuma-rs2js --dry-run

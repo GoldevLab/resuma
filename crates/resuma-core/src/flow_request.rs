@@ -48,6 +48,34 @@ impl FlowRequest {
         self.extensions.get(key)
     }
 
+    /// True when middleware attached `extensions["authenticated"] = true`.
+    pub fn is_authenticated(&self) -> bool {
+        self.extension("authenticated")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    }
+
+    /// User id set by auth middleware (`extensions["user_id"]`).
+    pub fn user_id(&self) -> Option<&str> {
+        self.extension("user_id").and_then(|v| v.as_str())
+    }
+
+    /// Role names set by auth middleware (`extensions["roles"]` as JSON array).
+    pub fn roles(&self) -> Vec<String> {
+        self.extension("roles")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn has_role(&self, role: &str) -> bool {
+        self.roles().iter().any(|r| r == role)
+    }
+
     /// Build a request from plain HTTP parts (no framework-specific types).
     pub fn from_parts(
         method: impl Into<String>,

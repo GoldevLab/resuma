@@ -20,21 +20,27 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.74"
 authors = ["Resuma Contributors"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/resuma/resuma"
-description = "Resuma - The first Rust framework with SSR + Resumability + Islands + Server Actions + JS Bridge"
+homepage = "https://github.com/resuma/resuma"
+documentation = "https://docs.rs/resuma"
+description = "Resuma - SSR + Resumability + Islands + Server Actions for Rust"
 keywords = ["web", "framework", "ssr", "resumability", "islands"]
+categories = ["web-programming", "asynchronous"]
+readme = "README.md"
 
 [workspace.dependencies]
-# Workspace internal crates
+# Workspace internal crates (publish in dependency order — see docs/PUBLISHING.md)
+resuma-rs2js   = { path = "crates/resuma-rs2js",   version = "0.1.0" }
 resuma-core    = { path = "crates/resuma-core",    version = "0.1.0" }
 resuma-macros  = { path = "crates/resuma-macros",  version = "0.1.0" }
 resuma-ssr     = { path = "crates/resuma-ssr",     version = "0.1.0" }
-resuma-server  = { path = "crates/resuma-server",  version = "0.1.0" }
 resuma-router  = { path = "crates/resuma-router",  version = "0.1.0" }
-resuma-rs2js   = { path = "crates/resuma-rs2js",   version = "0.1.0" }
+resuma-server  = { path = "crates/resuma-server",  version = "0.1.0" }
 resuma-flow    = { path = "crates/resuma-flow",    version = "0.1.0" }
+resuma-cli     = { path = "crates/resuma-cli",     version = "0.1.0" }
 
 # 3rd-party
 serde       = { version = "1", features = ["derive"] }

@@ -1,0 +1,51 @@
+name: Publish to crates.io
+
+on:
+  workflow_dispatch:
+    inputs:
+      crate:
+        description: "Crate to publish (or 'all' in order)"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - resuma-rs2js
+          - resuma-core
+          - resuma-macros
+          - resuma-ssr
+          - resuma-router
+          - resuma-server
+          - resuma-flow
+          - resuma-cli
+          - resuma
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Login to crates.io
+        run: cargo login "${{ secrets.CRATES_IO_TOKEN }}"
+
+      - name: Publish
+        run: |
+          publish_one() {
+            echo "Publishing $1..."
+            cargo publish -p "$1"
+          }
+          if [ "${{ inputs.crate }}" = "all" ]; then
+            for c in resuma-rs2js resuma-core resuma-macros resuma-ssr resuma-router \
+                     resuma-server resuma-flow resuma-cli resuma; do
+              publish_one "$c"
+              sleep 90
+            done
+          else
+            publish_one "${{ inputs.crate }}"
+          fi
