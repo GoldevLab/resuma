@@ -38,7 +38,7 @@ resuma routes --generate --path src/pages"#)}
             <p>"All commands map to plain Cargo workflows:"</p>
             {code_block(r#"cargo run                              # dev server
 cargo build --release                  # production build
-cargo run -p resuma-cli -- routes --generate --path src/pages"#)}
+resuma routes --generate --path src/pages"#)}
         </>
     }
 }

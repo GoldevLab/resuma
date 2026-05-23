@@ -5,28 +5,28 @@ pub fn page(_req: FlowRequest) -> View {
     view! {
         <>
             <h1>"Resuma + Flow"</h1>
-            <p class="lead">"One package to install, two layers to learn — like Qwik + Qwik City, but unified for Rust."</p>
+            <p class="lead">"One crate to install — like Qwik, but for Rust."</p>
 
             <h2>"The model"</h2>
             <table class="docs-table">
                 <thead>
-                    <tr><th>"Layer"</th><th>"Crate (internal)"</th><th>"You import"</th><th>"Purpose"</th></tr>
+                    <tr><th>"Layer"</th><th>"Module (internal)"</th><th>"You import"</th><th>"Purpose"</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td><strong>"Resuma¹"</strong></td><td>"resuma-core, resuma-ssr, resuma-server"</td><td>"resuma::prelude::*"</td><td>"Components, signals, SSR, resumability"</td></tr>
-                    <tr><td><strong>"Flow²"</strong></td><td>"resuma-flow, resuma-router"</td><td>"FlowApp, #[load], #[submit]"</td><td>"Pages, routing, data, forms"</td></tr>
+                    <tr><td><strong>"Resuma¹"</strong></td><td>"resuma::core, ssr, server"</td><td>"resuma::prelude::*"</td><td>"Components, signals, SSR, resumability"</td></tr>
+                    <tr><td><strong>"Flow²"</strong></td><td>"resuma::flow, router"</td><td>"FlowApp, #[load], #[submit]"</td><td>"Pages, routing, data, forms"</td></tr>
                 </tbody>
             </table>
 
             <h2>"Install"</h2>
             <p>"Users depend on a single crate:"</p>
             {code_block(r#"[dependencies]
-resuma = "0.1"
+resuma = "0.2"
 tokio  = { version = "1", features = ["full"] }"#)}
 
             <p>"Everything re-exports through " <code>"resuma::prelude"</code>":"</p>
             {code_block(r#"use resuma::prelude::*;
-// ResumaApp, ResumaApp, view!, #[component], #[server]
+// ResumaApp, view!, #[component], #[server]
 // FlowApp, #[load], #[submit], #[layout], #[middleware]"#)}
 
             <h2>"When to use what"</h2>
@@ -48,11 +48,15 @@ tokio  = { version = "1", features = ["full"] }"#)}
   Cargo.toml          # resuma + tokio only"#)}
 
             <h2>"CLI commands"</h2>
-            {code_block(r#"resuma new my-app                    # static SSR (default)
+            {code_block(r#"cargo install resuma
+resuma new my-app                    # static SSR (default)
 resuma new my-app --template todo    # full showcase
 resuma dev
 resuma build
 resuma routes --generate --path src/pages   # Flow apps only"#)}
+
+            <h2>"Published crates"</h2>
+            <p>"Only two crates ship on crates.io: " <code>"resuma"</code> " (runtime) and " <code>"resuma-macros"</code> " (proc-macros — required by Rust)."</p>
 
             <h2>"API map (Qwik → Resuma)"</h2>
             <table class="docs-table">

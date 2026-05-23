@@ -53,7 +53,7 @@ fn Counter() -> View {
                     {feature_card("🦀", "Server actions", "#[server] async fn registers RPC at /_resuma/action/:name — callable from handlers and forms.")}
                     {feature_card("🌊", "Resuma Flow", "Full-stack layer: #[load], #[submit], layouts, middleware, file-based pages — one dependency.")}
                     {feature_card("📦", "One package", "cargo add resuma gives you core + Flow + macros + server. Like Qwik + Qwik City, unified.")}
-                    {feature_card("🔗", "JS bridge", "view! translates Rust closures to JS via resuma-rs2js. js!{} for escape hatches.")}
+                    {feature_card("🔗", "JS bridge", "view! translates Rust closures to JS at compile time. js!{} for escape hatches.")}
                 </div>
             </section>
 

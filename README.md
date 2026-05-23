@@ -120,40 +120,21 @@ resuma new my-app --template todo    # full Resuma showcase
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                      Resuma App                          │
+│                   resuma crate (v0.2)                    │
 │                                                          │
-│   ┌──────────────────┐    ┌────────────────────────┐     │
-│   │ resuma-core      │    │ resuma-macros          │     │
-│   │ Signal/View/Comp │◄──►│ view!/#[component]/... │     │
-│   └────────┬─────────┘    └──────────┬─────────────┘     │
-│            │                          │                  │
-│            ▼                          ▼                  │
-│   ┌──────────────────┐    ┌────────────────────────┐     │
-│   │ resuma-ssr       │    │ resuma-rs2js           │     │
-│   │ View → HTML      │    │ Rust closures → JS     │     │
-│   └────────┬─────────┘    └────────────────────────┘     │
-│            │                                              │
-│            ▼                                              │
-│   ┌──────────────────────────────────────────────────┐   │
-│   │ resuma-server (axum)                             │   │
-│   │  GET  /_resuma/runtime.js                        │   │
-│   │  POST /_resuma/action/:name                      │   │
-│   │  GET  /_resuma/handler/:chunk.js                 │   │
-│   │  GET  /_resuma/island/:chunk.js                  │   │
-│   └──────────────────────────────────────────────────┘   │
+│   core ──► ssr ──► server (axum)                         │
+│     │              GET  /_resuma/runtime.js              │
+│     │              POST /_resuma/action/:name            │
+│     └──► flow + router (pages, loads, submits)           │
+│                                                          │
+│   resuma-macros (separate crate)                         │
+│     view! / #[component] / rs2js → JS handlers           │
 └──────────────────────────────────────────────────────────┘
                          │ HTTP
                          ▼
 ┌──────────────────────────────────────────────────────────┐
 │                   Browser (~3KB)                         │
-│   ┌──────────────────────────────────────────────────┐   │
-│   │ Resuma runtime                                   │   │
-│   │  • parse <script type="resuma/state">…           │   │
-│   │  • reconstruct signals                           │   │
-│   │  • document-level event delegation               │   │
-│   │  • lazy import handler chunks                    │   │
-│   │  • call server actions via fetch                 │   │
-│   └──────────────────────────────────────────────────┘   │
+│   parse resuma/state · delegate events · lazy handlers   │
 └──────────────────────────────────────────────────────────┘
 ```
 

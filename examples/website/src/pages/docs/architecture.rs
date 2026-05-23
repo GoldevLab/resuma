@@ -16,7 +16,7 @@ serialize signals              delegate events
 
             <h2>"Pipeline of one click"</h2>
             <ol>
-                <li><strong>"view! expansion"</strong>" — closure → resuma-rs2js → HandlerRef in HTML"</li>
+                <li><strong>"view! expansion"</strong>" — closure → rs2js (in resuma-macros) → HandlerRef in HTML"</li>
                 <li><strong>"SSR"</strong>" — walk View tree, emit data-r-on:* attributes + JSON payload"</li>
                 <li><strong>"Runtime"</strong>" — document listener, lazy fetch handler chunk, update signals"</li>
             </ol>
@@ -27,16 +27,17 @@ serialize signals              delegate events
 </script>
 <script type="module" src="/_resuma/loader.js"></script>"#)}
 
-            <h2>"Crates"</h2>
+            <h2>"Crates (v0.2)"</h2>
             <table class="docs-table">
-                <thead><tr><th>"Crate"</th><th>"Role"</th></tr></thead>
+                <thead><tr><th>"Crate / module"</th><th>"Role"</th></tr></thead>
                 <tbody>
-                    <tr><td>"resuma-core"</td><td>"Signals, View, resumability primitives"</td></tr>
-                    <tr><td>"resuma-macros"</td><td>"view!, #[component], #[load], #[submit]"</td></tr>
-                    <tr><td>"resuma-ssr"</td><td>"HTML rendering + streaming chunks"</td></tr>
-                    <tr><td>"resuma-server"</td><td>"axum HTTP, /_resuma/* endpoints"</td></tr>
-                    <tr><td>"resuma-flow"</td><td>"FlowApp, pages, loads, submits"</td></tr>
-                    <tr><td>"resuma"</td><td>"Umbrella — depend on this only"</td></tr>
+                    <tr><td><code>"resuma"</code></td><td>"Single runtime crate — depend on this only"</td></tr>
+                    <tr><td><code>"resuma::core"</code></td><td>"Signals, View, resumability primitives"</td></tr>
+                    <tr><td><code>"resuma::ssr"</code></td><td>"HTML rendering + streaming chunks"</td></tr>
+                    <tr><td><code>"resuma::server"</code></td><td>"axum HTTP, /_resuma/* endpoints"</td></tr>
+                    <tr><td><code>"resuma::flow"</code></td><td>"FlowApp, pages, loads, submits"</td></tr>
+                    <tr><td><code>"resuma::router"</code></td><td>"File-based page scanner"</td></tr>
+                    <tr><td><code>"resuma-macros"</code></td><td>"view!, #[component], #[load], #[submit] (proc-macros)"</td></tr>
                 </tbody>
             </table>
 

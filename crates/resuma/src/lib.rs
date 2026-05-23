@@ -66,6 +66,7 @@ pub mod prelude {
         component, server, island, view, js, load, submit, layout, middleware,
         render_to_string, render_view,
         FlowApp, FlowRequest, FlowServeOptions, use_load, try_use_load, try_use_load_value, form,
+        current_request,
         LoadValue,
         Store, use_store, provide_context, use_context,
         use_task, use_visible_task, use_debounce, push_slots, resolve_slot, SlottedChild,

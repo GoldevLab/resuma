@@ -35,7 +35,7 @@ view! {
 The `view!` macro tokenizes the JSX-ish input and walks it. When it sees `onClick={...}`, it:
 
 1. Parses the closure with `syn`.
-2. Hands the body to `resuma-rs2js::translate_handler(...)`.
+2. Hands the body to `rs2js::translate_handler(...)` (inside `resuma-macros`).
 3. Receives back a `{ js: String, captures: BTreeSet<String>, ... }` translation.
 4. Generates Rust code that registers the chunk + symbol with the active `RenderContext`, returning an `AttrValue::Handler(HandlerRef { … })`.
 
@@ -60,7 +60,7 @@ View::element("button")
 
 ### 2.2 SSR rendering
 
-`resuma-ssr` walks the resulting `View` tree. For our button it emits:
+`resuma::ssr` walks the resulting `View` tree.
 
 ```html
 <button data-r-on:click="__page__#h_8d3a9c…"
@@ -96,7 +96,7 @@ Total round-trip on first interaction: zero network requests for the inline path
 * A typed JSON dispatcher `__resuma_action_dispatch_search(args)` that deserialises arguments via `serde_json` and calls `search`.
 * A `#[ctor::ctor]` initializer that registers the dispatcher in the global action registry.
 
-In templates, calling `actions::search(q).await` is detected by `resuma-rs2js` and translated to:
+In templates, calling `actions::search(q).await` is detected by rs2js and translated to:
 
 ```js
 (await __resuma.action('search', [q]))
@@ -117,7 +117,7 @@ The runtime walks `<resuma-island>` elements after bootstrap, dynamically import
 
 ## 5. Reactivity
 
-`resuma-core` mirrors a fine-grained reactivity model on the server:
+`resuma::core` mirrors a fine-grained reactivity model on the server:
 
 * `Signal<T>` allocates a stable id from the active `RenderContext`.
 * `use_effect` subscribes to signals captured during execution.
@@ -157,7 +157,7 @@ Inside `js!{}` you have:
 
 ## 8. File-based routing
 
-`resuma-router::discover(path)` walks `src/routes/` and turns:
+`resuma::router::discover(path)` walks `src/pages/` and turns:
 
 ```
 src/routes/index.rs            -> /

@@ -92,14 +92,14 @@ Flow serves `/robots.txt` and `/sitemap.xml`. Configure via `FlowSeoConfig`.
 
 Full API: `/docs/api` on the docs site.
 
-## Crates
+## Modules (inside `resuma`)
 
-| Crate | Role |
-|-------|------|
-| `resuma-core` | Signals, views, resumability |
-| `resuma-flow` | Pages, loads, submits, routing |
-| `resuma-server` | axum HTTP + `/_resuma/*` |
-| `resuma-router` | File scanner for `src/pages/` |
+| Module | Role |
+|--------|------|
+| `resuma::core` | Signals, views, resumability |
+| `resuma::flow` | Pages, loads, submits, routing |
+| `resuma::server` | axum HTTP + `/_resuma/*` |
+| `resuma::router` | File scanner for `src/pages/` |
 
 ## Cookbook recipes
 

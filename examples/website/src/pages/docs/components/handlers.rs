@@ -5,7 +5,7 @@ pub fn page(_req: FlowRequest) -> View {
     view! {
         <>
             <h1>"Event Handlers"</h1>
-            <p class="lead">"Closures in onClick and other event attributes are translated to JavaScript by resuma-rs2js and lazy-loaded on first interaction."</p>
+            <p class="lead">"Closures in onClick and other event attributes are translated to JavaScript at compile time (rs2js in resuma-macros) and lazy-loaded on first interaction."</p>
 
             <h2>"onClick"</h2>
             {code_block(r#"let count = use_signal(0);
@@ -19,7 +19,7 @@ view! {
             <h2>"How translation works"</h2>
             <ol>
                 <li>"view! captures the closure at compile time."</li>
-                <li>"resuma-rs2js emits a small JS module."</li>
+                <li>"rs2js (inside resuma-macros) emits a small JS module."</li>
                 <li>"SSR embeds a HandlerRef in " <code>"data-r-on:click"</code> " attributes."</li>
                 <li>"On first click, the runtime fetches " <code>"/_resuma/handler/:chunk"</code> " and runs the handler."</li>
             </ol>

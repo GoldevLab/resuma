@@ -49,7 +49,7 @@ fly open"##)}
             <h2>"Notes"</h2>
             <ul>
                 <li>"Replace " <code>"example-website"</code> " / " <code>"website"</code> " with your crate and binary names."</li>
-                <li>"Prebuilt JS runtime assets are embedded in resuma-server — no Node.js in the runtime image."</li>
+                <li>"Prebuilt JS runtime assets are embedded in the " <code>"resuma"</code> " crate — no Node.js in the runtime image."</li>
                 <li>"Set " <code>"RESUMA_ENV=production"</code> " and " <code>"RESUMA_TRUST_PROXY=1"</code> " — see " <a href="/docs/security/configure">"Configure security"</a>"."</li>
                 <li>"Health check hits " <code>"/"</code> "; " <code>"/robots.txt"</code> " and " <code>"/sitemap.xml"</code> " on Flow apps."</li>
             </ul>

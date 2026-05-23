@@ -10,7 +10,7 @@ pub fn page(_req: FlowRequest) -> View {
             <p>"Hydration re-executes your entire component tree on the client to attach event listeners. Resumability serializes signals and handler references into HTML during SSR; the client resumes only what the user interacts with — no full-tree replay."</p>
 
             <h2>"Does Resuma run Rust in the browser?"</h2>
-            <p>"No. Components always execute on the server. Client-side code is limited to a tiny runtime (~3 KB loader + lazy core) and small JS chunks translated from handler closures via resuma-rs2js. Business logic stays in Rust."</p>
+            <p>"No. Components always execute on the server. Client-side code is limited to a tiny runtime (~3 KB loader + lazy core) and small JS chunks translated from handler closures at compile time (rs2js in resuma-macros). Business logic stays in Rust."</p>
 
             <h2>"How big is the client bundle?"</h2>
             <p>"Static pages ship zero JS. Interactive pages load loader.js (~1–2 KB gzipped), then core.js on first interaction. Handler and island chunks load on demand. See the " <a href="/docs/benchmark">"benchmark page"</a> " for measured numbers vs Qwik."</p>
@@ -19,7 +19,7 @@ pub fn page(_req: FlowRequest) -> View {
             <p>"Both use resumability instead of hydration. Qwik splits $ boundaries in TS/JSX; Resuma splits at Rust handler closures and " <code>"#[island]"</code> " boundaries. Resuma Flow mirrors Qwik City with " <code>"#[load]"</code> ", " <code>"#[submit]"</code> ", and file-based pages — but everything is Rust-native."</p>
 
             <h2>"Do I need Node.js?"</h2>
-            <p>"Only if you rebuild the JS runtime from source. Prebuilt assets ship in resuma-server. For app development, Rust + cargo (or the resuma CLI) is enough."</p>
+            <p>"Only if you rebuild the JS runtime from source. Prebuilt assets ship inside the " <code>"resuma"</code> " crate (" <code>"assets/"</code> "). For app development, Rust + cargo (or " <code>"cargo install resuma"</code> ") is enough."</p>
 
             <h2>"Can I use Resuma without Flow?"</h2>
             <p>"Yes. ResumaApp supports single-page apps with manual route registration — ideal for counters, widgets, and embedded UI. Flow adds multi-page routing, loaders, submits, and middleware when you need a full site."</p>

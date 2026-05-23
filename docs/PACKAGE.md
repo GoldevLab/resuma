@@ -1,6 +1,6 @@
 # Resuma package — one install, two layers
 
-Like **Qwik + Qwik City**, but unified: users depend on a single crate.
+Like **Qwik**, but unified: users depend on a single crate.
 
 ```
 ┌─────────────────────────────┐     ┌─────────────────────────────┐
@@ -16,7 +16,7 @@ Like **Qwik + Qwik City**, but unified: users depend on a single crate.
 
 ```toml
 [dependencies]
-resuma = { version = "0.1", default-features = false }
+resuma = { version = "0.2", default-features = false }
 tokio  = { version = "1", features = ["full"] }
 ```
 
@@ -45,17 +45,21 @@ cd my-app && resuma dev
 
 From the monorepo: `cargo install --path crates/resuma --features cli`
 
-## Internal crates (for contributors)
+## Internal modules (for contributors)
 
-| Crate | Layer | Role |
-|-------|-------|------|
-| `resuma-core` | Core | Signals, View, resumability |
-| `resuma-macros` | Core | `view!`, `#[component]`, `#[load]` |
-| `resuma-ssr` | Core | HTML + streaming |
-| `resuma-server` | Core | axum, `/_resuma/*` |
-| `resuma-flow` | Flow | `FlowApp`, routing, loads |
-| `resuma-router` | Flow | File scanner for `src/pages/` |
-| **`resuma`** | **Public** | **Re-exports everything** |
+| Module | Layer | Role |
+|--------|-------|------|
+| `resuma::core` | Core | Signals, View, resumability |
+| `resuma::ssr` | Core | HTML + streaming |
+| `resuma::server` | Core | axum, `/_resuma/*` |
+| `resuma::flow` | Flow | `FlowApp`, routing, loads |
+| `resuma::router` | Flow | File scanner for `src/pages/` |
+| `resuma-macros` | Macros | `view!`, `#[component]`, rs2js |
+| **`resuma`** | **Public** | **Runtime — depend on this** |
+
+## Published crates
+
+Only **`resuma`** + **`resuma-macros`** ship on crates.io (proc-macros must be a separate crate in Rust).
 
 ## Qwik → Resuma map
 
@@ -67,6 +71,6 @@ From the monorepo: `cargo install --path crates/resuma --features cli`
 | `server$` | `#[server]` |
 | `plugin.ts` | `#[middleware]` |
 | `src/routes/` | `src/pages/` |
-| Qwik + Qwik City (2 packages) | `resuma` (1 package) |
+| Qwik + Qwik City (2 packages) | `resuma` (1 runtime crate) |
 
 See the live docs: `cargo run -p example-website` → http://127.0.0.1:3000
