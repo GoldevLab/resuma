@@ -59,7 +59,12 @@ From the monorepo: `cargo install --path crates/resuma --features cli`
 
 ## Published crates
 
-Only **`resuma`** + **`resuma-macros`** ship on crates.io (proc-macros must be a separate crate in Rust).
+Only **`resuma`** + **`resuma-macros`** ship on [crates.io](https://crates.io/crates/resuma) (proc-macros must be a separate crate in Rust).
+
+| Crate | crates.io | docs.rs |
+|-------|-----------|---------|
+| `resuma` | [crates.io/crates/resuma](https://crates.io/crates/resuma) | [docs.rs/resuma](https://docs.rs/resuma) |
+| `resuma-macros` | [crates.io/crates/resuma-macros](https://crates.io/crates/resuma-macros) | [docs.rs/resuma-macros](https://docs.rs/resuma-macros) |
 
 ## Qwik → Resuma map
 

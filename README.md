@@ -2,9 +2,15 @@
 
 # 🌊 Resuma
 
+[![Crates.io](https://img.shields.io/crates/v/resuma.svg)](https://crates.io/crates/resuma)
+[![docs.rs](https://img.shields.io/docsrs/resuma)](https://docs.rs/resuma)
+[![License](https://img.shields.io/crates/l/resuma.svg)](https://github.com/GolfredoPerezFernandez/resuma)
+
 **The first Rust web framework with SSR + Resumability + Islands + Server Actions + a friendly JS Bridge.**
 
 *Better than Leptos: zero hydration, true resumability, native islands, automatic Rust→JS handler compilation.*
+
+**Install:** [`cargo install resuma`](https://crates.io/crates/resuma) · **Docs:** [docs.rs/resuma](https://docs.rs/resuma) · **Repo:** [GitHub](https://github.com/GolfredoPerezFernandez/resuma)
 
 </div>
 
@@ -22,7 +28,7 @@ Resuma is a from-scratch Rust framework for building modern web apps. It picks t
 | Server actions | Partial | `#[server] async fn` + RPC |
 | JS interop | Manual `wasm-bindgen` | **`js!{}` escape hatch** |
 | Templates | RSX / DSL | **JSX-like `view!{}`** without `$` noise |
-| Rust → JS compilation | ❌ | ✅ via `resuma-rs2js` |
+| Rust → JS compilation | ❌ | ✅ via `resuma-macros` (rs2js) |
 
 The mental model: **components only run on the server**. The browser never re-executes them. Instead, the SSR pass serialises every signal, handler reference and island into the HTML, and the tiny client runtime *resumes* execution lazily — exactly when the user clicks something.
 
@@ -52,7 +58,7 @@ async fn main() -> std::io::Result<()> {
 }
 ```
 
-That single click handler is **automatically translated to JavaScript** by `resuma-rs2js`, lazy-loaded on first interaction, and runs against the resumed signal state. No hydration, no re-execution, no WASM bundle.
+That single click handler is **automatically translated to JavaScript** by `resuma-macros` (rs2js), lazy-loaded on first interaction, and runs against the resumed signal state. No hydration, no re-execution, no WASM bundle.
 
 ## Server actions
 
@@ -109,7 +115,7 @@ Mark any component with `#[island]` and Resuma will package its handlers into an
 
 See [`docs/PACKAGE.md`](docs/PACKAGE.md) and [`docs/FLOW.md`](docs/FLOW.md).
 
-**Live docs site:** `cargo run -p example-website` → http://127.0.0.1:3000
+**Live docs site:** https://resuma-docs.fly.dev · or `cargo run -p example-website` → http://127.0.0.1:3000
 
 ```bash
 resuma new my-app                    # static SSR (default)
@@ -168,7 +174,7 @@ Resuma/
 
 ## Getting started
 
-> **Pre-requisites:** Rust 1.74+ ([rustup](https://rustup.rs)).
+> **Pre-requisites:** Rust 1.91+ ([rustup](https://rustup.rs)).
 
 ### Install from crates.io (recommended)
 
@@ -178,6 +184,10 @@ resuma new my-app --template todo
 cd my-app
 resuma dev
 ```
+
+- **Crate:** [crates.io/crates/resuma](https://crates.io/crates/resuma)
+- **API docs:** [docs.rs/resuma/0.2.0](https://docs.rs/resuma/0.2.0)
+- **Proc-macros:** [docs.rs/resuma-macros/0.2.0](https://docs.rs/resuma-macros/0.2.0)
 
 Library only (no CLI binary):
 
@@ -200,7 +210,7 @@ cargo run -p example-todo      # full-stack + security showcase
 cargo run -p example-website   # docs site
 ```
 
-## What works in v0.1
+## What works in v0.2
 
 ✅ `Signal<T>`, `use_signal`, `use_effect`, `use_computed`
 ✅ `view!{}` macro with JSX-like syntax (no `$` noise)
@@ -215,9 +225,9 @@ cargo run -p example-website   # docs site
 ✅ File-based routing scanner (`src/routes/[id].rs` → `/users/:id`)
 ✅ `resuma` CLI: `new`, `dev`, `build`, `routes`
 
-## Roadmap (v0.2+)
+## Roadmap (v0.3+)
 
-- [ ] Hot Module Reload via `resuma-cli` + websocket bridge
+- [ ] Hot Module Reload via `resuma` CLI + websocket bridge
 - [ ] Build-time pre-rendering for static sites
 - [ ] Partial pre-rendering (PPR) — server shell + dynamic islands
 - [ ] `#[island(load = "visible")]` lazy load policies
@@ -225,7 +235,7 @@ cargo run -p example-website   # docs site
 - [ ] First-class TypeScript bindings for `js!{}` blocks
 - [ ] WASM-backed islands for compute-heavy code (opt-in)
 
-Already shipped in v0.1: streaming SSR (Flow), layouts, file-based routing, security defaults.
+Already shipped in v0.2: single-crate layout, streaming SSR (Flow), layouts, file-based routing, security defaults, [crates.io publish](https://crates.io/crates/resuma).
 
 ## Why "Resuma"?
 

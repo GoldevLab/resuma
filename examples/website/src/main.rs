@@ -23,6 +23,8 @@ fn SiteLayout() -> View {
                 </nav>
                 <div class="header-actions">
                     <a href="/docs/getting_started" class="btn btn-ghost">"Get Started"</a>
+                    <a href="https://docs.rs/resuma" class="btn btn-ghost" target="_blank">"docs.rs"</a>
+                    <a href="https://crates.io/crates/resuma" class="btn btn-ghost" target="_blank">"crates.io"</a>
                     <a href="https://github.com/GolfredoPerezFernandez/resuma" class="btn btn-primary">"GitHub"</a>
                 </div>
             </div>
@@ -30,7 +32,15 @@ fn SiteLayout() -> View {
         <Slot />
         <footer class="site-footer">
             <p>"Made with ❤️ by the Resuma team · MIT License"</p>
-            <p><a href="/docs/package">"One crate: resuma + Flow"</a>" · "<a href="/docs/architecture">"Architecture"</a></p>
+            <p>
+                <a href="https://crates.io/crates/resuma" target="_blank">"crates.io"</a>
+                " · "
+                <a href="https://docs.rs/resuma" target="_blank">"docs.rs"</a>
+                " · "
+                <a href="/docs/package">"One crate: resuma + Flow"</a>
+                " · "
+                <a href="/docs/architecture">"Architecture"</a>
+            </p>
         </footer>
     }
 }

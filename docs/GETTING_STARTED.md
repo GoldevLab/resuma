@@ -2,7 +2,9 @@
 
 > Quick path to your first resumable Rust app.
 
-**Interactive docs:** `cargo run -p example-website` → http://127.0.0.1:3000/docs
+**Published on crates.io:** [resuma 0.2.0](https://crates.io/crates/resuma) · **API docs:** [docs.rs/resuma](https://docs.rs/resuma)
+
+**Interactive docs:** `cargo run -p example-website` → http://127.0.0.1:3000/docs · **Live:** https://resuma-docs.fly.dev/docs
 
 ## Try examples
 
@@ -20,14 +22,20 @@ Static pages ship **zero client JS** until you interact.
 
 ## Prerequisites
 
-* [Rust 1.74+](https://rustup.rs)
+* [Rust 1.91+](https://rustup.rs)
 * [Node.js 18+](https://nodejs.org) (optional — rebuild JS runtime only)
 
 ## Install CLI
 
 ```sh
-cargo install --path crates/resuma --features cli   # from source
-# cargo install resuma                            # when published
+cargo install resuma   # from crates.io
+resuma --help
+```
+
+From source while developing the monorepo:
+
+```sh
+cargo install --path crates/resuma --features cli
 ```
 
 ```toml

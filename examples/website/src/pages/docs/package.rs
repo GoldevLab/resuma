@@ -57,6 +57,23 @@ resuma routes --generate --path src/pages   # Flow apps only"#)}
 
             <h2>"Published crates"</h2>
             <p>"Only two crates ship on crates.io: " <code>"resuma"</code> " (runtime) and " <code>"resuma-macros"</code> " (proc-macros — required by Rust)."</p>
+            <table class="docs-table">
+                <thead>
+                    <tr><th>"Crate"</th><th>"crates.io"</th><th>"docs.rs"</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>"resuma"</code></td>
+                        <td><a href="https://crates.io/crates/resuma" target="_blank">"crates.io/crates/resuma"</a></td>
+                        <td><a href="https://docs.rs/resuma" target="_blank">"docs.rs/resuma"</a></td>
+                    </tr>
+                    <tr>
+                        <td><code>"resuma-macros"</code></td>
+                        <td><a href="https://crates.io/crates/resuma-macros" target="_blank">"crates.io/crates/resuma-macros"</a></td>
+                        <td><a href="https://docs.rs/resuma-macros" target="_blank">"docs.rs/resuma-macros"</a></td>
+                    </tr>
+                </tbody>
+            </table>
 
             <h2>"API map (Qwik → Resuma)"</h2>
             <table class="docs-table">

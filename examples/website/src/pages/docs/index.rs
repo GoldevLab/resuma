@@ -4,7 +4,13 @@ pub fn page(_req: FlowRequest) -> View {
     view! {
         <>
             <h1>"Documentation"</h1>
-            <p class="lead">"Resumable SSR in Rust — core components, full-stack Flow, production security, and deploy guides."</p>
+            <p class="lead">
+                "Resumable SSR in Rust — core components, full-stack Flow, production security, and deploy guides. "
+                "Published as "
+                <a href="https://crates.io/crates/resuma" target="_blank">"resuma 0.2"</a>
+                " on crates.io · "
+                <a href="https://docs.rs/resuma" target="_blank">"API on docs.rs"</a>"."
+            </p>
 
             <h2>"Start here"</h2>
             <div class="grid-3">

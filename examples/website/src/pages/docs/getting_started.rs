@@ -43,7 +43,7 @@ pub fn page(_req: FlowRequest) -> View {
             <h2>"Prerequisites"</h2>
             <p>"To build Resuma apps locally, you need:"</p>
             <ul>
-                <li><a href="https://rustup.rs">"Rust 1.74+"</a>" (stable channel via rustup)"</li>
+                <li><a href="https://rustup.rs">"Rust 1.91+"</a>" (stable channel via rustup)"</li>
                 <li><a href="https://nodejs.org">"Node.js 18+"</a>" (optional — only to rebuild the JS runtime)"</li>
                 <li>"Your favorite editor ("<a href="https://code.visualstudio.com/">"VS Code"</a>" + rust-analyzer recommended)"</li>
             </ul>
@@ -54,8 +54,18 @@ pub fn page(_req: FlowRequest) -> View {
             </p>
 
             <h2>"Install the CLI"</h2>
-            <p>"Once published to crates.io (recommended):"</p>
+            <p>
+                "From "
+                <a href="https://crates.io/crates/resuma" target="_blank">"crates.io"</a>
+                " (recommended):"
+            </p>
             {code_block("cargo install resuma")}
+            <p>
+                "API reference: "
+                <a href="https://docs.rs/resuma" target="_blank">"docs.rs/resuma"</a>
+                " · "
+                <a href="https://docs.rs/resuma-macros" target="_blank">"docs.rs/resuma-macros"</a>
+            </p>
             <p>"From source while developing the monorepo:"</p>
             {code_block(r#"git clone https://github.com/GolfredoPerezFernandez/resuma
 cd resuma

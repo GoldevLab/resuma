@@ -1,5 +1,7 @@
 # Installation
 
+Resuma is published on [crates.io](https://crates.io/crates/resuma). API docs: [docs.rs/resuma](https://docs.rs/resuma).
+
 Resuma needs the Rust toolchain. Node only matters if you want to rebuild
 the JavaScript runtime (a fallback bundle ships in the repo).
 
@@ -16,7 +18,7 @@ Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
 After installing, restart your terminal and verify:
 
 ```powershell
-rustc --version   # should print 1.74+
+rustc --version   # should print 1.91+
 cargo --version
 ```
 

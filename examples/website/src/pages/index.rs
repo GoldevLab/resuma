@@ -19,6 +19,7 @@ pub fn page(_req: FlowRequest) -> View {
                     <div class="hero-actions">
                         <a href="/docs/getting_started" class="btn btn-primary">"Get Started"</a>
                         <a href="/docs" class="btn btn-ghost">"Read the Docs"</a>
+                        <a href="https://crates.io/crates/resuma" class="btn btn-ghost" target="_blank">"crates.io"</a>
                     </div>
                     <div class="hero-stats">
                         <div><strong>"~884 B"</strong>" loader (gzip)"</div>

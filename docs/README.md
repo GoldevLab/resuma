@@ -4,7 +4,9 @@ Two ways to read the docs:
 
 | Format | How |
 |--------|-----|
-| **Docs site** (recommended) | `cargo run -p example-website` → http://127.0.0.1:3000/docs |
+| **Docs site** (recommended) | https://resuma-docs.fly.dev/docs · or `cargo run -p example-website` → http://127.0.0.1:3000/docs |
+| **API reference** | [docs.rs/resuma](https://docs.rs/resuma) · [docs.rs/resuma-macros](https://docs.rs/resuma-macros) |
+| **Crates.io** | [resuma](https://crates.io/crates/resuma) · [resuma-macros](https://crates.io/crates/resuma-macros) |
 | **Markdown** (this folder) | GitHub / offline reference |
 
 ## Markdown index
