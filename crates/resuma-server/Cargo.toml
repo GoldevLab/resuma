@@ -5,13 +5,13 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 description = "HTTP server (axum) for Resuma. Serves SSR pages, server actions and the JS runtime."
-readme = "../../README.md"
+readme = "README.md"
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 keywords.workspace = true
-include = ["src/**/*", "assets/**/*", "Cargo.toml"]
+include = ["src/**/*", "assets/**/*", "README.md", "Cargo.toml"]
 
 [dependencies]
 resuma-core   = { workspace = true }

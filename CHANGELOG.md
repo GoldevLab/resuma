@@ -9,7 +9,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - `repository` and `homepage` metadata now point to `https://github.com/GolfredoPerezFernandez/resuma`
-- All published crates include the workspace `README.md` on crates.io
+- All published crates include a crate-specific `README.md` on crates.io
 
 ## [0.1.0] - 2025-05-23
 
