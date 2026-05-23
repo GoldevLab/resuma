@@ -5,6 +5,11 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 description = "Resuma command-line interface — `resuma new`, `resuma dev`, `resuma build`."
+readme = "../../README.md"
+
+[lib]
+name = "resuma_cli"
+path = "src/lib.rs"
 
 [[bin]]
 name = "resuma"

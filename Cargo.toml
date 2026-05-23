@@ -8,9 +8,13 @@ members = [
     "crates/resuma-router",
     "crates/resuma-rs2js",
     "crates/resuma-cli",
+    "crates/resuma-flow",
     "crates/resuma",
     "examples/counter",
     "examples/todo",
+    "examples/flow-demo",
+    "examples/flow-pages",
+    "examples/website",
 ]
 
 [workspace.package]
@@ -30,6 +34,7 @@ resuma-ssr     = { path = "crates/resuma-ssr",     version = "0.1.0" }
 resuma-server  = { path = "crates/resuma-server",  version = "0.1.0" }
 resuma-router  = { path = "crates/resuma-router",  version = "0.1.0" }
 resuma-rs2js   = { path = "crates/resuma-rs2js",   version = "0.1.0" }
+resuma-flow    = { path = "crates/resuma-flow",    version = "0.1.0" }
 
 # 3rd-party
 serde       = { version = "1", features = ["derive"] }

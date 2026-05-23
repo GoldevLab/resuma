@@ -1,0 +1,37 @@
+# Resuma docs site — deploy from repo root with: fly deploy
+#
+# First time: fly launch --no-deploy --name resuma-docs
+# Or change `app` below to your Fly app name.
+
+app = 'resuma-docs'
+primary_region = 'iad'
+
+[build]
+
+[deploy]
+  strategy = 'rolling'
+
+[env]
+  HOST = '0.0.0.0'
+  PORT = '3000'
+  RESUMA_PAGES_ROOT = '/app/pages'
+  SITE_URL = 'https://resuma-docs.fly.dev'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+  [[http_service.checks]]
+    grace_period = '20s'
+    interval = '15s'
+    method = 'get'
+    timeout = '5s'
+    path = '/'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'

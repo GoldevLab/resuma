@@ -276,7 +276,13 @@ fn emit_node(node: Node) -> TokenStream {
             quote! { ::resuma::__private::View::fragment(vec![ #(#cs),* ]) }
         }
         Node::Element { tag, attrs, children, is_component, self_closing } => {
-            if is_component {
+            if tag == "Slot" {
+                emit_slot(attrs)
+            } else if tag == "Form" {
+                emit_form(attrs, children)
+            } else if tag == "NavLink" {
+                emit_nav_link(attrs, children)
+            } else if is_component {
                 emit_component(tag, attrs, children)
             } else {
                 emit_html_element(tag, attrs, children, self_closing)
@@ -295,6 +301,29 @@ fn emit_child(node: Node) -> TokenStream {
     }
 }
 
+fn emit_slot(attrs: Vec<Attr>) -> TokenStream {
+    let mut name: Option<String> = None;
+    for a in attrs {
+        match a.name.as_str() {
+            "name" => {
+                if let AttrVal::StaticStr(s) = a.value {
+                    name = Some(s);
+                } else if let AttrVal::Expr(ts) = a.value {
+                    return quote! { ::resuma::__private::resolve_slot(Some({ #ts }.to_string().as_str())) };
+                }
+            }
+            _ => {}
+        }
+    }
+    match name {
+        Some(n) => {
+            let lit = n;
+            quote! { ::resuma::__private::resolve_slot(Some(#lit)) }
+        }
+        None => quote! { ::resuma::__private::resolve_slot(None) },
+    }
+}
+
 fn emit_html_element(tag: String, attrs: Vec<Attr>, children: Vec<Node>, _self_closing: bool) -> TokenStream {
     let attr_pushes = attrs.into_iter().map(emit_attr);
     let child_pushes = children.into_iter().map(emit_child);
@@ -309,7 +338,6 @@ fn emit_html_element(tag: String, attrs: Vec<Attr>, children: Vec<Node>, _self_c
 fn emit_component(tag: String, attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
     let component_path: TokenStream = tag.parse().unwrap_or_else(|_| quote!(MissingComponent));
 
-    // Each attribute is forwarded as a builder method call: `.foo(value)`.
     let setters = attrs.into_iter().map(|a| {
         let name = syn::Ident::new(&a.name, Span::call_site());
         match a.value {
@@ -319,25 +347,175 @@ fn emit_component(tag: String, attrs: Vec<Attr>, children: Vec<Node>) -> TokenSt
         }
     });
 
-    let child_pushes = children.into_iter().map(emit_child);
+    let child_pushes = children.into_iter().map(emit_slotted_child);
 
     quote! {
         ::resuma::__private::render_component::<#component_path>(
             <#component_path as ::resuma::__private::Component>::Props::default()
                 #(#setters)*
-                .__resuma_children(vec![ #(#child_pushes),* ])
+                .__resuma_slotted(vec![ #(#child_pushes),* ])
         )
     }
 }
 
+fn emit_nav_link(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
+    let mut href: Option<TokenStream> = None;
+    let mut active_class = quote! { "active" };
+    let mut class = quote! { "" };
+
+    for a in attrs {
+        match a.name.as_str() {
+            "href" => {
+                href = Some(match a.value {
+                    AttrVal::StaticStr(s) => quote!(#s),
+                    AttrVal::Expr(ts) => quote!({ #ts }),
+                    AttrVal::Bool => quote! { "" },
+                });
+            }
+            "activeClass" | "active_class" => {
+                active_class = match a.value {
+                    AttrVal::StaticStr(s) => quote!(#s),
+                    AttrVal::Expr(ts) => quote!({ #ts }),
+                    AttrVal::Bool => quote! { "active" },
+                };
+            }
+            "class" => {
+                class = match a.value {
+                    AttrVal::StaticStr(s) => quote!(#s),
+                    AttrVal::Expr(ts) => quote!({ #ts }),
+                    AttrVal::Bool => quote! { "" },
+                };
+            }
+            _ => {}
+        }
+    }
+
+    let href = href.unwrap_or_else(|| quote! { "" });
+    let child_pushes = children.into_iter().map(emit_child);
+
+    quote! {
+        {
+            let __path = ::resuma::current_request()
+                .map(|r| r.path)
+                .unwrap_or_else(|| "/".to_string());
+            ::resuma::__private::nav_link(
+                #href,
+                &__path,
+                #active_class,
+                #class,
+                vec![ #(#child_pushes),* ],
+            )
+        }
+    }
+}
+
+fn emit_form(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
+    let mut submit_name: Option<TokenStream> = None;
+    let mut extra_attrs = Vec::new();
+
+    for a in attrs {
+        if a.name == "submit" {
+            submit_name = Some(match a.value {
+                AttrVal::StaticStr(s) => quote!(#s),
+                AttrVal::Expr(ts) => {
+                    if let Ok(path) = syn::parse2::<syn::Path>(ts.clone()) {
+                        if path.segments.len() == 1 {
+                            let ident = path.segments[0].ident.clone();
+                            quote!(stringify!(#ident))
+                        } else {
+                            quote!({ #ts }.to_string())
+                        }
+                    } else {
+                        quote!({ #ts }.to_string())
+                    }
+                }
+                AttrVal::Bool => {
+                    return compile_err("Form submit handler must be a function name");
+                }
+            });
+        } else {
+            extra_attrs.push(a);
+        }
+    }
+
+    let submit = submit_name.unwrap_or_else(|| {
+        quote! { compile_error!("Form requires submit={handler}"); "" }
+    });
+
+    let attr_pushes = extra_attrs.into_iter().map(emit_attr);
+    let child_pushes = children.into_iter().map(emit_child);
+
+    quote! {
+        ::resuma::__private::flow_form(
+            #submit,
+            vec![ #(#attr_pushes),* ],
+            vec![ #(#child_pushes),* ],
+        )
+    }
+}
+
+fn emit_slotted_child(node: Node) -> TokenStream {
+    match node {
+        Node::Element { mut attrs, children, is_component, self_closing, tag } => {
+            let slot_name = take_slot_attr(&mut attrs);
+            let child = if tag == "Slot" {
+                emit_slot(attrs)
+            } else if tag == "Form" {
+                emit_form(attrs, children)
+            } else if tag == "NavLink" {
+                emit_nav_link(attrs, children)
+            } else if is_component {
+                emit_component(tag, attrs, children)
+            } else {
+                emit_html_element(tag, attrs, children, self_closing)
+            };
+            let slot_expr = match slot_name {
+                Some(AttrVal::StaticStr(s)) => quote! { Some(#s.to_string()) },
+                Some(AttrVal::Expr(ts)) => quote! { Some({ #ts }.to_string()) },
+                Some(AttrVal::Bool) | None => quote! { None },
+            };
+            quote! {
+                ::resuma::__private::SlottedChild {
+                    slot: #slot_expr,
+                    child: ::resuma::__private::Child::View(#child),
+                }
+            }
+        }
+        other => {
+            let child = emit_child(other);
+            quote! {
+                ::resuma::__private::SlottedChild {
+                    slot: None,
+                    child: #child,
+                }
+            }
+        }
+    }
+}
+
+fn take_slot_attr(attrs: &mut Vec<Attr>) -> Option<AttrVal> {
+    if let Some(idx) = attrs.iter().position(|a| a.name == "slot") {
+        Some(attrs.remove(idx).value)
+    } else {
+        None
+    }
+}
+
 fn emit_attr(attr: Attr) -> TokenStream {
-    let name = attr.name;
+    let name = attr.name.clone();
+    let lower = name.to_lowercase();
+
+    if lower == "preventdefault" {
+        return emit_modifier_attr("preventDefault", attr.value);
+    }
+    if lower == "stoppropagation" {
+        return emit_modifier_attr("stopPropagation", attr.value);
+    }
 
     // Detect event handlers in any of the common spellings:
     //   * Solid-style `on:click=...`
     //   * React-style `onClick=...`   (lowercased to "onclick" for matching)
     //   * HTML-style  `onclick=...`
-    let lower = name.to_lowercase();
     let is_event = name.starts_with("on:") || lower.starts_with("on") && lower.len() > 2;
 
     if is_event {
@@ -353,6 +531,22 @@ fn emit_attr(attr: Attr) -> TokenStream {
         },
         AttrVal::Expr(ts) => quote! {
             (#name.to_string(), ::resuma::__private::resolve_attr_value({ #ts }))
+        },
+    }
+}
+
+fn emit_modifier_attr(kind: &str, value: AttrVal) -> TokenStream {
+    let event = match value {
+        AttrVal::StaticStr(s) => quote!(#s.to_string()),
+        AttrVal::Bool => quote!("click".to_string()),
+        AttrVal::Expr(ts) => quote!({ #ts }.to_string()),
+    };
+    match kind {
+        "preventDefault" => quote! {
+            ("preventDefault".to_string(), ::resuma::__private::AttrValue::PreventDefault(#event))
+        },
+        _ => quote! {
+            ("stopPropagation".to_string(), ::resuma::__private::AttrValue::StopPropagation(#event))
         },
     }
 }

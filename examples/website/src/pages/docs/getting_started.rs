@@ -1,0 +1,150 @@
+use resuma::prelude::*;
+
+use crate::site::{code_block, playground_card};
+
+pub fn page(_req: FlowRequest) -> View {
+    view! {
+        <>
+            <h1>"Getting Started Resumably"</h1>
+            <p class="lead">
+                "Resuma is a resumable Rust web framework — no hydration, no eager JS execution. "
+                "Components run on the server; a tiny loader resumes interactivity on demand. "
+                "Resuma Flow adds file-based pages, loads, and submits in one crate — like Qwik + Qwik City, unified."
+            </p>
+
+            <h2>"Try it right away"</h2>
+            <p>
+                "Rust apps can't run in the browser like Qwik's StackBlitz playgrounds yet. "
+                "Instead, clone the repo and launch a live example in one command:"
+            </p>
+            <div class="playground-grid">
+                {playground_card(
+                    "Counter (core only)",
+                    "Minimal resumable button — see loader.js load on first click.",
+                    "cargo run -p example-counter",
+                )}
+                {playground_card(
+                    "Flow demo (full-stack)",
+                    "Loads, submits, streaming SSR, and file-based pages.",
+                    "cargo run -p example-flow-demo",
+                )}
+                {playground_card(
+                    "This docs site",
+                    "Static landing (0 JS) + interactive docs pages.",
+                    "cargo run -p example-website",
+                )}
+            </div>
+            <p>
+                "Open " <a href="http://127.0.0.1:3000">"http://127.0.0.1:3000"</a>
+                " and inspect the Network tab — static pages ship zero client JS."
+            </p>
+
+            <h2>"Prerequisites"</h2>
+            <p>"To build Resuma apps locally, you need:"</p>
+            <ul>
+                <li><a href="https://rustup.rs">"Rust 1.74+"</a>" (stable channel via rustup)"</li>
+                <li><a href="https://nodejs.org">"Node.js 18+"</a>" (optional — only to rebuild the JS runtime)"</li>
+                <li>"Your favorite editor ("<a href="https://code.visualstudio.com/">"VS Code"</a>" + rust-analyzer recommended)"</li>
+            </ul>
+            <p>
+                "Optionally, read "
+                <a href="/docs/architecture">"How resumability works"</a>
+                " before scaffolding."
+            </p>
+
+            <h2>"Install the CLI"</h2>
+            <p>"Once published to crates.io (recommended):"</p>
+            {code_block("cargo install resuma")}
+            <p>"From source while developing the monorepo:"</p>
+            {code_block(r#"git clone https://github.com/resuma/resuma
+cd resuma
+cargo install --path crates/resuma --features cli
+
+resuma --help"#)}
+
+            <h2>"Create an app using the CLI"</h2>
+            <p>
+                "Use " <code>"resuma new"</code> " or " <code>"resuma create"</code> " to scaffold a starter. "
+                "Pick a template — counter for core-only, flow for full-stack:"
+            </p>
+            <div class="template-grid">
+                <div class="template-pill">
+                    <strong>"counter"</strong>
+                    <span>"Single-page app · ResumaApp · great first project"</span>
+                </div>
+                <div class="template-pill">
+                    <strong>"flow"</strong>
+                    <span>"Multi-page · FlowApp · file-based pages · layouts"</span>
+                </div>
+            </div>
+            {code_block(r#"# Counter starter (default)
+resuma new my-app
+resuma new my-app --template counter
+
+# Full-stack starter (Resuma + Flow)
+resuma new my-app --template flow
+
+cd my-app"#)}
+
+            <p>"The CLI generates Cargo.toml, src/main.rs, and (for flow) a pages directory with a route registry."</p>
+
+            <h2>"Start the development server"</h2>
+            <p>"Inside your project directory:"</p>
+            {code_block(r#"resuma dev
+# hot reload at http://127.0.0.1:3000"#)}
+            <p>"Without the CLI, plain Cargo works too:"</p>
+            {code_block("cargo run")}
+
+            <h2>"Hello, Resuma"</h2>
+            <p>"A minimal component with resumable state:"</p>
+            {code_block(r#"use resuma::prelude::*;
+
+#[component]
+fn Hello() -> View {
+    let excited = use_signal(false);
+    view! {
+        <main>
+            <h1>"Hello Resuma"</h1>
+            <button onClick={ move |_| excited.set(true) }>
+                "Click me"
+            </button>
+        </main>
+    }
+}
+
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
+    ResumaApp::new()
+        .page("/", || Hello::render(HelloProps::default()))
+        .serve(ServeOptions::default())
+        .await
+}"#)}
+
+            <h2>"Add a server action"</h2>
+            {code_block(r#"#[server]
+async fn greet(name: String) -> String {
+    format!("Hello, {name}!")
+}"#)}
+            <p>"From a handler, call " <code>"__resuma.action('greet', [name])"</code> " — RPC at " <code>"POST /_resuma/action/:name"</code>"."</p>
+
+            <h2>"Project structure (flow template)"</h2>
+            {code_block(r##"my-app/
+├── Cargo.toml
+├── src/
+│   ├── main.rs          (FlowApp, layouts, auto_pages)
+│   └── pages/
+│       ├── index.rs     (route: /)
+│       ├── layout.rs    (layout marker)
+│       ├── mod.rs       (generated)
+│       └── _registry.rs (resuma routes --generate)"##)}
+
+            <h2>"Next steps"</h2>
+            <ul>
+                <li><a href="/docs/package">"Resuma¹ + Flow² package map"</a></li>
+                <li><a href="/docs/flow">"Resuma Flow — loads, submits, middleware"</a></li>
+                <li><a href="/docs/benchmark">"Bundle benchmark vs Qwik"</a></li>
+                <li><a href="/docs/architecture">"Architecture deep dive"</a></li>
+            </ul>
+        </>
+    }
+}

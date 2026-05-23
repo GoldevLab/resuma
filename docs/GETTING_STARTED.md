@@ -1,48 +1,92 @@
 # Getting started with Resuma
 
-A 5-minute tour of the framework.
+> **Getting Started Resumably** — the Qwik-style quick path to your first resumable Rust app.
 
-## 1. Install Rust and Node
+Resuma is a **resumable** Rust web framework: no hydration, no eager JS execution. Components run on the server; a tiny client loader resumes interactivity on demand. **Resuma Flow** adds file-based pages, loads, and submits in one crate (like Qwik + Qwik City, unified).
 
-* [`rustup.rs`](https://rustup.rs) — Rust 1.74+ (stable channel).
-* [`nodejs.org`](https://nodejs.org) — Node 18+ (only needed if you want to rebuild the JS runtime; a fallback bundle ships in the repo).
+## Try it right away
 
-## 2. Build the workspace
+Rust can't run in-browser playgrounds like Qwik's StackBlitz yet. Clone the repo and run a live example:
 
 ```sh
 git clone https://github.com/resuma/resuma
 cd resuma
-cargo build
+
+cargo run -p example-counter    # minimal counter
+cargo run -p example-flow-demo  # full-stack demo
+cargo run -p example-website    # this docs site
 ```
 
-This compiles every crate plus the `resuma` CLI binary.
+Open http://127.0.0.1:3000 — static pages load **zero client JS**.
 
-## 3. Run the counter example
+## Prerequisites
+
+* [Rust 1.74+](https://rustup.rs) (stable)
+* [Node.js 18+](https://nodejs.org) (optional — only to rebuild the JS runtime)
+* VS Code + rust-analyzer (recommended)
+
+## Install the CLI
+
+**Published (recommended):**
 
 ```sh
-cargo run -p example-counter
+cargo install resuma
 ```
 
-Open http://127.0.0.1:3000 and inspect the page:
+**From source:**
 
-* Network tab — only `runtime.js` loads (~3KB).
-* `<script type="resuma/state">…</script>` — that's the resumability payload.
-* Click the button — DevTools shows a single dynamic `import()` and the count updates instantly.
+```sh
+git clone https://github.com/resuma/resuma
+cd resuma
+cargo install --path crates/resuma --features cli
+resuma --help
+```
 
-## 4. Build your first component
+In app `Cargo.toml`, depend on the library only (skip CLI deps):
 
-Create `src/main.rs`:
+```toml
+resuma = { version = "0.1", default-features = false }
+```
+
+## Create an app using the CLI
+
+```sh
+# Counter starter (default)
+resuma new my-app
+resuma new my-app --template counter
+
+# Full-stack starter (Resuma + Flow)
+resuma create my-app --template flow
+
+cd my-app
+```
+
+| Template | What you get |
+|----------|--------------|
+| `counter` | Single page, `ResumaApp`, resumable signals |
+| `flow` | `FlowApp`, `src/pages/`, layouts, route registry |
+
+## Start the development server
+
+```sh
+resuma dev
+# → http://127.0.0.1:3000 with hot reload
+```
+
+Or plain `cargo run`.
+
+## Hello, Resuma
 
 ```rust
 use resuma::prelude::*;
 
 #[component]
-fn Hello(name: String) -> View {
-    let exclaimed = use_signal(false);
+fn Hello() -> View {
+    let excited = use_signal(false);
     view! {
         <main>
-            <h1>"Hello " {name} { if exclaimed.peek() { "!!" } else { "" } }</h1>
-            <button onClick={ move |_| exclaimed.set(true) }>"emphasis"</button>
+            <h1>"Hello Resuma"</h1>
+            <button onClick={ move |_| excited.set(true) }>"Click me"</button>
         </main>
     }
 }
@@ -50,58 +94,17 @@ fn Hello(name: String) -> View {
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     ResumaApp::new()
-        .page("/", || Hello::render(HelloProps { name: "world".into(), ..Default::default() }))
+        .page("/", || Hello::render(HelloProps::default()))
         .serve(ServeOptions::default())
         .await
 }
 ```
 
-`Cargo.toml`:
+## Next steps
 
-```toml
-[dependencies]
-resuma = { path = "../crates/resuma" }
-tokio  = { version = "1", features = ["full"] }
-```
+* [docs/ARCHITECTURE.md](ARCHITECTURE.md) — how resumability works
+* [docs/PACKAGE.md](PACKAGE.md) — Resuma¹ + Flow² map
+* [docs/FLOW.md](FLOW.md) — loads, submits, middleware
+* `/docs/benchmark` on the docs site — bundle sizes vs Qwik
 
-Run `cargo run`. Done.
-
-## 5. Add a server action
-
-```rust
-#[server]
-async fn count_words(s: String) -> usize {
-    s.split_whitespace().count()
-}
-```
-
-Inside a `view!`:
-
-```rust
-onClick={ js! {
-    const n = await __resuma.action('count_words', [state.text.value]);
-    state.count.set(n);
-}}
-```
-
-The action runs on the server, but is invoked from the browser exactly as if it were local.
-
-## 6. Use the CLI
-
-```sh
-cargo install --path crates/resuma-cli
-
-resuma new my-app
-cd my-app
-resuma dev      # → cargo-watch + auto reload
-resuma build    # → release binary + JS bundle
-resuma routes   # → list discovered file-based routes
-```
-
-## 7. Going further
-
-* [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) — how resumability, islands, and the JS bridge actually work.
-* [`examples/todo`](../examples/todo) — server actions + state mutation.
-* `runtime/src/runtime.ts` — the entire ~3KB client runtime, in heavily commented TypeScript.
-
-Welcome aboard. ✊
+Welcome aboard.

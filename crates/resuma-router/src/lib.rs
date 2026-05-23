@@ -1,14 +1,12 @@
-//! File-based routing for Resuma.
-//!
-//! Conventions, mirroring SvelteKit / Next App Router so it feels familiar:
+//! File-based page discovery for **Resuma Flow**.
 //!
 //! ```text
-//! src/routes/
+//! src/pages/
 //!     index.rs            -> /
 //!     about.rs            -> /about
 //!     users/[id].rs       -> /users/:id
 //!     blog/[...slug].rs   -> /blog/*slug
-//!     _layout.rs          -> shared layout (wraps siblings + nested routes)
+//!     _layout.rs          -> shared layout
 //! ```
 //!
 //! At build time the CLI scans this directory and generates a Rust module
@@ -52,9 +50,37 @@ pub fn discover<P: AsRef<Path>>(routes_root: P) -> Vec<DiscoveredRoute> {
     out
 }
 
+/// Layout URL patterns that apply to a page pattern, ordered root → leaf.
+pub fn layout_chain_for(page_pattern: &str, layouts: &[(String, PathBuf)]) -> Vec<String> {
+    let mut chain: Vec<String> = layouts
+        .iter()
+        .filter(|(pat, _)| layout_applies(pat, page_pattern))
+        .map(|(pat, _)| pat.clone())
+        .collect();
+    chain.sort_by_key(|p| p.len());
+    chain
+}
+
+fn layout_applies(layout_pattern: &str, page_pattern: &str) -> bool {
+    if layout_pattern == "/" {
+        return true;
+    }
+    if page_pattern == layout_pattern {
+        return true;
+    }
+    page_pattern.starts_with(layout_pattern)
+        && page_pattern
+            .as_bytes()
+            .get(layout_pattern.len())
+            .is_some_and(|b| *b == b'/')
+}
+
 fn parse_route(rel: PathBuf, abs: PathBuf) -> Option<DiscoveredRoute> {
-    let stem = rel.file_stem()?.to_str()?;
-    let parent = rel.parent().unwrap_or(Path::new("")).to_path_buf();
+        let stem = rel.file_stem()?.to_str()?;
+        if stem == "mod" || stem == "_registry" {
+            return None;
+        }
+        let parent = rel.parent().unwrap_or(Path::new("")).to_path_buf();
     let is_layout = stem == "layout" || stem == "_layout";
 
     let mut segments: Vec<String> = parent

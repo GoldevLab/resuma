@@ -34,7 +34,10 @@ static TODOS: Lazy<Mutex<Vec<Todo>>> = Lazy::new(|| {
 static NEXT_ID: Lazy<Mutex<u64>> = Lazy::new(|| Mutex::new(3));
 
 #[server]
-async fn list_todos() -> Vec<Todo> {
+async fn list_todos(req: &FlowRequest) -> Vec<Todo> {
+    if let Some(ua) = req.header("user-agent") {
+        println!("[todo] list_todos from {ua}");
+    }
     TODOS.lock().clone()
 }
 

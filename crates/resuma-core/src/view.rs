@@ -24,6 +24,8 @@ pub enum View {
     /// A self-contained interactive island. Renders its own SSR HTML and
     /// declares the chunk that will be lazy-loaded on first interaction.
     Island(Island),
+    /// Content projection slot — resolved from parent slotted children.
+    Slot(SlotView),
     /// A rendered chunk of raw HTML — used for trusted output and for nested
     /// pre-rendered components that have already been flattened.
     Raw(String),
@@ -48,6 +50,11 @@ pub struct Fragment {
 pub struct ComponentMarker {
     pub name: String,
     pub view: Box<View>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SlotView {
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,6 +107,10 @@ pub enum AttrValue {
     Handler(HandlerRef),
     /// Boolean attribute that is omitted when false.
     Bool(bool),
+    /// Declarative `preventDefault` for event handlers (async-safe).
+    PreventDefault(String),
+    /// Declarative `stopPropagation` for event handlers (async-safe).
+    StopPropagation(String),
 }
 
 /// Reactive text/HTML node bound to a signal.
@@ -123,6 +134,10 @@ impl View {
 
     pub fn fragment(children: Vec<Child>) -> Self {
         View::Fragment(Fragment { children })
+    }
+
+    pub fn slot(name: Option<String>) -> Self {
+        View::Slot(SlotView { name })
     }
 }
 

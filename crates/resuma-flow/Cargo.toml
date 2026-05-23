@@ -1,0 +1,25 @@
+[package]
+name = "resuma-flow"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Resuma Flow — full-stack app layer: pages, layouts, loads, submits, middleware"
+
+[dependencies]
+resuma-core   = { workspace = true }
+resuma-server = { workspace = true }
+resuma-router = { workspace = true }
+resuma-ssr    = { workspace = true }
+serde         = { workspace = true }
+serde_json    = { workspace = true }
+async-trait   = { workspace = true }
+thiserror     = { workspace = true }
+once_cell     = { workspace = true }
+parking_lot   = { workspace = true }
+tokio         = { workspace = true }
+axum          = { workspace = true }
+serde_urlencoded = "0.7"
+ctor             = "0.2"
+async-stream     = "0.3"
+futures-util     = { version = "0.3", default-features = false, features = ["std"] }

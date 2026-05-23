@@ -96,6 +96,25 @@ fn LiveCounter() -> View {
 
 Mark any component with `#[island]` and Resuma will package its handlers into an isolated chunk that ships only when the island scrolls into view (or immediately, configurable).
 
+## Resuma Flow (full-stack layer)
+
+**One crate** — `resuma` includes core + Flow (like Qwik + Qwik City, unified).
+
+| Resuma Flow | Purpose |
+|-------------|---------|
+| `FlowApp` | App builder with page registry |
+| `#[load]` | Server data before render |
+| `#[submit]` | Form mutations |
+| `src/pages/` | File-based pages |
+
+See [`docs/PACKAGE.md`](docs/PACKAGE.md) and [`docs/FLOW.md`](docs/FLOW.md).
+
+**Live docs site:** `cargo run -p example-website` → http://127.0.0.1:3000
+
+```bash
+resuma new my-app --template flow
+```
+
 ## Architecture
 
 ```
@@ -173,8 +192,9 @@ cargo run -p example-counter
 # Try the todo example with server actions
 cargo run -p example-todo
 
-# Use the CLI
-cargo install --path crates/resuma-cli
+# Use the CLI (from source)
+cargo install --path crates/resuma --features cli
+# When published: cargo install resuma
 resuma new my-app
 cd my-app
 resuma dev

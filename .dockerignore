@@ -1,0 +1,12 @@
+target/
+**/.git/
+**/.gitignore
+**/node_modules/
+runtime/node_modules/
+**/*.md
+!examples/website/src/pages/**/*.rs
+.cursor/
+agent-transcripts/
+terminals/
+**/.env
+**/.env.*

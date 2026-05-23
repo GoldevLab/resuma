@@ -18,6 +18,10 @@ mod component_macro;
 mod server_macro;
 mod island_macro;
 mod js_macro;
+mod load_macro;
+mod submit_macro;
+mod layout_macro;
+mod middleware_macro;
 
 use proc_macro::TokenStream;
 
@@ -61,6 +65,30 @@ pub fn server(args: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn island(args: TokenStream, input: TokenStream) -> TokenStream {
     island_macro::expand(args.into(), input.into()).into()
+}
+
+/// `#[load]` — Resuma Flow server data loader (runs before page render).
+#[proc_macro_attribute]
+pub fn load(args: TokenStream, input: TokenStream) -> TokenStream {
+    load_macro::expand(args.into(), input.into()).into()
+}
+
+/// `#[submit]` — Resuma Flow form submission handler.
+#[proc_macro_attribute]
+pub fn submit(args: TokenStream, input: TokenStream) -> TokenStream {
+    submit_macro::expand(args.into(), input.into()).into()
+}
+
+/// `#[layout]` — Resuma Flow layout wrapper for nested pages.
+#[proc_macro_attribute]
+pub fn layout(args: TokenStream, input: TokenStream) -> TokenStream {
+    layout_macro::expand(args.into(), input.into()).into()
+}
+
+/// `#[middleware]` — Resuma Flow request middleware.
+#[proc_macro_attribute]
+pub fn middleware(args: TokenStream, input: TokenStream) -> TokenStream {
+    middleware_macro::expand(args.into(), input.into()).into()
 }
 
 /// `js!` — raw JavaScript escape hatch for event handlers.

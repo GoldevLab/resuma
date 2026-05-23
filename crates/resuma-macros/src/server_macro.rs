@@ -2,11 +2,11 @@
 //!
 //! Generates:
 //!  * a wrapper that registers the action in the global registry
-//!  * a typed client stub callable from `view!` handlers as `actions::name(..)`
+//!  * optional `&FlowRequest` injection as the last parameter
 
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{parse2, FnArg, ItemFn, Pat};
+use syn::{parse2, FnArg, ItemFn, Pat, Type};
 
 pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
     let func: ItemFn = match parse2(input) {
@@ -26,7 +26,6 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
             .to_compile_error();
     }
 
-    // Forward args verbatim. Each must be (Pat, Type).
     let inputs = func.sig.inputs.clone();
 
     let mut arg_idents = Vec::new();
@@ -40,11 +39,13 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
         }
     }
 
+    let (call_idents, has_req) = split_request_arg(&arg_idents, &arg_types);
+
     let dispatcher_name = format_ident!("__resuma_action_dispatch_{}", name);
-    let registry_ctor   = format_ident!("__resuma_action_register_{}", name);
+    let registry_ctor = format_ident!("__resuma_action_register_{}", name);
     let trampoline_name = format_ident!("__resuma_action_trampoline_{}", name);
 
-    let json_extract = arg_idents.iter().enumerate().map(|(i, id)| {
+    let json_extract = call_idents.iter().enumerate().map(|(i, id)| {
         quote! {
             let #id: _ = match args.get(#i).cloned() {
                 Some(v) => match ::resuma::__private::serde_json::from_value(v) {
@@ -56,32 +57,37 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
         }
     });
 
+    let call = match (call_idents.is_empty(), has_req) {
+        (true, true) => quote!( #name( &req ) ),
+        (true, false) => quote!( #name() ),
+        (false, true) => quote!( #name( #(#call_idents),*, &req ) ),
+        (false, false) => quote!( #name( #(#call_idents),* ) ),
+    };
+
     quote! {
         #vis async fn #name ( #inputs ) #output #block
 
         #[doc(hidden)]
         pub async fn #dispatcher_name(
             args: ::std::vec::Vec<::resuma::__private::serde_json::Value>,
-        ) -> ::resuma::__private::Result<::resuma::__private::serde_json::Value>
-        {
+            req: ::resuma::FlowRequest,
+        ) -> ::resuma::__private::Result<::resuma::__private::serde_json::Value> {
             #(#json_extract)*
-            let res = #name( #(#arg_idents),* ).await;
+            let res = #call.await;
             ::resuma::__private::serde_json::to_value(&res)
                 .map_err(::resuma::__private::ResumaError::from)
         }
 
-        /// Trampoline whose explicit signature lets the compiler coerce the
-        /// `Box::pin(dispatcher_future)` value into the boxed-future type
-        /// expected by `resuma_server::ActionFn`.
         #[doc(hidden)]
         fn #trampoline_name (
             args: ::std::vec::Vec<::resuma::__private::serde_json::Value>,
+            req: ::resuma::FlowRequest,
         ) -> ::std::pin::Pin<::std::boxed::Box<
             dyn ::std::future::Future<
                 Output = ::resuma::__private::Result<::resuma::__private::serde_json::Value>,
             > + ::std::marker::Send,
         >> {
-            ::std::boxed::Box::pin(#dispatcher_name(args))
+            ::std::boxed::Box::pin(#dispatcher_name(args, req))
         }
 
         #[doc(hidden)]
@@ -89,5 +95,41 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
         fn #registry_ctor() {
             ::resuma::__private::register_server_action(#name_str, #trampoline_name);
         }
+    }
+}
+
+fn split_request_arg(
+    idents: &[syn::Ident],
+    types: &[Type],
+) -> (Vec<syn::Ident>, bool) {
+    if idents.is_empty() {
+        return (Vec::new(), false);
+    }
+    let last_ty = &types[types.len() - 1];
+    if is_flow_request_ref(last_ty) {
+        (
+            idents[..idents.len() - 1].to_vec(),
+            true,
+        )
+    } else {
+        (idents.to_vec(), false)
+    }
+}
+
+fn is_flow_request_ref(ty: &Type) -> bool {
+    let Type::Reference(r) = ty else {
+        return false;
+    };
+    is_flow_request_type(&r.elem)
+}
+
+fn is_flow_request_type(ty: &Type) -> bool {
+    match ty {
+        Type::Path(p) => p
+            .path
+            .segments
+            .last()
+            .is_some_and(|s| s.ident == "FlowRequest"),
+        _ => false,
     }
 }

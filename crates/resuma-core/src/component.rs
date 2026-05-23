@@ -3,6 +3,7 @@
 use serde::Serialize;
 
 use crate::signal::Signal;
+use crate::store::Store;
 use crate::view::{Child, Dynamic, View};
 
 /// Trait implemented by every renderable unit. The `#[component]` macro
@@ -73,8 +74,7 @@ impl<T: IntoView> IntoView for Vec<T> {
 }
 
 /// `Signal<T>` interpolated inside `view!{ {count} }` becomes a reactive
-/// `<resuma-dyn>` node bound to the signal id. The runtime patches the text
-/// content whenever the signal changes — no manual subscription needed.
+/// `<resuma-dyn>` node bound to the signal id.
 impl<T: Clone + Serialize + 'static> IntoView for Signal<T> {
     fn into_view(&self) -> View {
         let snapshot = serde_json::to_value(self.peek()).unwrap_or(serde_json::Value::Null);
@@ -83,5 +83,23 @@ impl<T: Clone + Serialize + 'static> IntoView for Signal<T> {
             format: None,
             snapshot,
         })
+    }
+}
+
+impl<T: Clone + Serialize + 'static> IntoView for &Signal<T> {
+    fn into_view(&self) -> View {
+        (*self).into_view()
+    }
+}
+
+impl<T: Clone + Serialize + for<'de> serde::Deserialize<'de> + 'static> IntoView for Store<T> {
+    fn into_view(&self) -> View {
+        self.signal().into_view()
+    }
+}
+
+impl<T: Clone + Serialize + for<'de> serde::Deserialize<'de> + 'static> IntoView for &Store<T> {
+    fn into_view(&self) -> View {
+        self.signal().into_view()
     }
 }

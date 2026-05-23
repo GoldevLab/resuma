@@ -44,22 +44,24 @@ cargo run -p example-todo
 
 ## Optional: rebuild the JS runtime
 
-The repo includes a hand-written fallback at `crates/resuma-server/assets/runtime.js`. To rebuild the optimized bundle from the TypeScript source:
+The repo embeds `loader.js`, `core.js`, and legacy `runtime.js` under `crates/resuma-server/assets/`. To rebuild from TypeScript:
 
 ```sh
 cd runtime
 npm install
 npm run build
-# Bundle ends up at runtime/dist/runtime.js — copy it back over the fallback
-cp dist/runtime.js ../crates/resuma-server/assets/runtime.js
+npm run size   # raw + gzip + brotli report
+cp dist/loader.js dist/core.js dist/runtime.js ../crates/resuma-server/assets/
 ```
 
 ## Install the CLI
 
 ```sh
-cargo install --path crates/resuma-cli
+cargo install resuma
 resuma --help
 ```
+
+From the monorepo: `cargo install --path crates/resuma --features cli`
 
 ## Troubleshooting
 

@@ -51,14 +51,6 @@ pub struct Translation {
     pub actions: BTreeSet<String>,
 }
 
-impl Translation {
-    fn empty() -> Self { Self { js: String::new(), captures: BTreeSet::new(), actions: BTreeSet::new() } }
-    fn merge(&mut self, other: Translation) {
-        self.captures.extend(other.captures);
-        self.actions.extend(other.actions);
-    }
-}
-
 /// Convenience entry point: translate a closure expression into a JS arrow
 /// function. The closure must be a literal (e.g. `move |ev| ...`).
 pub fn translate_handler(closure: &ExprClosure) -> Result<Translation, Rs2JsError> {

@@ -10,3 +10,5 @@ description = "Server-side rendering engine for Resuma. Walks View trees, emits 
 resuma-core = { workspace = true }
 serde       = { workspace = true }
 serde_json  = { workspace = true }
+futures-util = "0.3"
+async-stream = "0.3"

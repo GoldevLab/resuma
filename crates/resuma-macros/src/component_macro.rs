@@ -71,15 +71,15 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
             #(#prop_fields,)*
             /// Children injected by the `view!` macro for `<Component>{...}</Component>`.
             #[doc(hidden)]
-            pub __resuma_children: ::std::vec::Vec<::resuma::__private::Child>,
+            pub __resuma_slotted: ::std::vec::Vec<::resuma::__private::SlottedChild>,
         }
 
         impl #props_ident {
             #(#prop_setters)*
 
             #[doc(hidden)]
-            pub fn __resuma_children(mut self, c: ::std::vec::Vec<::resuma::__private::Child>) -> Self {
-                self.__resuma_children = c;
+            pub fn __resuma_slotted(mut self, c: ::std::vec::Vec<::resuma::__private::SlottedChild>) -> Self {
+                self.__resuma_slotted = c;
                 self
             }
         }
@@ -91,7 +91,7 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
 
             fn render(props: Self::Props) -> #return_ty {
                 #(#prop_destructure)*
-                let _children = props.__resuma_children;
+                let _slot_guard = ::resuma::__private::push_slots(props.__resuma_slotted);
                 #body
             }
         }

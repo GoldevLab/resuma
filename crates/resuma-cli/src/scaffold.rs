@@ -36,14 +36,83 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-resuma = { version = "0.1" }
+resuma = { version = "0.1", default-features = false }
 tokio  = { version = "1", features = ["full"] }
+"#;
+
+const FLOW_MAIN: &str = r##"mod pages;
+
+use resuma::prelude::*;
+use pages::PagesRegistry;
+
+#[layout("/")]
+fn AppLayout() -> View {
+    view! {
+        <div class="shell">
+            <nav class="nav"><NavLink href="/" activeClass="active">"Home"</NavLink></nav>
+            <Slot />
+        </div>
+    }
+}
+
+const CSS: &str = r#"<style>
+body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }
+.nav a { margin-right: 1rem; color: #6366f1; text-decoration: none; }
+.nav a.active { font-weight: 700; }
+</style>"#;
+
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
+    FlowApp::new()
+        .with_title("%NAME%")
+        .with_head(CSS)
+        .auto_pages(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/pages"),
+            PagesRegistry,
+        )
+        .serve(FlowServeOptions::default())
+        .await
+}
+"##;
+
+const FLOW_PAGE_INDEX: &str = r#"use resuma::prelude::*;
+
+pub fn page(_req: FlowRequest) -> View {
+    view! {
+        <main>
+            <h1>"Welcome to Resuma Flow"</h1>
+            <p>"Edit " <code>"src/pages/index.rs"</code> " to get started."</p>
+        </main>
+    }
+}
+"#;
+
+const FLOW_PAGES_MOD: &str = r#"pub mod index;
+mod _registry;
+pub use _registry::PagesRegistry;
+"#;
+
+const FLOW_PAGES_REGISTRY: &str = r#"use resuma::prelude::*;
+use resuma::FlowPageRegistry;
+
+pub struct PagesRegistry;
+
+impl FlowPageRegistry for PagesRegistry {
+    fn render(&self, module: &str, req: FlowRequest) -> Option<View> {
+        match module {
+            "index" => Some(super::index::page(req)),
+            _ => None,
+        }
+    }
+}
+"#;
+
+const FLOW_LAYOUT_MARKER: &str = r#"//! Layout marker — pairs with `#[layout("/")]` in `main.rs`.
 "#;
 
 const README: &str = r#"# %NAME%
 
-Created with [Resuma](https://github.com/resuma/resuma) — the first Rust
-framework with **SSR + Resumability + Islands + Server Actions + JS bridge**.
+Created with [Resuma](https://github.com/resuma/resuma) — SSR + Resumability + Flow in one crate.
 
 ## Develop
 
@@ -55,6 +124,12 @@ resuma dev
 
 ```sh
 resuma build
+```
+
+## Add pages (Flow template)
+
+```sh
+resuma routes --generate --path src/pages
 ```
 "#;
 
@@ -72,13 +147,37 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
     fs::write(dir.join("README.md"), readme).context("write README.md")?;
     fs::write(dir.join(".gitignore"), "target/\nCargo.lock\n").context("write .gitignore")?;
 
-    let main_rs = match template {
-        "counter" => COUNTER_MAIN,
-        other => return Err(anyhow!("unknown template `{}`", other)),
-    };
-    fs::write(dir.join("src/main.rs"), main_rs).context("write src/main.rs")?;
+    match template {
+        "counter" => {
+            fs::write(dir.join("src/main.rs"), COUNTER_MAIN).context("write src/main.rs")?;
+        }
+        "flow" => {
+            fs::create_dir_all(dir.join("src/pages"))?;
+            fs::write(
+                dir.join("src/main.rs"),
+                FLOW_MAIN.replace("%NAME%", name),
+            )
+            .context("write src/main.rs")?;
+            fs::write(dir.join("src/pages/index.rs"), FLOW_PAGE_INDEX)
+                .context("write src/pages/index.rs")?;
+            fs::write(dir.join("src/pages/layout.rs"), FLOW_LAYOUT_MARKER)
+                .context("write src/pages/layout.rs")?;
+            fs::write(dir.join("src/pages/mod.rs"), FLOW_PAGES_MOD)
+                .context("write src/pages/mod.rs")?;
+            fs::write(dir.join("src/pages/_registry.rs"), FLOW_PAGES_REGISTRY)
+                .context("write src/pages/_registry.rs")?;
+        }
+        other => {
+            return Err(anyhow!(
+                "unknown template `{}` (try: counter, flow)",
+                other
+            ));
+        }
+    }
 
     println!("[resuma] created `{}` (template: {})", name, template);
-    println!("\n  cd {}\n  resuma dev\n", name);
+    println!("\n  cd {}", name);
+    println!("  resuma dev      # hot reload at http://127.0.0.1:3000");
+    println!("  cargo run       # or plain cargo\n");
     Ok(())
 }

@@ -17,7 +17,7 @@ use std::fmt::Write;
 use std::rc::Rc;
 
 use resuma_core::{
-    context::{RenderContext, RenderMode, ResumePayload},
+    context::{RenderContext, RenderMode, ResumePayload, page_needs_client},
     handler::HandlerRef,
     serialize::encode_payload,
     view::{Attr, AttrValue, Child, Element, Fragment, Island, View},
@@ -25,20 +25,45 @@ use resuma_core::{
 };
 
 mod escape;
+pub mod seo;
+pub mod stream;
 use escape::{escape_attr, escape_text};
+
+pub use stream::{build_page_stream, render_stream_parts, render_to_stream, stream_head, stream_tail, stream_placeholder, StreamChunk};
 
 /// Configuration for full-page rendering.
 #[derive(Debug, Clone, Default)]
 pub struct PageOptions {
     pub title: String,
+    pub description: String,
     pub head: String,
     pub lang: String,
+    /// Public site origin, e.g. `https://resuma-docs.fly.dev` (no trailing slash).
+    pub site_url: String,
+    /// Open Graph image path or absolute URL.
+    pub og_image: String,
+    pub og_type: String,
+    /// Optional JSON-LD `<script>` inner JSON (not HTML-escaped).
+    pub json_ld: String,
+    /// Override canonical URL (absolute). Defaults to `site_url + path`.
+    pub canonical: Option<String>,
+    /// Client bootstrap script. Defaults to `/_resuma/loader.js`.
+    pub loader_src: String,
+    /// Legacy alias for `loader_src` when set explicitly.
     pub runtime_src: String,
     pub stylesheet: Option<String>,
 }
 
 /// Render a `View` produced by a component to a complete HTML document.
 pub fn render_to_string<F>(opts: &PageOptions, build_view: F) -> String
+where
+    F: FnOnce() -> View,
+{
+    render_to_string_at_path(opts, "/", build_view)
+}
+
+/// Like [`render_to_string`] but sets canonical/OG tags from the request path.
+pub fn render_to_string_at_path<F>(opts: &PageOptions, path: &str, build_view: F) -> String
 where
     F: FnOnce() -> View,
 {
@@ -50,7 +75,41 @@ where
         (buf, ctx.snapshot())
     });
 
-    wrap_document(opts, &body, &payload)
+    wrap_document(opts, &body, &payload, path)
+}
+
+fn loader_src(opts: &PageOptions) -> &str {
+    if !opts.runtime_src.is_empty() {
+        &opts.runtime_src
+    } else if !opts.loader_src.is_empty() {
+        &opts.loader_src
+    } else {
+        "/_resuma/loader.js"
+    }
+}
+
+pub(crate) fn client_scripts(opts: &PageOptions, body_html: &str, payload: &ResumePayload) -> String {
+    if !page_needs_client(payload, body_html) {
+        return String::new();
+    }
+    let payload_json = encode_payload(payload);
+    format!(
+        r#"<script type="resuma/state" id="resuma-state">{payload}</script>
+<script type="module" src="{loader}"></script>"#,
+        payload = payload_json,
+        loader = loader_src(opts),
+    )
+}
+
+/// Render a `View` body and capture the resumability payload in one pass.
+pub fn render_body_and_payload(view: &View) -> (String, ResumePayload) {
+    let ctx = RenderContext::new(RenderMode::Ssr);
+    let body = with_context(ctx.clone(), || {
+        let mut buf = String::new();
+        write_view(&mut buf, view);
+        buf
+    });
+    (body, ctx.snapshot())
 }
 
 /// Render only the body of a `View`, no document scaffolding.
@@ -69,20 +128,17 @@ pub fn render_with_context(ctx: Rc<RenderContext>, view: &View) -> String {
     })
 }
 
-fn wrap_document(opts: &PageOptions, body_html: &str, payload: &ResumePayload) -> String {
+fn wrap_document(opts: &PageOptions, body_html: &str, payload: &ResumePayload, path: &str) -> String {
     let lang = if opts.lang.is_empty() { "en" } else { &opts.lang };
-    let payload_json = encode_payload(payload);
+    let title = seo::page_title(opts, path);
+    let description = seo::page_description(opts, path);
+    let seo_tags = seo::seo_head_tags(opts, path);
     let stylesheet = opts
         .stylesheet
         .as_ref()
         .map(|s| format!(r#"<link rel="stylesheet" href="{}" />"#, s))
         .unwrap_or_default();
-
-    let runtime = if opts.runtime_src.is_empty() {
-        "/_resuma/runtime.js"
-    } else {
-        opts.runtime_src.as_str()
-    };
+    let scripts = client_scripts(opts, body_html, payload);
 
     format!(
         r#"<!doctype html>
@@ -90,23 +146,25 @@ fn wrap_document(opts: &PageOptions, body_html: &str, payload: &ResumePayload) -
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="{description}" />
 <title>{title}</title>
+{seo_tags}
 {stylesheet}
 {head}
 </head>
 <body>
 <div id="resuma-root">{body}</div>
-<script type="resuma/state" id="resuma-state">{payload}</script>
-<script type="module" src="{runtime}"></script>
+{scripts}
 </body>
 </html>"#,
         lang = lang,
-        title = escape_text(&opts.title),
+        title = escape_text(&title),
+        description = escape_text(&description),
+        seo_tags = seo_tags,
         head = opts.head,
         stylesheet = stylesheet,
         body = body_html,
-        payload = payload_json,
-        runtime = runtime,
+        scripts = scripts,
     )
 }
 
@@ -134,6 +192,10 @@ fn write_view(buf: &mut String, view: &View) {
         }
         View::Component(c) => write_view(buf, &c.view),
         View::Island(island) => write_island(buf, island),
+        View::Slot(slot) => {
+            let resolved = resuma_core::resolve_slot(slot.name.as_deref());
+            write_view(buf, &resolved);
+        }
     }
 }
 
@@ -180,6 +242,12 @@ fn write_attr(buf: &mut String, attr: &Attr) {
             let _ = write!(buf, r#" {}="" data-r-bind:{}="{}|{}""#, name, name, signal, escape_attr(f));
         }
         AttrValue::Handler(h) => write_handler_attr(buf, h),
+        AttrValue::PreventDefault(ev) => {
+            let _ = write!(buf, r#" data-r-prevent:{ev}="" "#, ev = ev);
+        }
+        AttrValue::StopPropagation(ev) => {
+            let _ = write!(buf, r#" data-r-stop:{ev}="" "#, ev = ev);
+        }
     }
 }
 
@@ -205,9 +273,8 @@ fn write_handler_attr(buf: &mut String, h: &HandlerRef) {
         let _ = write!(buf, r#" data-r-cap:{ev}="{cap}""#, ev = h.event, cap = captures);
     }
 
-    if let Some(inline) = &h.inline {
-        let _ = write!(buf, r#" data-r-inline:{ev}="{js}""#, ev = h.event, js = escape_attr(inline));
-    }
+    // Handler source lives only in the resumability JSON payload — not duplicated
+    // in `data-r-inline:*` attributes. The runtime lazy-compiles on first interaction.
 }
 
 fn write_island(buf: &mut String, island: &Island) {

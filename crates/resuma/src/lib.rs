@@ -45,15 +45,31 @@
 pub use resuma_core::{
     Signal, ReadSignal, WriteSignal, use_signal,
     Effect, Computed, use_effect, use_computed,
-    View, IntoView, Component,
+    View, IntoView, Component, Child,
     RenderContext, RenderMode, ResumaError, Result,
+    Store, use_store, NoSerialize, no_serialize,
+    SlottedChild, push_slots, resolve_slot, SlotGuard, with_default_slot,
+    ContextId, provide_context, use_context,
+    use_task, use_visible_task, use_debounce, visible_task_js,
+    nav_link, combine_js,
+    portal, with_view_transition, stream_slot, stream_chunk,
+    Theme, provide_theme, use_theme, theme_css_vars,
 };
 
-pub use resuma_macros::{component, server, island, view, js};
+pub use resuma_macros::{component, server, island, view, js, load, submit, layout, middleware};
 
 pub use resuma_server::{ResumaApp, ServeOptions, register_server_action};
 
-pub use resuma_ssr::{render_to_string, render_view, PageOptions};
+pub use resuma_ssr::{render_to_string, render_view, PageOptions, render_to_stream};
+
+pub use resuma_flow::{
+    FlowApp, FlowServeOptions, FlowRequest, LoadValue, SubmitValue, LoaderError, SubmitError,
+    register_loader, register_submit, register_layout, register_middleware,
+    register_loader_cache, register_stream_loader, register_stream_chunk,
+    use_load, try_use_load, try_use_load_value, with_request, current_request, form, encode_submit_result,
+    discover_pages, DiscoveredPage, FlowPageRegistry, apply_layouts,
+    FlowError, error_page, not_found_page,
+};
 
 pub mod prelude {
     //! Glob-friendly re-exports.
@@ -62,8 +78,17 @@ pub mod prelude {
         Effect, Computed, use_effect, use_computed,
         View, IntoView, Component,
         ResumaApp, ServeOptions, PageOptions,
-        component, server, island, view, js,
+        component, server, island, view, js, load, submit, layout, middleware,
         render_to_string, render_view,
+        FlowApp, FlowRequest, FlowServeOptions, use_load, try_use_load, try_use_load_value, form,
+        LoadValue,
+        Store, use_store, provide_context, use_context,
+        use_task, use_visible_task, use_debounce, push_slots, resolve_slot, SlottedChild,
+        nav_link, combine_js, SubmitError, LoaderError,
+        FlowError, error_page, not_found_page,
+        portal, with_view_transition, stream_slot,
+        Theme, provide_theme, use_theme, theme_css_vars,
+        FlowPageRegistry, Child,
     };
 }
 
@@ -81,7 +106,10 @@ pub mod __private {
         signal::SignalId,
         context::{current_context, RenderContext, RenderMode},
         ResumaError, Result,
+        slot::{SlottedChild, push_slots, resolve_slot, with_default_slot},
     };
+    pub use resuma_flow::form as flow_form;
+    pub use resuma_core::{combine_js, nav_link};
     pub use resuma_server::register_server_action;
 
     /// Source code for an event handler — produced by `view!` macro and the

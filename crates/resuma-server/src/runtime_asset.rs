@@ -1,8 +1,5 @@
-//! Embeds the compiled JS runtime into the binary so apps don't need a
-//! separate static asset server.
-//!
-//! When the runtime crate is rebuilt (`pnpm --filter @resuma/runtime build`),
-//! the resulting `runtime.js` is copied into this directory. Until that
-//! happens we ship a tiny inline fallback that warns the developer.
+//! Embedded JS runtime bundles (loader + core + legacy monolith).
 
+pub const LOADER_JS: &str = include_str!("../assets/loader.js");
+pub const CORE_JS: &str = include_str!("../assets/core.js");
 pub const RUNTIME_JS: &str = include_str!("../assets/runtime.js");
