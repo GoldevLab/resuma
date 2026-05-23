@@ -1,0 +1,12 @@
+[package]
+name = "resuma-ssr"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Server-side rendering engine for Resuma. Walks View trees, emits HTML, and embeds the resumability payload."
+
+[dependencies]
+resuma-core = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }

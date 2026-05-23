@@ -1,0 +1,18 @@
+[package]
+name = "resuma"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Resuma — the first Rust framework with SSR + Resumability + Islands + Server Actions + JS Bridge. This is the umbrella crate users depend on."
+readme = "../../README.md"
+
+[dependencies]
+resuma-core    = { workspace = true }
+resuma-macros  = { workspace = true }
+resuma-ssr     = { workspace = true }
+resuma-server  = { workspace = true }
+resuma-router  = { workspace = true }
+serde          = { workspace = true }
+serde_json     = { workspace = true }
+ctor           = "0.2"

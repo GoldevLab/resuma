@@ -1,0 +1,9 @@
+target/
+Cargo.lock
+node_modules/
+dist/
+.resuma/
+*.log
+.DS_Store
+.idea/
+.vscode/

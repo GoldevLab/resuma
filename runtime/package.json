@@ -1,0 +1,20 @@
+{
+  "name": "@resuma/runtime",
+  "version": "0.1.0",
+  "description": "Tiny client runtime for Resuma. Reads serialized state, lazy-loads event handlers, dispatches server actions. No hydration.",
+  "type": "module",
+  "main": "dist/runtime.js",
+  "module": "dist/runtime.js",
+  "types": "dist/runtime.d.ts",
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "esbuild src/runtime.ts --bundle --format=esm --target=es2020 --minify --sourcemap --outfile=dist/runtime.js",
+    "build:dev": "esbuild src/runtime.ts --bundle --format=esm --target=es2020 --sourcemap --outfile=dist/runtime.dev.js",
+    "watch": "esbuild src/runtime.ts --bundle --format=esm --target=es2020 --sourcemap --watch --outfile=dist/runtime.dev.js",
+    "size": "esbuild src/runtime.ts --bundle --format=esm --target=es2020 --minify --analyze | head -50"
+  },
+  "devDependencies": {
+    "esbuild": "^0.23.0",
+    "typescript": "^5.6.0"
+  }
+}

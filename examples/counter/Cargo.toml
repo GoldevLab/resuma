@@ -1,0 +1,13 @@
+[package]
+name = "example-counter"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[[bin]]
+name = "counter"
+path = "src/main.rs"
+
+[dependencies]
+resuma = { path = "../../crates/resuma" }
+tokio  = { workspace = true }

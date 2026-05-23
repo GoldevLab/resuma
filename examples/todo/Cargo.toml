@@ -1,0 +1,16 @@
+[package]
+name = "example-todo"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[[bin]]
+name = "todo"
+path = "src/main.rs"
+
+[dependencies]
+resuma = { path = "../../crates/resuma" }
+tokio  = { workspace = true }
+serde  = { workspace = true }
+once_cell = { workspace = true }
+parking_lot = { workspace = true }
