@@ -65,7 +65,7 @@ parking_lot = "0.12"
 
 const README: &str = r##"# %NAME%
 
-Created with [Resuma](https://github.com/resuma/resuma).
+Created with [Resuma](https://github.com/GolfredoPerezFernandez/resuma).
 
 ## Templates
 

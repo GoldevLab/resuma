@@ -90,7 +90,7 @@ pub fn doc_sidebar(_active_path: &str) -> View {
 
             <h4>"Resources"</h4>
             <nav>
-                <a href="https://github.com/resuma/resuma" target="_blank">"GitHub"</a>
+                <a href="https://github.com/GolfredoPerezFernandez/resuma" target="_blank">"GitHub"</a>
             </nav>
         </aside>
     }

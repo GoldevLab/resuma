@@ -215,7 +215,7 @@ tokio = { version = "1", features = ["full"] }
 ### From source (development)
 
 ```sh
-git clone https://github.com/resuma/resuma
+git clone https://github.com/GolfredoPerezFernandez/resuma
 cd resuma
 cargo install --path crates/resuma --features cli
 

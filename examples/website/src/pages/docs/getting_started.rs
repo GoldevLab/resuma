@@ -57,7 +57,7 @@ pub fn page(_req: FlowRequest) -> View {
             <p>"Once published to crates.io (recommended):"</p>
             {code_block("cargo install resuma")}
             <p>"From source while developing the monorepo:"</p>
-            {code_block(r#"git clone https://github.com/resuma/resuma
+            {code_block(r#"git clone https://github.com/GolfredoPerezFernandez/resuma
 cd resuma
 cargo install --path crates/resuma --features cli
 

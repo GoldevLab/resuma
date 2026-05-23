@@ -7,7 +7,7 @@ Official reference: [Cargo — Publishing on crates.io](https://doc.rust-lang.or
 ## Prerequisites
 
 1. [crates.io](https://crates.io) account + API token
-2. Clean git tree (tag `v0.1.0` recommended before first publish)
+2. Clean git tree (tag `v0.1.1` recommended before publish)
 3. `cargo login <token>` — create token at https://crates.io/settings/tokens
 4. Crate names available on crates.io (`resuma`, `resuma-core`, …)
 5. Push repo to GitHub (docs.rs builds from the tagged commit)
@@ -15,8 +15,8 @@ Official reference: [Cargo — Publishing on crates.io](https://doc.rust-lang.or
 ## First production publish
 
 ```bash
-git add -A && git commit -m "chore: release v0.1.0"
-git tag v0.1.0
+git add -A && git commit -m "chore: release v0.1.1"
+git tag v0.1.1
 git push origin main --tags
 
 cargo login   # paste API token once
@@ -92,5 +92,5 @@ CLI templates live in `crates/resuma-cli/templates/` (embedded via `include_str!
 1. Bump `[workspace.package] version` in root `Cargo.toml`
 2. Bump all `[workspace.dependencies] resuma-*` version keys to match
 3. Update `CHANGELOG.md`
-4. Tag: `git tag v0.1.0 && git push origin v0.1.0`
+4. Tag: `git tag v0.1.1 && git push origin v0.1.1`
 5. Re-run publish order (only changed crates if using cargo-yank strategy for mistakes)

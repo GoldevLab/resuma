@@ -23,7 +23,7 @@ fn SiteLayout() -> View {
                 </nav>
                 <div class="header-actions">
                     <a href="/docs/getting_started" class="btn btn-ghost">"Get Started"</a>
-                    <a href="https://github.com/resuma/resuma" class="btn btn-primary">"GitHub"</a>
+                    <a href="https://github.com/GolfredoPerezFernandez/resuma" class="btn btn-primary">"GitHub"</a>
                 </div>
             </div>
         </header>
