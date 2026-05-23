@@ -10,7 +10,7 @@ use quote::quote;
 use std::iter::Peekable;
 use std::vec::IntoIter;
 
-use resuma_rs2js as rs2js;
+use crate::rs2js;
 
 #[derive(Debug)]
 enum Node {

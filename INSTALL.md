@@ -44,14 +44,14 @@ cargo run -p example-todo
 
 ## Optional: rebuild the JS runtime
 
-The repo embeds `loader.js`, `core.js`, and legacy `runtime.js` under `crates/resuma-server/assets/`. To rebuild from TypeScript:
+The repo embeds `loader.js`, `core.js`, and legacy `runtime.js` under `crates/resuma/assets/`. To rebuild from TypeScript:
 
 ```sh
 cd runtime
 npm install
 npm run build
 npm run size   # raw + gzip + brotli report
-cp dist/loader.js dist/core.js dist/runtime.js ../crates/resuma-server/assets/
+cp dist/loader.js dist/core.js dist/runtime.js ../crates/resuma/assets/
 ```
 
 ## Install the CLI

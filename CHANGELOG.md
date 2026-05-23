@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0] - 2026-05-23
+
+### Changed
+
+- **Breaking:** Consolidated 7 internal crates into a single `resuma` runtime crate (like Qwik's one-package DX).
+- Only **2 crates** are published: `resuma` + `resuma-macros` (proc-macros must stay separate in Rust).
+- `resuma-rs2js` merged into `resuma-macros` as an internal module.
+
+### Fixed
+
+- Each crate on crates.io includes a README.
+
 ## [0.1.1] - 2026-05-23
 
 ### Fixed

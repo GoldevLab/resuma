@@ -13,6 +13,7 @@
 //! `resuma-rs2js` to produce a JS chunk. The Rust side only stores a
 //! `HandlerRef` pointing at that chunk so SSR can emit `data-r-on:click=…`.
 
+mod rs2js;
 mod view_macro;
 mod component_macro;
 mod server_macro;

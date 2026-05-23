@@ -1,48 +1,23 @@
 //! # Resuma
 //!
 //! The first Rust web framework with **SSR + Resumability + Islands +
-//! Server Actions + a friendly JS bridge** — all in one box.
+//! Server Actions + a friendly JS bridge** — all in one crate.
 //!
-//! ```ignore
-//! use resuma::prelude::*;
-//!
-//! #[component]
-//! fn Counter() -> View {
-//!     let count = use_signal(0);
-//!     view! {
-//!         <div>
-//!             <h1>"Counter: " {count}</h1>
-//!             <button onClick={ move |_| count.update(|c| *c += 1) }>"+"</button>
-//!         </div>
-//!     }
-//! }
-//!
-//! #[server]
-//! async fn greet(name: String) -> String { format!("hello {name}") }
-//!
-//! #[tokio::main]
-//! async fn main() -> std::io::Result<()> {
-//!     ResumaApp::new()
-//!         .with_title("Counter")
-//!         .page("/", || Counter::render(CounterProps::default()))
-//!         .serve(ServeOptions::default())
-//!         .await
-//! }
-//! ```
-//!
-//! ## How it differs from Leptos / Yew / Dioxus
-//!
-//! * **Resumable, not hydrated.** Components only run on the server. The
-//!   client never re-executes the framework — it only resumes interactions.
-//! * **Islands by default.** Each `#[island]` ships its own JS chunk and
-//!   the rest of the page stays static.
-//! * **Server actions.** `#[server] async fn` is callable from event
-//!   handlers as `actions::name(args)`.
-//! * **Friendly JS bridge.** The `view!` macro understands a small Rust
-//!   subset and translates closures to JS via `resuma-rs2js`. For anything
-//!   beyond that subset, the `js!{}` escape hatch ships raw JS verbatim.
+//! Internal layout: `core`, `ssr`, `server`, `router`, `flow`, and optional `cli`.
+//! Users typically depend on this crate only; `resuma-macros` is a separate proc-macro crate.
 
-pub use resuma_core::{
+pub mod core;
+pub mod ssr;
+pub mod server;
+pub mod router;
+pub mod flow;
+
+#[cfg(feature = "cli")]
+pub mod cli;
+
+pub use resuma_macros::{component, server, island, view, js, load, submit, layout, middleware};
+
+pub use crate::core::{
     Signal, ReadSignal, WriteSignal, use_signal,
     Effect, Computed, use_effect, use_computed,
     View, IntoView, Component, Child,
@@ -54,25 +29,30 @@ pub use resuma_core::{
     nav_link, combine_js,
     portal, with_view_transition, stream_slot, stream_chunk,
     Theme, provide_theme, use_theme, theme_css_vars,
+    FlowRequest,
 };
 
-pub use resuma_macros::{component, server, island, view, js, load, submit, layout, middleware};
-
-pub use resuma_server::{
+pub use crate::server::{
     ResumaApp, ServeOptions, register_server_action, set_action_middleware,
     SecurityConfig, configure_security, CSRF_HEADER, CSRF_FIELD,
 };
 
-pub use resuma_ssr::{render_to_string, render_view, PageOptions, render_to_stream};
+pub use crate::ssr::{render_to_string, render_view, PageOptions, render_to_stream};
 
-pub use resuma_flow::{
-    FlowApp, FlowServeOptions, FlowPwaConfig, FlowRequest, LoadValue, SubmitValue, LoaderError, SubmitError,
+pub use crate::flow::{
+    FlowApp, FlowServeOptions, FlowPwaConfig, LoadValue, SubmitValue, LoaderError, SubmitError,
     register_loader, register_submit, register_layout, register_middleware,
     register_loader_cache, register_stream_loader, register_stream_chunk,
     use_load, try_use_load, try_use_load_value, with_request, current_request, form, encode_submit_result,
     discover_pages, DiscoveredPage, FlowPageRegistry, apply_layouts,
     FlowError, error_page, not_found_page,
 };
+
+/// CLI entry point (`cargo install resuma`).
+#[cfg(feature = "cli")]
+pub fn run() -> anyhow::Result<()> {
+    crate::cli::run()
+}
 
 pub mod prelude {
     //! Glob-friendly re-exports.
@@ -101,10 +81,9 @@ pub mod prelude {
 #[doc(hidden)]
 pub mod __private {
     //! Re-exports used by the macro-generated code.
-    //! Stable across patch releases of the same minor version.
     pub use ctor;
     pub use serde_json;
-    pub use resuma_core::{
+    pub use crate::core::{
         Signal, ReadSignal, WriteSignal,
         View, IntoView, Component, Child,
         view::{AttrValue, Element, Fragment, Island as IslandView},
@@ -114,32 +93,24 @@ pub mod __private {
         ResumaError, Result,
         slot::{SlottedChild, push_slots, resolve_slot, with_default_slot},
     };
-    pub use resuma_flow::form as flow_form;
-    pub use resuma_core::{combine_js, nav_link};
-    pub use resuma_server::register_server_action;
+    pub use crate::flow::form as flow_form;
+    pub use crate::core::{combine_js, nav_link};
+    pub use crate::server::register_server_action;
 
-    /// Source code for an event handler — produced by `view!` macro and the
-    /// `js!{}` escape hatch.
     #[derive(Debug, Clone)]
     pub enum HandlerSource {
         Inline(String),
         Chunk { chunk: String, symbol: String, source: String },
     }
 
-    /// Metadata captured by an event handler closure. The `name` field is
-    /// the user-visible Rust identifier captured by the closure (e.g.
-    /// `count`); `id` is the stable signal id assigned by the SSR renderer.
     #[derive(Debug, Clone)]
     pub enum ResumeCapture {
         Signal { name: String, id: SignalId },
         Action(String),
     }
 
-    pub use resuma_core::view::Element as ElementType;
+    pub use crate::core::view::Element as ElementType;
 
-    /// Bridge between the macro layer and the SSR renderer. Registers the
-    /// handler chunk in the active `RenderContext` and returns an
-    /// `AttrValue::Handler` ready to be embedded in the View.
     pub fn register_handler(
         event: &str,
         chunk: &str,
@@ -150,13 +121,11 @@ pub mod __private {
     ) -> AttrValue {
         if let Some(ctx) = current_context() {
             ctx.register_handler(chunk, symbol, js_source);
-            for a in &actions { ctx.register_action(a); }
+            for a in &actions {
+                ctx.register_action(a);
+            }
         }
 
-        // Strip out actions; only signal captures travel via the
-        // `HandlerRef::captures` field. The `inline` JS contains references
-        // like `state.count` — we ship `count:<id>` pairs in the captures
-        // attribute so the runtime can build a name-keyed `state` proxy.
         let signal_captures: Vec<HandlerCapture> = captures
             .into_iter()
             .filter_map(|c| match c {
@@ -174,25 +143,20 @@ pub mod __private {
         })
     }
 
-    /// Helper used by the `view!` macro to convert a handler tuple
-    /// `(name, AttrValue)` into a builder method invocation.
     pub trait ElementBuilderExt {
         fn attr_runtime(self, kv: (String, AttrValue)) -> Self;
     }
 
-    impl ElementBuilderExt for resuma_core::view::ElementBuilder {
+    impl ElementBuilderExt for crate::core::view::ElementBuilder {
         fn attr_runtime(self, (name, value): (String, AttrValue)) -> Self {
             self.attr(name, value)
         }
     }
 
-    /// `view!` calls this for `<MyComponent prop=v />` invocations.
     pub fn render_component<C: Component>(props: C::Props) -> View {
         C::render(props)
     }
 
-    /// Resolve a Rust value into an `AttrValue` so `class={my_string}` etc.
-    /// Just Works.
     pub fn resolve_attr_value<T: Into<AttrValueAuto>>(value: T) -> AttrValue {
         value.into().into_attr_value()
     }
@@ -200,30 +164,69 @@ pub mod __private {
     pub struct AttrValueAuto(AttrValue);
 
     impl AttrValueAuto {
-        fn into_attr_value(self) -> AttrValue { self.0 }
+        fn into_attr_value(self) -> AttrValue {
+            self.0
+        }
     }
 
-    impl From<&str>   for AttrValueAuto { fn from(s: &str)   -> Self { Self(AttrValue::Static(s.to_string())) } }
-    impl From<String> for AttrValueAuto { fn from(s: String) -> Self { Self(AttrValue::Static(s)) } }
-    impl From<bool>   for AttrValueAuto { fn from(b: bool)   -> Self { Self(AttrValue::Bool(b)) } }
-    impl From<i32>    for AttrValueAuto { fn from(n: i32)    -> Self { Self(AttrValue::Static(n.to_string())) } }
-    impl From<i64>    for AttrValueAuto { fn from(n: i64)    -> Self { Self(AttrValue::Static(n.to_string())) } }
-    impl From<u32>    for AttrValueAuto { fn from(n: u32)    -> Self { Self(AttrValue::Static(n.to_string())) } }
-    impl From<u64>    for AttrValueAuto { fn from(n: u64)    -> Self { Self(AttrValue::Static(n.to_string())) } }
-    impl From<f64>    for AttrValueAuto { fn from(n: f64)    -> Self { Self(AttrValue::Static(n.to_string())) } }
+    impl From<&str> for AttrValueAuto {
+        fn from(s: &str) -> Self {
+            Self(AttrValue::Static(s.to_string()))
+        }
+    }
+    impl From<String> for AttrValueAuto {
+        fn from(s: String) -> Self {
+            Self(AttrValue::Static(s))
+        }
+    }
+    impl From<bool> for AttrValueAuto {
+        fn from(b: bool) -> Self {
+            Self(AttrValue::Static(b.to_string()))
+        }
+    }
+    impl From<i32> for AttrValueAuto {
+        fn from(n: i32) -> Self {
+            Self(AttrValue::Static(n.to_string()))
+        }
+    }
+    impl From<i64> for AttrValueAuto {
+        fn from(n: i64) -> Self {
+            Self(AttrValue::Static(n.to_string()))
+        }
+    }
+    impl From<u32> for AttrValueAuto {
+        fn from(n: u32) -> Self {
+            Self(AttrValue::Static(n.to_string()))
+        }
+    }
+    impl From<u64> for AttrValueAuto {
+        fn from(n: u64) -> Self {
+            Self(AttrValue::Static(n.to_string()))
+        }
+    }
+    impl From<f64> for AttrValueAuto {
+        fn from(n: f64) -> Self {
+            Self(AttrValue::Static(n.to_string()))
+        }
+    }
 
     impl<T: Clone + serde::Serialize + 'static> From<&Signal<T>> for AttrValueAuto {
         fn from(s: &Signal<T>) -> Self {
-            Self(AttrValue::Dynamic { signal: s.id(), format: None })
+            Self(AttrValue::Dynamic {
+                signal: s.id(),
+                format: None,
+            })
         }
     }
     impl<T: Clone + serde::Serialize + 'static> From<Signal<T>> for AttrValueAuto {
         fn from(s: Signal<T>) -> Self {
-            Self(AttrValue::Dynamic { signal: s.id(), format: None })
+            Self(AttrValue::Dynamic {
+                signal: s.id(),
+                format: None,
+            })
         }
     }
 
-    /// Wrap a view inside an `<Island>` boundary.
     pub fn wrap_in_island(name: &str, instance: u32, view: View) -> View {
         if let Some(ctx) = current_context() {
             ctx.register_island(name);
@@ -237,15 +240,13 @@ pub mod __private {
         })
     }
 
-    pub use resuma_core::view::ElementBuilder;
-    pub use resuma_core::view as view_mod;
+    pub use crate::core::view::ElementBuilder;
+    pub use crate::core::view as view_mod;
 
     pub fn fragment(children: Vec<Child>) -> View {
         View::fragment(children)
     }
 
-    /// `View::element(...)` shortcut — pulled into __private so the macro
-    /// can reach it via `__private::element`.
     pub fn element(tag: &str) -> ElementBuilder {
         View::element(tag)
     }

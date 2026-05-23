@@ -10,14 +10,7 @@ on:
         type: choice
         options:
           - all
-          - resuma-rs2js
-          - resuma-core
           - resuma-macros
-          - resuma-ssr
-          - resuma-router
-          - resuma-server
-          - resuma-flow
-          - resuma-cli
           - resuma
 
 env:
@@ -41,11 +34,9 @@ jobs:
             cargo publish -p "$1"
           }
           if [ "${{ inputs.crate }}" = "all" ]; then
-            for c in resuma-rs2js resuma-core resuma-macros resuma-ssr resuma-router \
-                     resuma-server resuma-flow resuma-cli resuma; do
-              publish_one "$c"
-              sleep 90
-            done
+            publish_one resuma-macros
+            sleep 90
+            publish_one resuma
           else
             publish_one "${{ inputs.crate }}"
           fi

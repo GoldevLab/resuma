@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "Resuma — the first Rust framework with SSR + Resumability + Islands + Server Actions + JS Bridge. This is the umbrella crate users depend on."
+description = "Resuma — SSR + Resumability + Islands + Server Actions + JS Bridge for Rust"
 readme = "../../README.md"
 repository.workspace = true
 homepage.workspace = true
@@ -12,6 +12,12 @@ documentation.workspace = true
 rust-version.workspace = true
 categories.workspace = true
 keywords.workspace = true
+include = [
+    "src/**/*",
+    "assets/**/*",
+    "templates/**/*",
+    "Cargo.toml",
+]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -24,17 +30,30 @@ required-features = ["cli"]
 
 [features]
 default = ["cli"]
-cli = ["dep:resuma-cli", "dep:anyhow"]
+cli = ["dep:clap", "dep:anyhow", "dep:notify", "dep:walkdir", "dep:tracing-subscriber"]
 
 [dependencies]
-resuma-core    = { workspace = true }
-resuma-macros  = { workspace = true }
-resuma-ssr     = { workspace = true }
-resuma-server  = { workspace = true }
-resuma-router  = { workspace = true }
-resuma-flow    = { workspace = true }
-resuma-cli     = { workspace = true, optional = true }
-serde          = { workspace = true }
-serde_json     = { workspace = true }
-ctor           = "0.2"
-anyhow         = { workspace = true, optional = true }
+resuma-macros = { workspace = true }
+serde         = { workspace = true }
+serde_json    = { workspace = true }
+tokio         = { workspace = true }
+axum          = { workspace = true }
+tower         = { workspace = true }
+tower-http    = { workspace = true }
+tracing       = { workspace = true }
+once_cell     = { workspace = true }
+parking_lot   = { workspace = true }
+thiserror     = { workspace = true }
+async-trait   = { workspace = true }
+futures-util  = { version = "0.3", default-features = false, features = ["std"] }
+async-stream  = "0.3"
+serde_urlencoded = "0.7"
+flate2        = "1"
+brotli        = "7"
+ctor          = "0.2"
+# CLI (optional)
+clap                = { workspace = true, optional = true }
+anyhow              = { workspace = true, optional = true }
+notify              = { workspace = true, optional = true }
+walkdir             = { workspace = true, optional = true }
+tracing-subscriber  = { workspace = true, optional = true }

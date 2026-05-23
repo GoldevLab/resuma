@@ -1,14 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/resuma-core",
     "crates/resuma-macros",
-    "crates/resuma-ssr",
-    "crates/resuma-server",
-    "crates/resuma-router",
-    "crates/resuma-rs2js",
-    "crates/resuma-cli",
-    "crates/resuma-flow",
     "crates/resuma",
     "examples/counter",
     "examples/todo",
@@ -18,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.74"
 authors = ["Resuma Contributors"]
@@ -32,15 +25,7 @@ categories = ["web-programming", "asynchronous"]
 readme = "README.md"
 
 [workspace.dependencies]
-# Workspace internal crates (publish in dependency order — see docs/PUBLISHING.md)
-resuma-rs2js   = { path = "crates/resuma-rs2js",   version = "0.1.1" }
-resuma-core    = { path = "crates/resuma-core",    version = "0.1.1" }
-resuma-macros  = { path = "crates/resuma-macros",  version = "0.1.1" }
-resuma-ssr     = { path = "crates/resuma-ssr",     version = "0.1.1" }
-resuma-router  = { path = "crates/resuma-router",  version = "0.1.1" }
-resuma-server  = { path = "crates/resuma-server",  version = "0.1.1" }
-resuma-flow    = { path = "crates/resuma-flow",    version = "0.1.1" }
-resuma-cli     = { path = "crates/resuma-cli",     version = "0.1.1" }
+resuma-macros = { path = "crates/resuma-macros", version = "0.2.0" }
 
 # 3rd-party
 serde       = { version = "1", features = ["derive"] }

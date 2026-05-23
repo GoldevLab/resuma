@@ -172,21 +172,15 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for a deep dive.
 ```
 Resuma/
 ├── crates/
-│   ├── resuma-core/        # Signals, Effects, View tree, Component trait
-│   ├── resuma-macros/      # view!, #[component], #[server], #[island], js!
-│   ├── resuma-ssr/         # SSR renderer + resumability payload
-│   ├── resuma-rs2js/       # Rust → JS subset compiler (handler bodies)
-│   ├── resuma-server/      # axum HTTP server (pages, actions, runtime)
-│   ├── resuma-router/      # file-based routing scanner
-│   ├── resuma-cli/         # `resuma new|dev|build|routes`
-│   └── resuma/             # umbrella facade users depend on
+│   ├── resuma/             # single runtime crate (core, ssr, server, flow, cli)
+│   └── resuma-macros/      # proc-macros + rs2js (required separate crate)
 ├── runtime/                # TypeScript source for the ~3KB client runtime
 └── examples/
-    ├── counter/            # minimal counter
-    ├── todo/               # full showcase + backend security reference
-    ├── flow-demo/          # FlowApp with loaders & streaming
-    ├── flow-pages/         # file-based routing
-    └── website/            # docs site (this documentation)
+    ├── counter/
+    ├── todo/
+    ├── flow-demo/
+    ├── flow-pages/
+    └── website/            # docs site
 ```
 
 **Docs:** [`docs/README.md`](docs/README.md) · live site: `cargo run -p example-website`
@@ -208,7 +202,7 @@ Library only (no CLI binary):
 
 ```toml
 [dependencies]
-resuma = { version = "0.1", default-features = false }
+resuma = { version = "0.2", default-features = false }
 tokio = { version = "1", features = ["full"] }
 ```
 

@@ -1,5 +1,5 @@
-# Publish Resuma workspace crates to crates.io in dependency order.
-# Usage: .\scripts\publish-crates.ps1 [-DryRun]
+# Publish Resuma to crates.io (2 crates: macros first, then runtime).
+# Usage: .\scripts\publish-crates.ps1 [-DryRun] [-AllowDirty]
 
 param(
     [switch]$DryRun,
@@ -8,14 +8,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $crates = @(
-    "resuma-rs2js",
-    "resuma-core",
     "resuma-macros",
-    "resuma-ssr",
-    "resuma-router",
-    "resuma-server",
-    "resuma-flow",
-    "resuma-cli",
     "resuma"
 )
 

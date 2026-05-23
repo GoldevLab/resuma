@@ -68,5 +68,5 @@ Sources: [Qwikloader docs](https://qwik.dev/docs/advanced/qwikloader/), [Qwik PR
 ## Updating this benchmark
 
 1. Rebuild runtime: `cd runtime && npm run build`
-2. Copy assets to `crates/resuma-server/assets/` (loader.js, core.js, runtime.js)
+2. Copy assets to `crates/resuma/assets/` (loader.js, core.js, runtime.js)
 3. Re-run `npm run size` and update `examples/website/src/pages/docs/benchmark.rs`
