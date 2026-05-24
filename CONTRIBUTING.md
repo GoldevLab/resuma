@@ -1,6 +1,6 @@
 # Contributing to Resuma
 
-Thanks for helping improve Resuma. This repo is the **framework** (crates, runtime, examples, benchmark). The **docs site** lives in a separate repository deployed at [resuma-docs.fly.dev](https://resuma-docs.fly.dev).
+Thanks for helping improve Resuma. This repo is the **framework** (crates, runtime, examples, benchmark). The **docs site** lives in **`../site-docs`** (GitHub: [resuma-docs](https://github.com/GolfredoPerezFernandez/resuma-docs)), deployed at [resuma-docs.fly.dev](https://resuma-docs.fly.dev).
 
 ## Before you start
 
@@ -36,7 +36,7 @@ cargo install --path crates/resuma --features cli --force
 1. Fork and create a feature branch from `main`
 2. Keep changes focused — one concern per PR
 3. Add or update tests when behavior changes
-4. Update docs in `docs/` or the external docs-site repo if user-facing behavior changes
+4. Update docs in `docs/` or the external `site-docs` repo if user-facing behavior changes
 5. Ensure CI passes (format, clippy, tests, runtime build)
 
 ## Benchmark changes

@@ -4,7 +4,7 @@
 
 **Published on crates.io:** [resuma 0.2.0](https://crates.io/crates/resuma) · **API docs:** [docs.rs/resuma](https://docs.rs/resuma)
 
-**Interactive docs:** https://resuma-docs.fly.dev/docs · **Local:** clone `docs-site` (separate repo) and `cargo run`
+**Interactive docs:** https://resuma-docs.fly.dev/docs · **Local:** clone `site-docs` (sibling repo at `../site-docs`) and `cargo run`
 
 ## Try examples
 

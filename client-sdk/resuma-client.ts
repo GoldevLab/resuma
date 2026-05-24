@@ -1,7 +1,7 @@
 /**
  * Resuma client component SDK — mount contract for TypeScript widgets.
  *
- * Copy this file into your app's `client/` directory (see docs-site for a full example).
+ * Copy this file into your app's `client/` directory (see `site-docs` for a full example).
  */
 
 export type ClientCleanup = () => void;

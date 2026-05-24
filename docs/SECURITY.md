@@ -76,7 +76,7 @@ All patterns are live in **`examples/todo`**: Controller/Service split, Guards, 
 - [ ] Force HTTPS at the edge (`force_https = true` on Fly)
 - [ ] Add auth middleware for protected routes and sensitive `#[server]` actions
 - [ ] Validate input in every `#[server]` / `#[submit]` handler (length, format, authz)
-- [ ] Run container as non-root (see docs-site `Dockerfile`)
+- [ ] Run container as non-root (see `site-docs` `Dockerfile`)
 - [ ] Keep secrets in env / secret manager — never commit `.env`
 - [ ] Deploy: see [cookbook/docker](/docs/cookbook/docker) on the docs site (Fly.io + Dockerfile)
 

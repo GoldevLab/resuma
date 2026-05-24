@@ -30,7 +30,7 @@
 | `flow-pages` | `cargo run -p example-flow-pages` | File routing, layouts |
 | `flow-demo` | `cargo run -p example-flow-demo` | Loaders, streaming |
 
-Docs site source lives in the separate `docs-site` repository. See [docs/README.md](./README.md).
+Docs site source lives in the separate **`site-docs`** repository (`../site-docs`). See [docs/README.md](./README.md).
 
 ## Bootstrap
 
