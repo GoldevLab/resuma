@@ -4,7 +4,7 @@
 FROM rust:1-bookworm AS builder
 WORKDIR /app
 
-COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY Cargo.toml rust-toolchain.toml ./
 COPY crates ./crates
 COPY apps ./apps
 COPY examples ./examples
