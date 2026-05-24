@@ -78,4 +78,4 @@ Only **`resuma`** + **`resuma-macros`** ship on [crates.io](https://crates.io/cr
 | File-based pages | `src/pages/` |
 | Core + routing + CLI | `resuma` (one runtime crate) |
 
-See the live docs: https://resuma-docs.fly.dev · or `cargo run -p example-website` → http://127.0.0.1:3000
+See the live docs: https://resuma-docs.fly.dev · local: clone `docs-site` and `cargo run`

@@ -4,7 +4,7 @@
 
 **Published on crates.io:** [resuma 0.2.0](https://crates.io/crates/resuma) · **API docs:** [docs.rs/resuma](https://docs.rs/resuma)
 
-**Interactive docs:** `cargo run -p example-website` → http://127.0.0.1:3000/docs · **Live:** https://resuma-docs.fly.dev/docs
+**Interactive docs:** https://resuma-docs.fly.dev/docs · **Local:** clone `docs-site` (separate repo) and `cargo run`
 
 ## Try examples
 
@@ -14,7 +14,6 @@ cd resuma
 
 cargo run -p example-todo        # full showcase + backend security reference
 cargo run -p example-flow-demo   # FlowApp, loaders, streaming
-cargo run -p example-website     # docs site
 cargo run -p example-counter     # minimal counter
 ```
 

@@ -7,7 +7,6 @@ members = [
     "examples/todo",
     "examples/flow-demo",
     "examples/flow-pages",
-    "apps/docs-site",
 ]
 
 [workspace.package]
@@ -19,8 +18,8 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/GolfredoPerezFernandez/resuma"
 homepage = "https://resuma-docs.fly.dev"
 documentation = "https://resuma-docs.fly.dev/docs"
-description = "Resuma - SSR + Resumability + Islands + Server Actions for Rust"
-keywords = ["web", "framework", "ssr", "resumability", "islands"]
+description = "Resumable SSR web framework for Rust — zero hydration, ~901 B client loader, server actions, islands, and Flow"
+keywords = ["web", "framework", "ssr", "resumability", "islands", "rust", "axum", "server-actions", "zero-hydration"]
 categories = ["web-programming", "asynchronous"]
 readme = "README.md"
 

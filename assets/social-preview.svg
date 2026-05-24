@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-label="Resuma  resumable SSR for Rust">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#712cf9"/>
+      <stop offset="55%" stop-color="#5a1fd4"/>
+      <stop offset="100%" stop-color="#0550ae"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect x="80" y="80" width="96" height="96" rx="20" fill="rgba(255,255,255,0.15)"/>
+  <text x="128" y="152" text-anchor="middle" fill="#fff" font-family="Segoe UI, system-ui, sans-serif" font-size="56" font-weight="700">R</text>
+  <text x="220" y="150" fill="#ffffff" font-family="Segoe UI, system-ui, sans-serif" font-size="88" font-weight="700">Resuma</text>
+  <text x="80" y="260" fill="#f3ecff" font-family="Segoe UI, system-ui, sans-serif" font-size="40" font-weight="600">Instantly-interactive Rust web apps  without hydration</text>
+  <text x="80" y="340" fill="#e9d5ff" font-family="Segoe UI, system-ui, sans-serif" font-size="28">901 B initial JS · 4.2 KiB to full interactivity · 0 B on static pages</text>
+  <text x="80" y="400" fill="#ddd6fe" font-family="Segoe UI, system-ui, sans-serif" font-size="24">SSR · Resumability · Server actions · Flow · Native Rust</text>
+  <rect x="80" y="480" width="220" height="56" rx="12" fill="rgba(255,255,255,0.12)"/>
+  <text x="190" y="516" text-anchor="middle" fill="#fff" font-family="Segoe UI, system-ui, sans-serif" font-size="22" font-weight="600">resuma-docs.fly.dev</text>
+</svg>

@@ -1,7 +1,7 @@
 //! Security wiring for the todo showcase — production backend patterns in one module.
 //!
 //! Covers: session context, authorization, validation, audit logging, API keys,
-//! See `apps/docs-site` → `/docs/security/todo`.
+//! See docs site → `/docs/security/todo`.
 
 use std::future::Future;
 use std::net::SocketAddr;

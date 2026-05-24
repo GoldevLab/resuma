@@ -40,13 +40,14 @@ const OG_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="1200" he
 <defs>
 <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
 <stop offset="0%" stop-color="#712cf9"/>
-<stop offset="100%" stop-color="#4c1d95"/>
+<stop offset="55%" stop-color="#5a1fd4"/>
+<stop offset="100%" stop-color="#0550ae"/>
 </linearGradient>
 </defs>
 <rect width="1200" height="630" fill="url(#bg)"/>
 <text x="96" y="250" fill="#ffffff" font-family="Segoe UI, system-ui, sans-serif" font-size="96" font-weight="700">Resuma</text>
-<text x="96" y="340" fill="#e9d5ff" font-family="Segoe UI, system-ui, sans-serif" font-size="42">SSR + Resumability for Rust</text>
-<text x="96" y="430" fill="#ddd6fe" font-family="Segoe UI, system-ui, sans-serif" font-size="28">No hydration · ~884 B loader · Native Rust</text>
+<text x="96" y="340" fill="#e9d5ff" font-family="Segoe UI, system-ui, sans-serif" font-size="42">Instantly-interactive Rust — without hydration</text>
+<text x="96" y="430" fill="#ddd6fe" font-family="Segoe UI, system-ui, sans-serif" font-size="28">901 B initial · 4.2 KiB first click · 0 B static pages</text>
 </svg>"##;
 
 pub async fn handle_submit(

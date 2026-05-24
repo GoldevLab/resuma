@@ -2,7 +2,7 @@
 
 **Resuma Flow** is the full-stack layer: pages, layouts, server data, form submissions, and middleware — included in the `resuma` crate.
 
-**Interactive docs:** `cargo run -p example-website` → [/docs/flow](http://127.0.0.1:3000/docs/flow)
+**Interactive docs:** [/docs/flow](https://resuma-docs.fly.dev/docs/flow)
 
 ## Data path
 
@@ -30,7 +30,7 @@
 | `flow-pages` | `cargo run -p example-flow-pages` | File routing, layouts |
 | `flow-demo` | `cargo run -p example-flow-demo` | Loaders, streaming |
 
-Docs site source lives in `apps/docs-site` (not under `examples/`). See [docs/README.md](./README.md).
+Docs site source lives in the separate `docs-site` repository. See [docs/README.md](./README.md).
 
 ## Bootstrap
 
