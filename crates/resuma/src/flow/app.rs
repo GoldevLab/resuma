@@ -92,8 +92,7 @@ impl FlowApp {
         body: &'static [u8],
         content_type: &'static str,
     ) -> Self {
-        self.static_assets
-            .push((path.into(), body, content_type));
+        self.static_assets.push((path.into(), body, content_type));
         self
     }
 

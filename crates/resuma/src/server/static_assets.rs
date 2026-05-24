@@ -6,7 +6,10 @@ use axum::http::{header, HeaderValue};
 pub const STATIC_IMMUTABLE_CACHE: &str = "public, max-age=31536000, immutable";
 
 /// Build a GET response for a fixed static asset (Cache-Control + Content-Type).
-pub fn static_asset_response(content_type: &str, body: &'static [u8]) -> ([(header::HeaderName, HeaderValue); 2], Vec<u8>) {
+pub fn static_asset_response(
+    content_type: &str,
+    body: &'static [u8],
+) -> ([(header::HeaderName, HeaderValue); 2], Vec<u8>) {
     let ct = HeaderValue::from_str(content_type)
         .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream"));
     (

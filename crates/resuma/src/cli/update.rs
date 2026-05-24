@@ -171,7 +171,8 @@ pub(crate) fn parse_resuma_dependency(cargo: &str) -> Option<ResumaDependency> {
                         let part = part.trim();
                         if let Some(path) = part.strip_prefix("path").map(str::trim) {
                             let path = path.trim_start_matches('=').trim();
-                            if let Some(p) = path.strip_prefix('"').and_then(|s| s.strip_suffix('"'))
+                            if let Some(p) =
+                                path.strip_prefix('"').and_then(|s| s.strip_suffix('"'))
                             {
                                 return Some(ResumaDependency::Path(p.to_string()));
                             }

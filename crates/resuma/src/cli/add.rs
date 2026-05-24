@@ -31,9 +31,7 @@ pub fn add_integration(name: &str) -> Result<()> {
     match name {
         "sqlx" => add_sqlx(&cwd),
         "turso" => add_turso(&cwd),
-        other => Err(anyhow!(
-            "unknown integration `{other}` (try: sqlx, turso)"
-        )),
+        other => Err(anyhow!("unknown integration `{other}` (try: sqlx, turso)")),
     }
 }
 

@@ -96,9 +96,8 @@ pub use crate::ssr::{render_to_stream, render_to_string, render_view, PageOption
 pub use crate::flow::{
     apply_layouts, current_request, discover_pages, encode_submit_result, error_page, form,
     not_found_page, register_layout, register_loader, register_loader_cache, register_middleware,
-    FlowExtensions,
     register_stream_chunk, register_stream_loader, register_submit, try_use_load,
-    try_use_load_value, use_load, with_request, DiscoveredPage, FlowApp, FlowError,
+    try_use_load_value, use_load, with_request, DiscoveredPage, FlowApp, FlowError, FlowExtensions,
     FlowPageRegistry, FlowPwaConfig, FlowServeOptions, LoadValue, LoaderError, SubmitError,
     SubmitValue,
 };
@@ -139,10 +138,10 @@ pub mod prelude {
         submit, theme_css_vars, try_use_load, try_use_load_value, use_computed,
         use_computed_with_js, use_context, use_debounce, use_effect, use_load, use_signal,
         use_store, use_task, use_theme, use_visible_task, view, with_view_transition, Child,
-        ClientComponent, Component, Computed, Effect, FlowApp, FlowError, FlowPageRegistry, FlowRequest,
-        FlowServeOptions, IntoView, LoadValue, LoaderError, PageOptions, ReadSignal, Result,
-        ResumaApp, ResumaError, SecurityConfig, ServeOptions, Signal, SlottedChild, Store,
-        SubmitError, Theme, View, WriteSignal, CSRF_FIELD, CSRF_HEADER, CLIENT_SCRIPT_PREFIX,
+        ClientComponent, Component, Computed, Effect, FlowApp, FlowError, FlowPageRegistry,
+        FlowRequest, FlowServeOptions, IntoView, LoadValue, LoaderError, PageOptions, ReadSignal,
+        Result, ResumaApp, ResumaError, SecurityConfig, ServeOptions, Signal, SlottedChild, Store,
+        SubmitError, Theme, View, WriteSignal, CLIENT_SCRIPT_PREFIX, CSRF_FIELD, CSRF_HEADER,
     };
 }
 

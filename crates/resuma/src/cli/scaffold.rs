@@ -141,7 +141,8 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
     let readme = README.replace("%NAME%", name);
     fs::write(dir.join("README.md"), readme).context("write README.md")?;
     fs::write(dir.join(".gitignore"), "target/\nCargo.lock\n").context("write .gitignore")?;
-    fs::write(dir.join("rust-toolchain.toml"), RUST_TOOLCHAIN).context("write rust-toolchain.toml")?;
+    fs::write(dir.join("rust-toolchain.toml"), RUST_TOOLCHAIN)
+        .context("write rust-toolchain.toml")?;
 
     match template {
         "basic" => {
@@ -176,8 +177,11 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
             fs::write(pages.join("about.rs"), FLOW_ABOUT).context("write pages/about.rs")?;
         }
         "flow-fullstack" => {
-            fs::write(dir.join("Cargo.toml"), CARGO_FULLSTACK.replace("%NAME%", name))
-                .context("write Cargo.toml")?;
+            fs::write(
+                dir.join("Cargo.toml"),
+                CARGO_FULLSTACK.replace("%NAME%", name),
+            )
+            .context("write Cargo.toml")?;
             fs::write(
                 dir.join("src/main.rs"),
                 FULLSTACK_MAIN.replace("%NAME%", name),
@@ -194,11 +198,7 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
             let mig = dir.join("migrations");
             fs::create_dir_all(&mig)?;
             fs::write(mig.join("001_users.sql"), FULLSTACK_MIGRATION)?;
-            fs::write(
-                dir.join(".env.example"),
-                "DATABASE_URL=sqlite:local.db\n",
-            )
-            .ok();
+            fs::write(dir.join(".env.example"), "DATABASE_URL=sqlite:local.db\n").ok();
         }
         other => {
             return Err(anyhow!(

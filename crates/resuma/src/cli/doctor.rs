@@ -6,7 +6,9 @@ use std::process::Command;
 use anyhow::Result;
 
 use super::ensure_rust_toolchain;
-use super::update::{latest_crates_io_version, parse_resuma_dependency, ResumaDependency, CLI_VERSION};
+use super::update::{
+    latest_crates_io_version, parse_resuma_dependency, ResumaDependency, CLI_VERSION,
+};
 
 pub fn doctor_command() -> Result<()> {
     println!("[resuma] doctor\n");
@@ -64,7 +66,10 @@ pub fn doctor_command() -> Result<()> {
             match dep {
                 ResumaDependency::Version(v) => {
                     println!("  resuma dependency: v{v}");
-                    if v != CLI_VERSION && !v.starts_with(CLI_VERSION) && !CLI_VERSION.starts_with(&v) {
+                    if v != CLI_VERSION
+                        && !v.starts_with(CLI_VERSION)
+                        && !CLI_VERSION.starts_with(&v)
+                    {
                         println!("  → run `resuma update` to align with CLI v{CLI_VERSION}");
                     }
                 }

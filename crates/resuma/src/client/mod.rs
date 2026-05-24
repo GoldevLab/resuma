@@ -96,10 +96,7 @@ pub fn client_component(comp: ClientComponent) -> View {
     if let Some(props) = &comp.props {
         if !props.is_null() {
             let json = props.to_string();
-            attrs.push_str(&format!(
-                r#" data-r-client-props="{}""#,
-                escape_attr(&json)
-            ));
+            attrs.push_str(&format!(r#" data-r-client-props="{}""#, escape_attr(&json)));
         }
     }
 

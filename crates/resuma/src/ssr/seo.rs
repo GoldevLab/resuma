@@ -63,9 +63,7 @@ pub fn json_ld_script(json_ld: &str) -> String {
         return String::new();
     }
     let safe = crate::core::serialize::sanitize_json_for_script(json_ld.trim());
-    format!(
-        "\n<script type=\"application/ld+json\">\n{safe}\n</script>\n",
-    )
+    format!("\n<script type=\"application/ld+json\">\n{safe}\n</script>\n",)
 }
 
 pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {

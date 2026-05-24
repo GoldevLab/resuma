@@ -22,11 +22,7 @@ async fn flow_serves_static_and_client_assets() {
 
     let static_js = app
         .clone()
-        .oneshot(
-            Request::get("/static/app.js")
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .oneshot(Request::get("/static/app.js").body(Body::empty()).unwrap())
         .await
         .unwrap();
     assert_eq!(static_js.status(), StatusCode::OK);
@@ -51,12 +47,7 @@ async fn flow_serves_static_and_client_assets() {
         .await
         .unwrap();
     assert_eq!(client_js.status(), StatusCode::OK);
-    assert!(
-        client_js
-            .headers()
-            .get("cache-control")
-            .is_some()
-    );
+    assert!(client_js.headers().get("cache-control").is_some());
 }
 
 #[tokio::test]
@@ -75,11 +66,7 @@ async fn pre_registered_island_chunk_keeps_custom_resume() {
 
     let payload = ResumePayload {
         signals: vec![],
-        handlers: [(
-            "chart".into(),
-            [("h1".into(), "return 1".into())].into(),
-        )]
-        .into(),
+        handlers: [("chart".into(), [("h1".into(), "return 1".into())].into())].into(),
         islands: vec!["chart".into()],
         actions: vec![],
         contexts: Default::default(),
