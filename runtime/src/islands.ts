@@ -29,7 +29,7 @@ async function hydrateIsland(
 ): Promise<void> {
   try {
     const mod: { resume?: (p: unknown, s: Map<string, SignalCell<unknown>>, root: HTMLElement) => void } =
-      await import(`/_resuma/island/${chunk}.js`);
+      await import(`/_resuma/island-chunk/${chunk}.js`);
     if (typeof mod.resume === "function") mod.resume(props, signals, el);
   } catch (err) {
     // Islands are optional — the static HTML still works without their JS.

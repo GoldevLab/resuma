@@ -1,9 +1,8 @@
 //! Effects and computed values.
 //!
-//! Effects re-execute when any of the signals they depend on change. On the
-//! server, effects are only used as part of `use_computed` so that derived
-//! state is captured during SSR. The client runtime maintains its own,
-//! mirrored effect graph.
+//! Effects re-execute when any of the signals they depend on change.
+//! In v0.3, effects and `use_computed` run during **SSR**; client-side effect
+//! replay is not implemented yet — use `js!` for client-driven derived UI.
 
 use std::sync::Arc;
 

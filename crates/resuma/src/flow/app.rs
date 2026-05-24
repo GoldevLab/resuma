@@ -58,20 +58,7 @@ impl FlowServeOptions {
     }
 
     fn addr_from_env() -> SocketAddr {
-        if let Ok(raw) = std::env::var("RESUMA_ADDR") {
-            if let Ok(addr) = raw.parse() {
-                return addr;
-            }
-        }
-
-        let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
-        let port: u16 = std::env::var("PORT")
-            .ok()
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(3000);
-        format!("{host}:{port}")
-            .parse()
-            .unwrap_or_else(|_| SocketAddr::from(([127, 0, 0, 1], port)))
+        crate::server::listen::listen_addr_from_env()
     }
 }
 
@@ -215,9 +202,8 @@ impl FlowApp {
             .collect();
 
         for (pattern, entry) in static_pages {
-            let pat = pattern.clone();
-            app = app.page(&pattern, move || {
-                render_entry(&pat, entry.clone(), deferred_streaming)
+            app = app.page_with_request(&pattern, move |req| {
+                render_with_flow(req, entry.clone(), deferred_streaming)
             });
         }
 
@@ -233,8 +219,8 @@ impl FlowApp {
 
         if !dynamic_pages.is_empty() {
             let ds = deferred_streaming;
-            app = app.fallback(move |path| {
-                dispatch_dynamic(&dynamic_pages, path, ds)
+            app = app.fallback_with_request(move |path, req| {
+                dispatch_dynamic(&dynamic_pages, path, req, ds)
                     .or_else(|| not_found.as_ref().map(|f| f()))
             });
         } else if let Some(nf) = not_found {
@@ -273,26 +259,16 @@ impl Default for FlowApp {
     }
 }
 
-fn render_entry(path: &str, entry: PageEntry, deferred_streaming: bool) -> View {
-    let req = FlowRequest {
-        path: path.to_string(),
-        ..Default::default()
-    };
-    render_with_flow(req, entry, deferred_streaming)
-}
-
 fn dispatch_dynamic(
     pages: &HashMap<String, PageEntry>,
     path: &str,
+    mut req: FlowRequest,
     deferred_streaming: bool,
 ) -> Option<View> {
     for (pattern, entry) in pages {
         if let Some(m) = match_route(pattern, path) {
-            let req = FlowRequest {
-                path: path.to_string(),
-                params: m.params,
-                ..Default::default()
-            };
+            req.path = path.to_string();
+            req.params = m.params;
             return Some(render_with_flow(req, entry.clone(), deferred_streaming));
         }
     }

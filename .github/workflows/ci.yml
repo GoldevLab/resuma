@@ -27,12 +27,18 @@ jobs:
       - name: Clippy
         run: cargo clippy -p resuma-macros -p resuma -- -D warnings
 
-      - name: Check crates
-        run: cargo check -p resuma-macros -p resuma
+      - name: Test
+        run: cargo test -p resuma
 
-      - name: Check examples
+      - name: Check workspace
+        run: cargo check --workspace
+
+      - name: Build JS runtime
+        working-directory: runtime
         run: |
-          cargo check -p example-counter -p example-todo -p example-website -p example-flow-pages
+          npm ci
+          npm run build
+          npm run size
 
   publish-dry-run:
     runs-on: ubuntu-latest
@@ -44,3 +50,5 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: cargo publish --dry-run (macros first)
         run: cargo publish -p resuma-macros --dry-run
+      - name: cargo publish --dry-run (resuma)
+        run: cargo publish -p resuma --dry-run

@@ -45,7 +45,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-resuma = { version = "0.2", default-features = false }
+resuma = { version = "0.3", default-features = false }
 tokio  = { version = "1", features = ["full"] }
 "#;
 
@@ -55,13 +55,30 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-resuma      = { version = "0.2", default-features = false }
+resuma      = { version = "0.3", default-features = false }
 tokio       = { version = "1", features = ["full"] }
 serde       = { version = "1", features = ["derive"] }
 serde_json  = { version = "1" }
 once_cell   = "1"
 parking_lot = "0.12"
 "#;
+
+const CARGO_FLOW: &str = r#"[package]
+name = "%NAME%"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+resuma = { version = "0.3", default-features = false }
+tokio  = { version = "1", features = ["full"] }
+serde  = { version = "1", features = ["derive"] }
+"#;
+
+const FLOW_MAIN: &str = include_str!("../../templates/flow/main.rs");
+const FLOW_INDEX: &str = include_str!("../../templates/flow/pages/index.rs");
+const FLOW_ABOUT: &str = include_str!("../../templates/flow/pages/about.rs");
+const FLOW_MOD: &str = include_str!("../../templates/flow/pages/mod.rs");
+const FLOW_REGISTRY: &str = include_str!("../../templates/flow/pages/_registry.rs");
 
 const README: &str = r##"# %NAME%
 
@@ -71,6 +88,7 @@ Created with [Resuma](https://github.com/GolfredoPerezFernandez/resuma).
 
 - **basic** - static SSR page, zero client JS
 - **todo** - full Resuma showcase (signals, server, island, security, js!)
+- **flow** - multi-page app with `src/pages/` and FlowApp
 
 ## Develop
 
@@ -111,8 +129,27 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
             fs::write(dir.join("src/todo_store.rs"), TODO_STORE)
                 .context("write src/todo_store.rs")?;
         }
+        "flow" => {
+            fs::write(dir.join("Cargo.toml"), CARGO_FLOW.replace("%NAME%", name))
+                .context("write Cargo.toml")?;
+            fs::write(
+                dir.join("src/main.rs"),
+                FLOW_MAIN.replace("%NAME%", name),
+            )
+            .context("write src/main.rs")?;
+            let pages = dir.join("src/pages");
+            fs::create_dir_all(&pages)?;
+            fs::write(pages.join("mod.rs"), FLOW_MOD).context("write pages/mod.rs")?;
+            fs::write(pages.join("_registry.rs"), FLOW_REGISTRY)
+                .context("write pages/_registry.rs")?;
+            fs::write(pages.join("index.rs"), FLOW_INDEX).context("write pages/index.rs")?;
+            fs::write(pages.join("about.rs"), FLOW_ABOUT).context("write pages/about.rs")?;
+        }
         other => {
-            return Err(anyhow!("unknown template `{}` (try: basic, todo)", other));
+            return Err(anyhow!(
+                "unknown template `{}` (try: basic, todo, flow)",
+                other
+            ));
         }
     }
 

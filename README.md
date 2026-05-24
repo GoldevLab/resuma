@@ -187,14 +187,15 @@ resuma dev
 ```
 
 - **Crate:** [crates.io/crates/resuma](https://crates.io/crates/resuma)
-- **API docs:** [docs.rs/resuma/0.2.3](https://docs.rs/resuma/0.2.3)
-- **Proc-macros:** [docs.rs/resuma-macros/0.2.3](https://docs.rs/resuma-macros/0.2.3)
+- **API docs:** [docs.rs/resuma/0.3.0](https://docs.rs/resuma/0.3.0)
+- **Proc-macros:** [docs.rs/resuma-macros/0.3.0](https://docs.rs/resuma-macros/0.3.0)
+- **Guide:** [resuma-docs.fly.dev/docs](https://resuma-docs.fly.dev/docs)
 
 Library only (no CLI binary):
 
 ```toml
 [dependencies]
-resuma = { version = "0.2", default-features = false }
+resuma = { version = "0.3", default-features = false }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -211,9 +212,9 @@ cargo run -p example-todo      # full-stack + security showcase
 cargo run -p example-website   # docs site
 ```
 
-## What works in v0.2
+## What works in v0.3
 
-✅ `Signal<T>`, `use_signal`, `use_effect`, `use_computed`
+✅ `Signal<T>`, `use_signal`, `use_effect`, `use_computed` (effects/computed SSR-only for now)
 ✅ `view!{}` macro with JSX-like syntax (no `$` noise)
 ✅ `#[component]` with auto-generated props builder
 ✅ `#[server]` async actions with JSON-RPC endpoint
@@ -221,12 +222,19 @@ cargo run -p example-website   # docs site
 ✅ `js!{}` escape hatch for raw JS handlers
 ✅ Rust → JS compiler for common handler patterns
 ✅ SSR with resumability payload embedded in HTML
+✅ Lazy handler/island chunks registered automatically from SSR
 ✅ ~3KB client runtime (lazy event delegation + signals + RPC)
 ✅ axum-based server with built-in `/_resuma/*` routes
-✅ File-based routing scanner (`src/routes/[id].rs` → `/users/:id`)
-✅ `resuma` CLI: `new`, `dev`, `build`, `routes`
+✅ File-based routing scanner (`src/pages/[id].rs` → `/users/:id`)
+✅ Flow static routes receive `FlowRequest` (query, headers, method)
+✅ `RESUMA_ADDR` / `HOST`+`PORT` bind configuration
+✅ `resuma` CLI: `new` (basic/todo/flow), `dev`, `build`, `routes`
 
-## Roadmap (v0.3+)
+## Client-side reactivity (v0.3)
+
+`use_signal` updates work on the client via the resumability payload. `use_effect` and `use_computed` currently run during **SSR only** — use `js!` handlers or manual signal updates for client-driven derived state until full client effect replay lands in a future release.
+
+## Roadmap (v0.4+)
 
 - [ ] Hot Module Reload via `resuma` CLI + websocket bridge
 - [ ] Build-time pre-rendering for static sites
@@ -236,7 +244,7 @@ cargo run -p example-website   # docs site
 - [ ] First-class TypeScript bindings for `js!{}` blocks
 - [ ] WASM-backed islands for compute-heavy code (opt-in)
 
-Already shipped in v0.2: single-crate layout, streaming SSR (Flow), layouts, file-based routing, security defaults, [crates.io publish](https://crates.io/crates/resuma).
+Already shipped in v0.3: HTTP context in Flow routes, env-based bind address, flow scaffold template, crypto CSRF, lazy chunk registration, expanded CI. v0.2 brought single-crate layout, streaming SSR (Flow), layouts, file-based routing, security defaults, [crates.io publish](https://crates.io/crates/resuma).
 
 ## Why "Resuma"?
 

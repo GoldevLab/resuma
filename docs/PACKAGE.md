@@ -16,7 +16,7 @@ Users depend on a **single crate** — core and full-stack Flow ship together.
 
 ```toml
 [dependencies]
-resuma = { version = "0.2", default-features = false }
+resuma = { version = "0.3", default-features = false }
 tokio  = { version = "1", features = ["full"] }
 ```
 

@@ -23,7 +23,7 @@ enum Commands {
     New {
         /// Project directory name.
         name: String,
-        /// Template: `basic` (static page) or `todo` (full Resuma showcase).
+        /// Template: `basic`, `todo`, or `flow` (file-based pages).
         #[arg(long, default_value = "basic")]
         template: String,
     },
@@ -147,7 +147,7 @@ fn ensure_runtime_built() -> Result<()> {
                 ("core.js", runtime_dir.join("dist/core.js")),
             ];
             for (name, from) in assets {
-                let to = Path::new("crates/resuma/assets").join(name);
+                let to = runtime_assets_dir().join(name);
                 if from.exists() {
                     if let Some(parent) = to.parent() {
                         std::fs::create_dir_all(parent).ok();
@@ -167,6 +167,16 @@ fn npm_bin() -> &'static str {
         "npm.cmd"
     } else {
         "npm"
+    }
+}
+
+/// Where to copy rebuilt JS when developing the Resuma monorepo vs a standalone app.
+fn runtime_assets_dir() -> PathBuf {
+    let monorepo = Path::new("crates/resuma/assets");
+    if monorepo.is_dir() {
+        monorepo.to_path_buf()
+    } else {
+        PathBuf::from(".resuma/assets")
     }
 }
 

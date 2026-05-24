@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-05-23
+
+### Added
+
+- `ServeOptions::from_env()` / `FlowServeOptions::from_env()` — bind via `RESUMA_ADDR` or `HOST`+`PORT`
+- `ResumaApp::page_with_request()` / `fallback_with_request()` — HTTP context in page factories
+- Flow static routes pass full `FlowRequest` (query, headers, method)
+- SSR auto-registers lazy handler/island chunks from the resumability payload
+- `resuma new --template flow` — file-based pages starter under `src/pages/`
+- Island chunk route `GET /_resuma/island-chunk/:chunk.js` (fixes collision with HMR refresh path)
+- Cryptographically random CSRF tokens (`getrandom`)
+- Expanded CI: workspace check, runtime build, `cargo publish --dry-run`
+
+### Changed
+
+- `resuma build` copies JS assets to `.resuma/assets/` outside the monorepo (or `crates/resuma/assets/` in-tree)
+- Scaffold templates target `resuma = "0.3"`
+- `use_effect` / `use_computed` documented as SSR-only until client replay ships
+
+### Fixed
+
+- Missing workspace deps (`async-trait`, `ctor`) that broke fresh checkouts
+- Flow pages could not read request query/headers on static routes
+
 ## [0.2.3] - 2026-05-24
 
 ### Changed
@@ -56,6 +80,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Examples: counter, todo (backend security reference), flow-demo, flow-pages, website
 - Documentation site and markdown guides under `docs/`
 
+[0.3.0]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.3.0
 [0.2.3]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.2.3
 [0.2.2]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.2.2
 [0.2.1]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.2.1

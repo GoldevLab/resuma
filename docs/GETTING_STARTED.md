@@ -40,7 +40,7 @@ cargo install --path crates/resuma --features cli
 
 ```toml
 # App Cargo.toml — library only, no CLI deps
-resuma = { version = "0.2", default-features = false }
+resuma = { version = "0.3", default-features = false }
 ```
 
 ## Create a project

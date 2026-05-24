@@ -77,6 +77,12 @@ pub struct PageOptions {
     pub csrf_token: String,
 }
 
+/// Render a complete HTML document for an already-built view (merges payload handlers server-side).
+pub fn render_document(opts: &PageOptions, path: &str, view: &View) -> (String, ResumePayload) {
+    let (body, payload) = render_body_and_payload(view);
+    (wrap_document(opts, &body, &payload, path), payload)
+}
+
 /// Render a `View` produced by a component to a complete HTML document.
 pub fn render_to_string<F>(opts: &PageOptions, build_view: F) -> String
 where

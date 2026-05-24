@@ -160,11 +160,11 @@ Inside `js!{}` you have:
 `resuma::router::discover(path)` walks `src/pages/` and turns:
 
 ```
-src/routes/index.rs            -> /
-src/routes/about.rs            -> /about
-src/routes/users/[id].rs       -> /users/:id
-src/routes/blog/[...slug].rs   -> /blog/*slug
-src/routes/_layout.rs          -> shared layout
+src/pages/index.rs            -> /
+src/pages/about.rs            -> /about
+src/pages/users/[id].rs       -> /users/:id
+src/pages/blog/[...slug].rs   -> /blog/*slug
+src/pages/layout.rs           -> shared layout
 ```
 
 into a `Vec<DiscoveredRoute>` that the CLI can dump (`resuma routes`) or feed into a generated `app.register_routes()` call.

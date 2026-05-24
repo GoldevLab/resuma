@@ -1,6 +1,6 @@
 # Publishing to crates.io
 
-**Current release:** [resuma 0.2.2](https://crates.io/crates/resuma) · [resuma-macros 0.2.2](https://crates.io/crates/resuma-macros) · [docs.rs/resuma](https://docs.rs/resuma)
+**Current release:** [resuma 0.3.0](https://crates.io/crates/resuma) · [resuma-macros 0.3.0](https://crates.io/crates/resuma-macros) · [docs.rs/resuma](https://docs.rs/resuma)
 
 Resuma ships as **two crates** (Rust requires proc-macros in a separate crate):
 

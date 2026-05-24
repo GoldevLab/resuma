@@ -108,16 +108,9 @@ pub fn config() -> SecurityConfig {
 
 /// Cryptographically random token (32 hex chars).
 pub fn random_token() -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static SALT: AtomicU64 = AtomicU64::new(0x9e37_79b9_7f4a_7c15);
-    let now = Instant::now();
-    let mut x = SALT.fetch_add(1, Ordering::Relaxed) ^ now.elapsed().as_nanos() as u64;
-    // SplitMix64-style mixing (good enough for CSRF nonces; not for crypto secrets).
-    x = x.wrapping_add(0x9e37_79b9_7f4a_7c15);
-    let mut z = x;
-    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-    format!("{:016x}{:016x}", x, z ^ (z >> 31))
+    let mut bytes = [0u8; 16];
+    getrandom::getrandom(&mut bytes).expect("OS random number generator");
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 pub fn csrf_token() -> String {

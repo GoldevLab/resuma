@@ -50,7 +50,8 @@ async-stream  = "0.3"
 serde_urlencoded = "0.7"
 flate2        = "1"
 brotli        = "7"
-ctor          = "0.2"
+getrandom         = { workspace = true }
+ctor              = { workspace = true }
 # CLI (optional)
 clap                = { workspace = true, optional = true }
 anyhow              = { workspace = true, optional = true }

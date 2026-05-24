@@ -1,0 +1,14 @@
+use resuma::prelude::*;
+use resuma::FlowPageRegistry;
+
+pub struct PagesRegistry;
+
+impl FlowPageRegistry for PagesRegistry {
+    fn render(&self, module: &str, req: FlowRequest) -> Option<View> {
+        match module {
+            "index" => Some(super::index::page(req)),
+            "about" => Some(super::about::page(req)),
+            _ => None,
+        }
+    }
+}

@@ -42,8 +42,8 @@ pub struct ResumaApp {
     fallback: Option<Arc<FallbackFactory>>,
 }
 
-type PageFactory = dyn Fn() -> View + Send + Sync;
-type FallbackFactory = dyn Fn(&str) -> Option<View> + Send + Sync;
+type PageFactory = dyn Fn(FlowRequest) -> View + Send + Sync;
+type FallbackFactory = dyn Fn(&str, FlowRequest) -> Option<View> + Send + Sync;
 
 #[derive(Debug, Clone)]
 pub struct ServeOptions {
@@ -53,8 +53,15 @@ pub struct ServeOptions {
 
 impl Default for ServeOptions {
     fn default() -> Self {
+        Self::from_env()
+    }
+}
+
+impl ServeOptions {
+    /// Read bind address from `RESUMA_ADDR` or `HOST` + `PORT` (same as [`FlowServeOptions`]).
+    pub fn from_env() -> Self {
         Self {
-            addr: ([127, 0, 0, 1], 3000).into(),
+            addr: super::listen::listen_addr_from_env(),
             security: SecurityConfig::from_env(),
         }
     }
@@ -124,24 +131,39 @@ impl ResumaApp {
         self
     }
 
-    /// Register a page route. The factory is invoked on every request — components
-    /// only run on the server, guaranteeing a fresh `RenderContext` per request.
-    pub fn page<F>(mut self, path: &str, factory: F) -> Self
+    /// Register a page route. The factory receives per-request HTTP context.
+    pub fn page_with_request<F>(mut self, path: &str, factory: F) -> Self
     where
-        F: Fn() -> View + Send + Sync + 'static,
+        F: Fn(FlowRequest) -> View + Send + Sync + 'static,
     {
         self.page_factories
             .insert(path.to_string(), Arc::new(factory));
         self
     }
 
-    /// Catch-all renderer for dynamic routes (Resuma Flow param patterns).
-    pub fn fallback<F>(mut self, factory: F) -> Self
+    /// Register a page route without HTTP context (legacy / simple apps).
+    pub fn page<F>(self, path: &str, factory: F) -> Self
     where
-        F: Fn(&str) -> Option<View> + Send + Sync + 'static,
+        F: Fn() -> View + Send + Sync + 'static,
+    {
+        self.page_with_request(path, move |_req| factory())
+    }
+
+    /// Catch-all renderer for dynamic routes (Resuma Flow param patterns).
+    pub fn fallback_with_request<F>(mut self, factory: F) -> Self
+    where
+        F: Fn(&str, FlowRequest) -> Option<View> + Send + Sync + 'static,
     {
         self.fallback = Some(Arc::new(factory));
         self
+    }
+
+    /// Catch-all without HTTP context.
+    pub fn fallback<F>(self, factory: F) -> Self
+    where
+        F: Fn(&str) -> Option<View> + Send + Sync + 'static,
+    {
+        self.fallback_with_request(move |path, _req| factory(path))
     }
 
     /// Register a precompiled handler chunk to be served at
@@ -154,7 +176,7 @@ impl ResumaApp {
     }
 
     /// Register a precompiled island chunk to be served at
-    /// `/_resuma/island/<chunk>.js`.
+    /// `/_resuma/island-chunk/<chunk>.js`.
     pub fn island_chunk(self, chunk_id: &str, source: impl Into<String>) -> Self {
         self.island_chunks
             .write()
@@ -208,7 +230,8 @@ impl ResumaApp {
             .route("/_resuma/runtime.js", get(serve_runtime))
             .route("/_resuma/action/:name", post(serve_action))
             .route("/_resuma/handler/:chunk", get(serve_handler_chunk))
-            .route("/_resuma/island/:chunk", get(serve_island_chunk))
+            .route("/_resuma/island-chunk/:chunk", get(serve_island_chunk))
+            .route("/_resuma/island/:instance", get(serve_island_refresh))
             .with_state(state)
     }
 }
@@ -272,6 +295,13 @@ fn render_page_response(state: &AppState, view: View, path: &str, https: bool) -
         use axum::body::Body;
         use futures_util::StreamExt;
 
+        let (_, payload) = crate::ssr::render_body_and_payload(&view);
+        super::handler_assets::merge_payload_handlers(
+            &state.handler_chunks,
+            &state.island_chunks,
+            &payload,
+        );
+
         let stream = if let Some(deferred) = try_deferred_stream(view.clone(), &opts, path) {
             deferred
         } else {
@@ -296,8 +326,13 @@ fn render_page_response(state: &AppState, view: View, path: &str, https: bool) -
             .unwrap();
         attach_page_security(res, &opts, https)
     } else {
-        let html = crate::ssr::render_to_string_at_path(&opts, path, move || view);
-        let mut res = Html(html).into_response();
+        let html = crate::ssr::render_document(&opts, path, &view);
+        super::handler_assets::merge_payload_handlers(
+            &state.handler_chunks,
+            &state.island_chunks,
+            &html.1,
+        );
+        let mut res = Html(html.0).into_response();
         if let Some(cache) = cache {
             res.headers_mut().insert(
                 header::CACHE_CONTROL,
@@ -320,7 +355,13 @@ async fn serve_page(uri: Uri, State(state): State<Arc<AppState>>, req: Request<B
         None => return (StatusCode::NOT_FOUND, "not found").into_response(),
     };
 
-    render_page_response(&state, factory(), &path, request_is_https(&req))
+    let flow_req = crate::flow::request::from_http_request(&req, &path, Default::default());
+    render_page_response(
+        &state,
+        factory(flow_req),
+        &path,
+        request_is_https(&req),
+    )
 }
 
 async fn serve_fallback(
@@ -329,8 +370,9 @@ async fn serve_fallback(
     req: Request<Body>,
 ) -> Response {
     let path = uri.path();
+    let flow_req = crate::flow::request::from_http_request(&req, path, Default::default());
     if let Some(fb) = &state.fallback {
-        if let Some(view) = fb(path) {
+        if let Some(view) = fb(path, flow_req) {
             return render_page_response(&state, view, path, request_is_https(&req));
         }
     }
@@ -472,6 +514,14 @@ async fn serve_handler_chunk(
         }
         None => (StatusCode::NOT_FOUND, "handler chunk not found").into_response(),
     }
+}
+
+async fn serve_island_refresh(Path(instance): Path<String>) -> Response {
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        format!("island refresh for `{instance}` is not implemented yet"),
+    )
+        .into_response()
 }
 
 async fn serve_island_chunk(
