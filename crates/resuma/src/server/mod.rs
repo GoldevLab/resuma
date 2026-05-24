@@ -32,6 +32,7 @@ pub mod page_cache;
 pub mod request_path;
 pub mod runtime_asset;
 pub mod security;
+pub mod static_assets;
 
 pub use actions::{register_server_action, set_action_middleware, ActionFn};
 pub use app::{apply_security_headers, security_headers_middleware, ResumaApp, ServeOptions};

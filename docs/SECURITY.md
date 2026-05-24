@@ -12,6 +12,8 @@ Resuma ships with **secure defaults** comparable to Express + Helmet + rate limi
 | **Rate limiting** | Per-IP sliding window on actions and submits |
 | **Body size limit** | 1 MB default on POST bodies (Axum `DefaultBodyLimit`) |
 | **SSR escaping** | HTML text/attributes escaped; JSON state payload sanitized against `</script>` breakout |
+| **JSON-LD** | Inline `application/ld+json` sanitized the same way as the resumability payload |
+| **Client components** | `ClientComponent` ids restricted to `[a-zA-Z0-9_-]`; attributes escaped |
 | **Middleware** | `#[middleware]` errors **block** pages, submits, and actions (401/403/429) |
 | **Production mode** | Generic client error messages; hides `/_resuma/benchmark.json` |
 
@@ -77,6 +79,19 @@ All patterns are live in **`examples/todo`**: Controller/Service split, Guards, 
 - [ ] Run container as non-root (see docs-site `Dockerfile`)
 - [ ] Keep secrets in env / secret manager — never commit `.env`
 - [ ] Deploy: see [cookbook/docker](/docs/cookbook/docker) on the docs site (Fly.io + Dockerfile)
+
+## Rate limiting (multi-instance)
+
+Resuma rate limits are **in-process** (sliding window per IP). They reset when the process restarts. For Fly.io, Kubernetes, or multiple replicas, add edge rate limiting (Fly proxy, Cloudflare, nginx `limit_req`) in front of Resuma. Tune defaults with `RESUMA_RATE_ACTIONS` and `RESUMA_RATE_SUBMITS`.
+
+## Trust boundaries
+
+| API | Trust level | Notes |
+|-----|-------------|-------|
+| `view!` text / attributes | Safe | Auto-escaped at SSR |
+| `View::raw()` / `ClientComponent` HTML | **Trusted** | Only use with static or validated content |
+| `with_head()` / `with_json_ld()` | **Trusted** | Developer-controlled; JSON-LD now sanitized |
+| User signal values in payload | Safe | `encode_payload()` sanitizes script breakouts |
 
 ## Reporting vulnerabilities
 

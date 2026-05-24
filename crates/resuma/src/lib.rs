@@ -57,6 +57,7 @@
 //! Most apps start with [`prelude`] (`use resuma::prelude::*`). Macros (`view!`, `#[component]`,
 //! `#[server]`, Flow attributes) and common types are re-exported at the crate root for convenience.
 
+pub mod client;
 pub mod core;
 pub mod flow;
 pub mod router;
@@ -69,6 +70,10 @@ pub mod cli;
 pub use resuma_macros::{
     component, computed, debounce, effect, island, js, layout, load, middleware, server, submit,
     view,
+};
+
+pub use crate::client::{
+    client_component, client_script_url, ClientComponent, CLIENT_SCRIPT_PREFIX,
 };
 
 pub use crate::core::{
@@ -122,21 +127,22 @@ pub mod prelude {
     //! * **SSR** — [`render_to_string`](crate::render_to_string), [`render_view`](crate::render_view)
     //! * **Flow runtime** — [`FlowRequest`](crate::FlowRequest), [`current_request`](crate::current_request),
     //!   [`use_load`](crate::use_load), [`form`](crate::form)
+    //! * **Client components** — [`ClientComponent`](crate::ClientComponent), [`client_component`](crate::client_component)
     //!
     //! For low-level types ([`RenderContext`](crate::RenderContext), [`ResumePayload`](crate::ResumePayload)),
     //! import from [`crate::core`].
     pub use super::{
-        combine_js, component, computed, configure_security, current_request, debounce, effect,
-        error_page, form, island, js, layout, load, middleware, nav_link, not_found_page, portal,
-        provide_context, provide_theme, push_slots, render_to_string, render_view, resolve_slot,
-        server, set_action_middleware, stream_slot, submit, theme_css_vars, try_use_load,
-        try_use_load_value, use_computed, use_computed_with_js, use_context, use_debounce,
-        use_effect, use_load, use_signal, use_store, use_task, use_theme, use_visible_task, view,
-        with_view_transition, Child, Component, Computed, Effect, FlowApp, FlowError,
-        FlowPageRegistry, FlowRequest, FlowServeOptions, IntoView, LoadValue, LoaderError,
-        PageOptions, ReadSignal, Result, ResumaApp, ResumaError, SecurityConfig, ServeOptions,
-        Signal, SlottedChild, Store, SubmitError, Theme, View, WriteSignal, CSRF_FIELD,
-        CSRF_HEADER,
+        client_component, client_script_url, combine_js, component, computed, configure_security,
+        current_request, debounce, effect, error_page, form, island, js, layout, load, middleware,
+        nav_link, not_found_page, portal, provide_context, provide_theme, push_slots,
+        render_to_string, render_view, resolve_slot, server, set_action_middleware, stream_slot,
+        submit, theme_css_vars, try_use_load, try_use_load_value, use_computed,
+        use_computed_with_js, use_context, use_debounce, use_effect, use_load, use_signal,
+        use_store, use_task, use_theme, use_visible_task, view, with_view_transition, Child,
+        ClientComponent, Component, Computed, Effect, FlowApp, FlowError, FlowPageRegistry, FlowRequest,
+        FlowServeOptions, IntoView, LoadValue, LoaderError, PageOptions, ReadSignal, Result,
+        ResumaApp, ResumaError, SecurityConfig, ServeOptions, Signal, SlottedChild, Store,
+        SubmitError, Theme, View, WriteSignal, CSRF_FIELD, CSRF_HEADER, CLIENT_SCRIPT_PREFIX,
     };
 }
 

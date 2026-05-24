@@ -44,8 +44,7 @@ pub fn merge_payload_handlers(
             continue;
         }
         if let Some(symbols) = payload.handlers.get(island) {
-            let mut module = handler_chunk_module(symbols);
-            module.push_str("\nexport function resume(props, signals, root) {}\n");
+            let module = handler_chunk_module(symbols);
             islands.insert(island.clone(), module);
         }
     }

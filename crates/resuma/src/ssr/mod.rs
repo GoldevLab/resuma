@@ -172,11 +172,47 @@ pub fn render_with_context(ctx: Rc<RenderContext>, view: &View) -> String {
 }
 
 pub(crate) fn apply_head_csp_nonce(head: &str, nonce: &str) -> String {
-    if nonce.is_empty() || !head.contains("<style") {
+    if nonce.is_empty() {
         return head.to_string();
     }
     let nonce_attr = format!(r#" nonce="{}""#, escape_attr(nonce));
-    head.replace("<style>", &format!("<style{nonce_attr}>"))
+    inject_csp_nonce_into_head(head, &nonce_attr)
+}
+
+fn inject_csp_nonce_into_head(head: &str, nonce_attr: &str) -> String {
+    let mut out = String::with_capacity(head.len() + 64);
+    let mut rest = head;
+    while let Some(start) = rest.find('<') {
+        out.push_str(&rest[..start]);
+        rest = &rest[start..];
+        let Some(end) = rest.find('>') else {
+            out.push_str(rest);
+            break;
+        };
+        let tag = &rest[..=end];
+        out.push_str(&inject_nonce_on_tag(tag, nonce_attr));
+        rest = &rest[end + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
+fn inject_nonce_on_tag(tag: &str, nonce_attr: &str) -> String {
+    let lower = tag.to_ascii_lowercase();
+    if !(lower.starts_with("<style") || lower.starts_with("<script")) {
+        return tag.to_string();
+    }
+    if lower.contains("nonce=") {
+        return tag.to_string();
+    }
+    if lower.starts_with("<script") && lower.contains("src=") {
+        return tag.to_string();
+    }
+    if let Some(gt) = tag.rfind('>') {
+        format!("{}{}{}", &tag[..gt], nonce_attr, &tag[gt..])
+    } else {
+        tag.to_string()
+    }
 }
 
 fn wrap_document(
@@ -197,7 +233,7 @@ fn wrap_document(
     let stylesheet = opts
         .stylesheet
         .as_ref()
-        .map(|s| format!(r#"<link rel="stylesheet" href="{}" />"#, s))
+        .map(|s| format!(r#"<link rel="stylesheet" href="{}" />"#, escape_attr(s)))
         .unwrap_or_default();
     let scripts = client_scripts(opts, body_html, payload);
     let dev_script = crate::server::dev::dev_reload_script();
@@ -424,4 +460,24 @@ fn is_void_element(tag: &str) -> bool {
             | "track"
             | "wbr"
     )
+}
+
+#[cfg(test)]
+mod head_nonce_tests {
+    use super::apply_head_csp_nonce;
+
+    #[test]
+    fn injects_nonce_on_inline_style_and_script() {
+        let head = r#"<style>.x{color:red}</style><script>console.log(1)</script>"#;
+        let out = apply_head_csp_nonce(head, "abc123");
+        assert!(out.contains(r#"<style nonce="abc123">"#));
+        assert!(out.contains(r#"<script nonce="abc123">"#));
+    }
+
+    #[test]
+    fn skips_external_script_with_src() {
+        let head = r#"<script type="module" src="/static/app.js"></script>"#;
+        let out = apply_head_csp_nonce(head, "abc123");
+        assert!(!out.contains("nonce="));
+    }
 }

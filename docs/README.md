@@ -16,8 +16,9 @@ Two ways to read the docs:
 | [GETTING_STARTED.md](./GETTING_STARTED.md) | Install CLI, templates, first app |
 | [BLOG_RUST_SSR_WITHOUT_HYDRATION.md](./BLOG_RUST_SSR_WITHOUT_HYDRATION.md) | Technical post draft (Showcase / Dev.to / HN) |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Resumability, SSR payload, runtime |
-| [PACKAGE.md](./PACKAGE.md) | Crate map (`resuma` umbrella) |
-| [FLOW.md](./FLOW.md) | FlowApp, `#[load]`, `#[submit]`, pages |
+| [PACKAGE.md](./PACKAGE.md) | Product map — Resuma, Resuma Flow, Macros, Client |
+| [NAMING.md](./NAMING.md) | Official brand names and naming rules |
+| [FLOW.md](./FLOW.md) | Resuma Flow — FlowApp, `#[load]`, `#[submit]`, pages |
 | [SECURITY.md](./SECURITY.md) | CSRF, headers, rate limits, production |
 | [BACKEND.md](./BACKEND.md) | NestJS + Next.js patterns → Rust (`examples/todo`) |
 | [PUBLISHING.md](./PUBLISHING.md) | Publish to crates.io (production release) |

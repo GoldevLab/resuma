@@ -16,6 +16,7 @@ include = [
     "src/**/*",
     "assets/**/*",
     "templates/**/*",
+    "../../client-sdk/resuma-client.ts",
     "Cargo.toml",
 ]
 

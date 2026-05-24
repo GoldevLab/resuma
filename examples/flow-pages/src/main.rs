@@ -44,7 +44,7 @@ async fn main() -> std::io::Result<()> {
         .with_title("Resuma · File Pages")
         .with_head(INLINE_CSS)
         .streaming(true)
-        .not_found(|| not_found_page())
+        .not_found(not_found_page)
         .auto_pages(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/pages"),
             PagesRegistry,

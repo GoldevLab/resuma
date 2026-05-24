@@ -83,14 +83,14 @@ fn update_project(check: bool, version: Option<&str>) -> Result<()> {
     let target = version.unwrap_or(CLI_VERSION);
 
     if check {
-        if let Some(v) = current {
-            print_version_line("resuma (project Cargo.toml)", Some(v));
+        if let Some(v) = parse_resuma_version(&cargo) {
+            print_version_line("resuma (project Cargo.toml)", Some(&v));
         }
         print_version_line("resuma (CLI bundled version)", Some(CLI_VERSION));
         if let Some(latest) = latest_crates_io_version("resuma") {
             print_version_line("resuma (crates.io latest)", Some(&latest));
         }
-        if let Some(ref cur) = current {
+        if let Some(cur) = current {
             if versions_compatible(cur, target) {
                 println!("\n[resuma] project dependency looks up to date");
             } else {
@@ -100,7 +100,7 @@ fn update_project(check: bool, version: Option<&str>) -> Result<()> {
         return Ok(());
     }
 
-    if current.as_deref().is_some_and(|c| versions_compatible(c, target)) {
+    if current.is_some_and(|c| versions_compatible(c, target)) {
         println!("[resuma] project already uses resuma {target}");
         println!("[resuma] refreshing lockfile…");
     } else {

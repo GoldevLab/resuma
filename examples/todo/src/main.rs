@@ -170,11 +170,9 @@ fn SessionBar() -> View {
 
 #[component]
 fn ProgressRing(stats: Stats) -> View {
-    let pct = if stats.total == 0 {
-        0
-    } else {
-        (stats.done * 100) / stats.total
-    };
+    let pct = (stats.done * 100)
+        .checked_div(stats.total)
+        .unwrap_or(0);
     view! {
         <div class="progress-ring" role="progressbar" aria-valuenow={pct.to_string()} aria-valuemin="0" aria-valuemax="100">
             <div class="progress-ring__track">

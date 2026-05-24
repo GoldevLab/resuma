@@ -23,14 +23,14 @@ First Leptos run compiles ~200 crates and can take several minutes. Subsequent r
 | Framework | Initial load | First interaction | Static page |
 |-----------|-------------:|--------------------:|------------:|
 | **Resuma** | 901 B | 4.20 KiB | **0 B** |
-| **Qwik** | 1.96 KiB | 22.32 KiB | — |
-| **templ + HTMX** | 16.21 KiB | 16.21 KiB | — |
-| **SolidStart** | 16.75 KiB | 16.75 KiB | — |
-| **SvelteKit** | 27.71 KiB | 27.71 KiB | — |
-| **Astro** (React island) | 57.76 KiB | 57.76 KiB | — |
-| **React** (Vite SPA) | 57.99 KiB | 57.99 KiB | — |
 | **Leptos** | 79.02 KiB | 79.02 KiB | — |
 | **Next.js** (App Router) | 142.43 KiB | 142.43 KiB | — |
+| **React** (Vite SPA) | 57.99 KiB | 57.99 KiB | — |
+| **Astro** (React island) | 57.76 KiB | 57.76 KiB | — |
+| **SvelteKit** | 27.71 KiB | 27.71 KiB | — |
+| **Qwik** | 1.96 KiB | 22.32 KiB | — |
+| **SolidStart** | 16.75 KiB | 16.75 KiB | — |
+| **templ + HTMX** | 16.21 KiB | 16.21 KiB | — |
 
 Measured from production build artifacts in `benchmark/` (May 2026).
 
@@ -46,14 +46,14 @@ Independent sources align with our numbers (same ranking, same order of magnitud
 
 | Framework | Ours | Published | Verdict |
 |-----------|-----:|----------:|---------|
-| Qwik | 1.96 / 22.32 KiB | [preloader ~2 KiB](https://github.com/QwikDev/qwik/pull/7519), [core ~20–24 KiB](https://dev.to/sendotltd/qwik-city-port-two-bundle-numbers-2860-kb-first-paint-4492-kb-total-because-resumability-4a8i) | Matches |
-| templ + HTMX | 16.21 KiB | [HTMX ~16 KB gzip](https://github.com/bigskysoftware/htmx/issues/3239) | Matches |
-| SolidStart | 16.75 KiB | [Solid SPA 8.33 KB](https://dev.to/sendotltd/solidjs-port-gzip-833-kb-react-83-because-fine-grained-reactivity-means-no-virtual-dom-353) + meta-framework | Reasonable |
-| SvelteKit | 27.71 KiB | [32.50 kB SendOT portfolio](https://dev.to/sendotltd/sveltekit-port-3250-kb-gzip-72-over-plain-svelte-meta-framework-tax-round-two-288c) | Close |
-| Astro + React | 57.76 KiB | [58.86 kB client.js](https://github.com/withastro/astro/issues/13378) | Matches |
-| React 19 Vite | 57.99 KiB | [~59 kB Vite scaffold](https://github.com/facebook/react/issues/29913), [49 kB React 18](https://dev.to/sendotltd/solidjs-port-gzip-833-kb-react-83-because-fine-grained-reactivity-means-no-virtual-dom-353) | Matches |
 | Leptos | 79.02 KiB | [WASM binary size docs](https://book.leptos.dev/deployment/binary_size.html) — few public minimal benchmarks | Plausible |
 | Next.js 16 | 142.43 KiB | [67 kB optimized App Router](https://markaicode.com/vs/stop-choosing-wrong-nextjs-15-app-router-vs-pages-router-performance-reality-check/) vs default scaffold | High (scaffold) |
+| React 19 Vite | 57.99 KiB | [~59 kB Vite scaffold](https://github.com/facebook/react/issues/29913), [49 kB React 18](https://dev.to/sendotltd/solidjs-port-gzip-833-kb-react-83-because-fine-grained-reactivity-means-no-virtual-dom-353) | Matches |
+| Astro + React | 57.76 KiB | [58.86 kB client.js](https://github.com/withastro/astro/issues/13378) | Matches |
+| SvelteKit | 27.71 KiB | [32.50 kB SendOT portfolio](https://dev.to/sendotltd/sveltekit-port-3250-kb-gzip-72-over-plain-svelte-meta-framework-tax-round-two-288c) | Close |
+| Qwik | 1.96 / 22.32 KiB | [preloader ~2 KiB](https://github.com/QwikDev/qwik/pull/7519), [core ~20–24 KiB](https://dev.to/sendotltd/qwik-city-port-two-bundle-numbers-2860-kb-first-paint-4492-kb-total-because-resumability-4a8i) | Matches |
+| SolidStart | 16.75 KiB | [Solid SPA 8.33 KB](https://dev.to/sendotltd/solidjs-port-gzip-833-kb-react-83-because-fine-grained-reactivity-means-no-virtual-dom-353) + meta-framework | Reasonable |
+| templ + HTMX | 16.21 KiB | [HTMX ~16 KB gzip](https://github.com/bigskysoftware/htmx/issues/3239) | Matches |
 
 See also the [SendOT portfolio series](https://dev.to/sendotltd/qwik-city-port-two-bundle-numbers-2860-kb-first-paint-4492-kb-total-because-resumability-4a8i) — same UX, production builds, gzip, across React/Vue/Svelte/Solid/Nuxt/SvelteKit/Qwik.
 
@@ -66,10 +66,10 @@ See also the [SendOT portfolio series](https://dev.to/sendotltd/qwik-city-port-t
 
 ### What each framework ships
 
-| | Resuma | Qwik | templ + HTMX | SolidStart | SvelteKit | Astro | React | Leptos | Next.js |
+| | Resuma | Leptos | Next.js | React | Astro | SvelteKit | Qwik | SolidStart | templ + HTMX |
 |---|---|---|---|---|---|---|---|---|---|
-| Initial | `loader.js` | preloader | `htmx.min.js` | client chunks | entry + runtime | React island + client | SPA bundle | WASM + glue | firstLoadChunkPaths |
-| First click | loader + core | preloader + core + route + chunk | same (server RT) | same | same | same | same | same | same |
+| Initial | `loader.js` | WASM + glue | firstLoadChunkPaths | SPA bundle | React island + client | entry + runtime | preloader | client chunks | `htmx.min.js` |
+| First click | loader + core | same | same | same | same | same | preloader + core + route + chunk | same | same (server RT) |
 | Static pages | 0 B | — | — | — | — | — | — | — | — |
 
 ## Reproduce individually

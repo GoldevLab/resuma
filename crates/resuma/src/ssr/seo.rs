@@ -62,9 +62,9 @@ pub fn json_ld_script(json_ld: &str) -> String {
     if json_ld.is_empty() {
         return String::new();
     }
+    let safe = crate::core::serialize::sanitize_json_for_script(json_ld.trim());
     format!(
-        "\n<script type=\"application/ld+json\">\n{}\n</script>\n",
-        json_ld.trim()
+        "\n<script type=\"application/ld+json\">\n{safe}\n</script>\n",
     )
 }
 

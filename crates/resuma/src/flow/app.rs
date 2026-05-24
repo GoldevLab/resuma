@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::middleware;
+use axum::routing::get;
 
 use crate::core::view::View;
 use crate::server::ResumaApp;
@@ -38,6 +39,8 @@ pub struct FlowApp {
     not_found: Option<Arc<dyn Fn() -> View + Send + Sync>>,
     pwa: Option<super::pwa::FlowPwaConfig>,
     extensions: super::extensions::FlowExtensions,
+    /// Extra GET routes (e.g. bundled JS/CSS for marketing pages).
+    static_assets: Vec<(String, &'static [u8], &'static str)>,
 }
 
 /// Listen and security options for [`FlowApp::serve`].
@@ -78,7 +81,26 @@ impl FlowApp {
             not_found: None,
             pwa: None,
             extensions: super::extensions::FlowExtensions::default(),
+            static_assets: Vec::new(),
         }
+    }
+
+    /// Serve a fixed byte slice at `path` (must start with `/`).
+    pub fn static_asset(
+        mut self,
+        path: impl Into<String>,
+        body: &'static [u8],
+        content_type: &'static str,
+    ) -> Self {
+        self.static_assets
+            .push((path.into(), body, content_type));
+        self
+    }
+
+    /// Register a TypeScript client component bundle at `/static/client/{id}.js`.
+    pub fn client_asset(self, id: impl AsRef<str>, body: &'static [u8]) -> Self {
+        let path = crate::client::client_script_url(id.as_ref());
+        self.static_asset(path, body, "application/javascript; charset=utf-8")
     }
 
     /// Attach a JSON-serializable value to every request (`req.extension("key")` in loads/submits).
@@ -210,6 +232,19 @@ impl FlowApp {
     }
 
     pub async fn serve(self, opts: FlowServeOptions) -> std::io::Result<()> {
+        crate::server::configure_security(opts.security.clone());
+        let router = self.into_router(opts.clone());
+        let listener = tokio::net::TcpListener::bind(opts.addr).await?;
+        println!("resuma flow listening on http://{}", opts.addr);
+        axum::serve(
+            listener,
+            router.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+    }
+
+    /// Build the axum router (pages, Flow routes, static assets, security layers).
+    pub fn into_router(self, opts: FlowServeOptions) -> axum::Router {
         let mut app = self.inner;
         if self.streaming {
             app = app.with_streaming(true);
@@ -263,20 +298,21 @@ impl FlowApp {
             router = super::pwa::attach_pwa_routes(router, pwa);
         }
 
-        crate::server::configure_security(opts.security.clone());
+        for (path, body, content_type) in self.static_assets {
+            router = router.route(
+                &path,
+                get(move || async move {
+                    crate::server::static_assets::static_asset_response(content_type, body)
+                }),
+            );
+        }
+
         use axum::extract::DefaultBodyLimit;
-        let router = router
+        router
             .layer(DefaultBodyLimit::max(opts.security.body_limit_bytes))
             .layer(middleware::from_fn(
                 crate::server::security_headers_middleware,
-            ));
-        let listener = tokio::net::TcpListener::bind(opts.addr).await?;
-        println!("resuma flow listening on http://{}", opts.addr);
-        axum::serve(
-            listener,
-            router.into_make_service_with_connect_info::<SocketAddr>(),
-        )
-        .await
+            ))
     }
 }
 

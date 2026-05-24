@@ -34,14 +34,14 @@ Same UX everywhere — SSR counter (heading + increment button). Production buil
 | Framework | Initial load | First click | Static page |
 |-----------|-------------:|------------:|------------:|
 | **Resuma** | **901 B** | **4.20 KiB** | **0 B** |
-| Qwik | 1.96 KiB | 22.32 KiB | — |
-| templ + HTMX | 16.21 KiB | 16.21 KiB | — |
-| SolidStart | 16.75 KiB | 16.75 KiB | — |
-| SvelteKit | 27.71 KiB | 27.71 KiB | — |
-| Astro (React island) | 57.76 KiB | 57.76 KiB | — |
-| React (Vite SPA) | 57.99 KiB | 57.99 KiB | — |
 | Leptos | 79.02 KiB | 79.02 KiB | — |
 | Next.js (App Router) | 142.43 KiB | 142.43 KiB | — |
+| React (Vite SPA) | 57.99 KiB | 57.99 KiB | — |
+| Astro (React island) | 57.76 KiB | 57.76 KiB | — |
+| SvelteKit | 27.71 KiB | 27.71 KiB | — |
+| Qwik | 1.96 KiB | 22.32 KiB | — |
+| SolidStart | 16.75 KiB | 16.75 KiB | — |
+| templ + HTMX | 16.21 KiB | 16.21 KiB | — |
 
 Regenerate locally: `node benchmark/run.mjs` · Independent sources in [benchmark/README.md](benchmark/README.md#external-validation)
 
@@ -119,7 +119,7 @@ async fn search(q: String) -> Vec<String> {
 
 ## Resuma Flow
 
-One crate — core + file-based pages, loaders, submits:
+Full-stack layer inside the same crate — file-based pages, loaders, submits (like **Qwik City** or **SolidStart**):
 
 ```bash
 resuma new my-app --template flow
@@ -128,12 +128,25 @@ resuma add sqlx    # optional DB scaffolding
 
 | API | Purpose |
 | --- | --- |
-| `FlowApp` | App builder with page registry |
+| `FlowApp` | Resuma Flow app builder |
 | `#[load]` | Server data before render |
 | `#[submit]` | Form mutations |
 | `src/pages/` | File-based routing |
 
 Guide: [resuma-docs.fly.dev/docs/flow](https://resuma-docs.fly.dev/docs/flow)
+
+### Product map
+
+| Product | Crate / path | Role |
+|---------|--------------|------|
+| **Resuma** | `resuma` | Core — signals, resumability, `ResumaApp` |
+| **Resuma Flow** | `resuma::flow` | Pages, routing, loaders, `FlowApp` |
+| **Resuma Macros** | `resuma-macros` | `view!`, `#[component]`, rs2js |
+| **Resuma Runtime** | `runtime/` | Browser loader + core |
+| **Resuma Client** | `client-sdk/` | TypeScript widgets (`ClientComponent`) |
+| **Resuma CLI** | `resuma` + `cli` feature | `new`, `dev`, `build` |
+
+Details: [docs/NAMING.md](./docs/NAMING.md)
 
 ---
 

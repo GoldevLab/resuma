@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.2] - 2026-05-24
+
+### Added
+
+- **Resuma Client** — `ClientComponent`, `client_component()`, `FlowApp::client_asset()` / `static_asset()` for TypeScript widget bundles
+- **`client-sdk/resuma-client.ts`** — shipped in the `resuma` crate; `bootClientComponent()` mount contract
+- **`FlowApp::into_router()`** — testable axum router builder
+- **Product naming guide** — `docs/NAMING.md` (Resuma / Resuma Flow / Macros / Runtime / Client / CLI)
+- CLI commands on crates.io source: `resuma update`, `resuma add`, `resuma doctor`
+
+### Fixed
+
+- **JSON-LD XSS** — `json_ld_script()` sanitizes `</script>` breakouts
+- **Stylesheet href** — `PageOptions::stylesheet` URLs HTML-escaped at SSR
+- **Client component ids** — restricted to `[a-zA-Z0-9_-]`; invalid ids emit nothing
+- **CSP nonces in `with_head()`** — inline `<style>` / `<script>` tags receive per-request nonces
+- **Island auto-chunks** — no longer append no-op `resume()` stub (pre-registered TS islands work)
+- **Static asset caching** — `Cache-Control: public, max-age=31536000, immutable` on embedded bundles
+- **Clippy** — `resuma update` module clean under `-D warnings`
+
+### Changed
+
+- Benchmark table order: Resuma first, then Leptos, then by popularity
+- README / PACKAGE.md / SECURITY.md aligned with official product names
+- Security docs: trust boundaries, rate limits, CSP + `with_head()` patterns
+
 ## [0.3.1] - 2026-05-24
 
 ### Changed
@@ -105,6 +131,7 @@ Major release since v0.2.2: resumability-first model, client effect replay, dev 
 - Examples: counter, todo (backend security reference), flow-demo, flow-pages, website
 - Documentation site and markdown guides under `docs/`
 
+[0.3.2]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.3.2
 [0.3.1]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.3.1
 [0.3.0]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.3.0
 [0.2.3]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.2.3
