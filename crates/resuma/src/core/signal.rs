@@ -108,6 +108,7 @@ where
     fn track(&self) {
         if let Some(ctx) = current_context() {
             if let Some(eid) = ctx.current_effect_id() {
+                ctx.record_effect_dep(eid, self.inner.id);
                 let mut subs = self.inner.subscribers.write();
                 if !subs.contains(&eid) {
                     subs.push(eid);

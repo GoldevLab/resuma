@@ -224,15 +224,20 @@ impl ResumaApp {
             router = router.route("/_resuma/benchmark.json", get(serve_benchmark));
         }
 
-        router
+        let mut router = router
             .route("/_resuma/loader.js", get(serve_loader))
             .route("/_resuma/core.js", get(serve_core))
             .route("/_resuma/runtime.js", get(serve_runtime))
             .route("/_resuma/action/:name", post(serve_action))
             .route("/_resuma/handler/:chunk", get(serve_handler_chunk))
             .route("/_resuma/island-chunk/:chunk", get(serve_island_chunk))
-            .route("/_resuma/island/:instance", get(serve_island_refresh))
-            .with_state(state)
+            .route("/_resuma/island/:instance", get(serve_island_refresh));
+
+        if super::dev::dev_mode_enabled() {
+            router = router.route("/_resuma/dev/ws", get(super::dev::dev_ws_handler));
+        }
+
+        router.with_state(state)
     }
 }
 
@@ -356,12 +361,7 @@ async fn serve_page(uri: Uri, State(state): State<Arc<AppState>>, req: Request<B
     };
 
     let flow_req = crate::flow::request::from_http_request(&req, &path, Default::default());
-    render_page_response(
-        &state,
-        factory(flow_req),
-        &path,
-        request_is_https(&req),
-    )
+    render_page_response(&state, factory(flow_req), &path, request_is_https(&req))
 }
 
 async fn serve_fallback(
@@ -517,11 +517,10 @@ async fn serve_handler_chunk(
 }
 
 async fn serve_island_refresh(Path(instance): Path<String>) -> Response {
-    (
-        StatusCode::NOT_IMPLEMENTED,
-        format!("island refresh for `{instance}` is not implemented yet"),
-    )
-        .into_response()
+    match super::island_cache::island_refresh_html(&instance) {
+        Some(html) => Html(html).into_response(),
+        None => (StatusCode::NOT_FOUND, "island instance not found").into_response(),
+    }
 }
 
 async fn serve_island_chunk(

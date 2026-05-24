@@ -132,11 +132,8 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
         "flow" => {
             fs::write(dir.join("Cargo.toml"), CARGO_FLOW.replace("%NAME%", name))
                 .context("write Cargo.toml")?;
-            fs::write(
-                dir.join("src/main.rs"),
-                FLOW_MAIN.replace("%NAME%", name),
-            )
-            .context("write src/main.rs")?;
+            fs::write(dir.join("src/main.rs"), FLOW_MAIN.replace("%NAME%", name))
+                .context("write src/main.rs")?;
             let pages = dir.join("src/pages");
             fs::create_dir_all(&pages)?;
             fs::write(pages.join("mod.rs"), FLOW_MOD).context("write pages/mod.rs")?;

@@ -1,8 +1,7 @@
 /**
  * Island bootstrap. Each `<resuma-island>` element on the page contains its
  * own SSR-rendered HTML plus props serialized as JSON. We dynamically import
- * its chunk and call `resume(props, signals, root)` if exported. This mirrors
- * the contract used by the macro layer.
+ * its chunk and call `resume(props, signals, root)` if exported.
  */
 
 import type { SignalCell } from "./signals.js";
@@ -14,11 +13,38 @@ export function initIslands(root: HTMLElement, signals: Map<string, SignalCell<u
   islands.forEach((el) => {
     const chunk = el.getAttribute("data-r-chunk");
     if (!chunk) return;
-    const propsRaw = el.getAttribute("data-r-props") ?? "{}";
-    let props: unknown = {};
-    try { props = JSON.parse(propsRaw); } catch { /* keep default */ }
-    void hydrateIsland(chunk, props, el, signals);
+    const load = el.getAttribute("data-r-load") ?? "eager";
+    if (load === "visible" && "IntersectionObserver" in window) {
+      const io = new IntersectionObserver(
+        (entries, obs) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            obs.unobserve(entry.target);
+            void mountIsland(el, chunk, signals);
+          }
+        },
+        { rootMargin: "100px" },
+      );
+      io.observe(el);
+      return;
+    }
+    void mountIsland(el, chunk, signals);
   });
+}
+
+async function mountIsland(
+  el: HTMLElement,
+  chunk: string,
+  signals: Map<string, SignalCell<unknown>>,
+): Promise<void> {
+  const propsRaw = el.getAttribute("data-r-props") ?? "{}";
+  let props: unknown = {};
+  try {
+    props = JSON.parse(propsRaw);
+  } catch {
+    /* keep default */
+  }
+  await hydrateIsland(chunk, props, el, signals);
 }
 
 async function hydrateIsland(
@@ -28,11 +54,13 @@ async function hydrateIsland(
   signals: Map<string, SignalCell<unknown>>,
 ): Promise<void> {
   try {
-    const mod: { resume?: (p: unknown, s: Map<string, SignalCell<unknown>>, root: HTMLElement) => void } =
-      await import(`/_resuma/island-chunk/${chunk}.js`);
+    const mod: {
+      resume?: (p: unknown, s: Map<string, SignalCell<unknown>>, root: HTMLElement) => void;
+    } = await import(`/_resuma/island-chunk/${chunk}.js`);
     if (typeof mod.resume === "function") mod.resume(props, signals, el);
   } catch (err) {
-    // Islands are optional — the static HTML still works without their JS.
     console.debug("[resuma] island chunk unavailable, staying static", chunk, err);
   }
 }
+
+export { hydrateIsland as loadIslandChunk };

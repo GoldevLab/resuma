@@ -17,6 +17,9 @@ use serde_json::Value;
 use super::effect::EffectId;
 use super::signal::SignalId;
 
+/// Max handler JS source bytes kept inline in the HTML payload (`__page__` only).
+pub const INLINE_HANDLER_MAX_BYTES: usize = 256;
+
 thread_local! {
     static CURRENT: RefCell<Option<Rc<RenderContext>>> = const { RefCell::new(None) };
 }
@@ -60,6 +63,12 @@ pub struct RenderContext {
     /// Client-only visible tasks (id → JS source).
     visible_tasks: RefCell<BTreeMap<u32, String>>,
     next_visible_task: AtomicU32,
+    /// Effect id → signal dependencies collected during SSR.
+    effect_deps: RefCell<BTreeMap<u32, Vec<SignalId>>>,
+    /// Client-replayable effects (computed, debounce, side effects with JS).
+    client_effects: RefCell<Vec<ClientEffectSpec>>,
+    /// Active component/island boundary stack for handler chunk ids.
+    handler_chunk_stack: RefCell<Vec<String>>,
 }
 
 impl RenderContext {
@@ -77,7 +86,27 @@ impl RenderContext {
             contexts: RefCell::new(BTreeMap::new()),
             visible_tasks: RefCell::new(BTreeMap::new()),
             next_visible_task: AtomicU32::new(1),
+            effect_deps: RefCell::new(BTreeMap::new()),
+            client_effects: RefCell::new(Vec::new()),
+            handler_chunk_stack: RefCell::new(Vec::new()),
         })
+    }
+
+    /// Innermost handler chunk id (`__page__` when no component boundary is active).
+    pub fn current_handler_chunk(&self) -> String {
+        self.handler_chunk_stack
+            .borrow()
+            .last()
+            .cloned()
+            .unwrap_or_else(|| "__page__".to_string())
+    }
+
+    pub fn push_handler_chunk(&self, chunk: impl Into<String>) {
+        self.handler_chunk_stack.borrow_mut().push(chunk.into());
+    }
+
+    pub fn pop_handler_chunk(&self) {
+        self.handler_chunk_stack.borrow_mut().pop();
     }
 
     pub fn next_signal_id(&self) -> SignalId {
@@ -148,8 +177,36 @@ impl RenderContext {
         id
     }
 
-    /// Snapshot the entire reactive state as JSON ready to embed in HTML.
+    pub fn record_effect_dep(&self, effect_id: u32, signal_id: SignalId) {
+        let mut deps = self.effect_deps.borrow_mut();
+        let list = deps.entry(effect_id).or_default();
+        if !list.contains(&signal_id) {
+            list.push(signal_id);
+        }
+    }
+
+    pub fn take_effect_deps(&self, effect_id: u32) -> Vec<SignalId> {
+        self.effect_deps
+            .borrow_mut()
+            .remove(&effect_id)
+            .unwrap_or_default()
+    }
+
+    pub fn register_client_effect(&self, spec: ClientEffectSpec) {
+        self.client_effects.borrow_mut().push(spec);
+    }
+
+    /// Snapshot for embedding in HTML (strips external handler sources).
     pub fn snapshot(&self) -> ResumePayload {
+        self.snapshot_internal().for_client()
+    }
+
+    /// Full snapshot including all handler sources (server-side chunk registration).
+    pub fn snapshot_full(&self) -> ResumePayload {
+        self.snapshot_internal()
+    }
+
+    fn snapshot_internal(&self) -> ResumePayload {
         ResumePayload {
             signals: self
                 .state
@@ -165,9 +222,61 @@ impl RenderContext {
             actions: self.actions.borrow().clone(),
             contexts: self.contexts.borrow().clone(),
             visible_tasks: self.visible_tasks.borrow().clone(),
+            effects: self.client_effects.borrow().clone(),
+            lazy_chunks: self
+                .handler_chunks
+                .borrow()
+                .keys()
+                .filter(|k| *k != "__page__")
+                .cloned()
+                .collect(),
             csrf_token: None,
         }
     }
+}
+
+impl ResumePayload {
+    /// Strip external handler JS from the client payload (lazy-fetched by chunk id).
+    pub fn for_client(&self) -> Self {
+        let mut client = self.clone();
+        let mut inline_page = BTreeMap::new();
+        let mut lazy = self.lazy_chunks.clone();
+
+        if let Some(page) = self.handlers.get("__page__") {
+            for (sym, src) in page {
+                if src.len() <= INLINE_HANDLER_MAX_BYTES {
+                    inline_page.insert(sym.clone(), src.clone());
+                } else {
+                    lazy.push("__page__".to_string());
+                }
+            }
+        }
+
+        client.handlers = BTreeMap::new();
+        if !inline_page.is_empty() {
+            client.handlers.insert("__page__".into(), inline_page);
+        }
+
+        lazy.sort();
+        lazy.dedup();
+        client.lazy_chunks = lazy;
+        client
+    }
+}
+
+/// Client-side effect registered during SSR (replayed by the runtime).
+#[derive(Debug, Clone, Serialize)]
+pub struct ClientEffectSpec {
+    pub id: u32,
+    pub deps: Vec<SignalId>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
+    pub captures: BTreeMap<String, SignalId>,
+    pub kind: String,
+    pub body: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<SignalId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub debounce_ms: Option<u64>,
 }
 
 /// The JSON blob that travels in `<script type="resuma/state">…</script>`.
@@ -181,6 +290,11 @@ pub struct ResumePayload {
     pub contexts: BTreeMap<String, Value>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
     pub visible_tasks: BTreeMap<u32, String>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub effects: Vec<ClientEffectSpec>,
+    /// Handler chunk ids fetched lazily from `/_resuma/handler/:chunk.js`.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub lazy_chunks: Vec<String>,
     /// Double-submit CSRF token (sent as `X-Resuma-CSRF` on POST requests).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub csrf_token: Option<String>,
@@ -194,6 +308,8 @@ impl ResumePayload {
             || !self.islands.is_empty()
             || !self.actions.is_empty()
             || !self.visible_tasks.is_empty()
+            || !self.effects.is_empty()
+            || !self.lazy_chunks.is_empty()
     }
 }
 
@@ -206,6 +322,7 @@ pub fn page_needs_client(payload: &ResumePayload, body_html: &str) -> bool {
         "data-r-on:",
         "data-r-submit",
         "resuma-island",
+        "resuma-boundary",
         "resuma-dyn",
         "data-r-bind:",
         "data-r-portal",
@@ -222,6 +339,18 @@ pub fn with_context<R>(ctx: Rc<RenderContext>, f: impl FnOnce() -> R) -> R {
         *cell.borrow_mut() = prev;
         result
     })
+}
+
+/// Run `f` while handlers register under `chunk` (component / island boundary).
+pub fn with_handler_chunk<R>(chunk: impl Into<String>, f: impl FnOnce() -> R) -> R {
+    if let Some(ctx) = current_context() {
+        ctx.push_handler_chunk(chunk);
+        let out = f();
+        ctx.pop_handler_chunk();
+        out
+    } else {
+        f()
+    }
 }
 
 pub fn current_context() -> Option<Rc<RenderContext>> {

@@ -37,7 +37,17 @@ enum Commands {
         skip_runtime: bool,
     },
     /// Build a production binary + JS bundles.
-    Build,
+    Build {
+        /// Pre-render static HTML for discovered routes into `--out`.
+        #[arg(long)]
+        static_export: bool,
+        /// Output directory for static export (default: `dist`).
+        #[arg(long, default_value = "dist")]
+        out: PathBuf,
+        /// Pages directory for Flow static export route discovery.
+        #[arg(long, default_value = "src/pages")]
+        pages: PathBuf,
+    },
     /// Print or generate routes from file-based routing.
     Routes {
         /// Path to the pages directory (default: `src/pages`).
@@ -57,7 +67,11 @@ pub fn run() -> Result<()> {
     match args.command {
         Commands::New { name, template } => scaffold::create_project(&name, &template),
         Commands::Dev { addr, skip_runtime } => dev_command(&addr, skip_runtime),
-        Commands::Build => build_command(),
+        Commands::Build {
+            static_export,
+            out,
+            pages,
+        } => build_command(static_export, &out, &pages),
         Commands::Routes { path, generate } => routes_command(&path, generate),
     }
 }
@@ -68,6 +82,7 @@ fn dev_command(addr: &str, skip_runtime: bool) -> Result<()> {
     }
 
     println!("[resuma] starting dev server at http://{}", addr);
+    std::env::set_var("RESUMA_DEV", "1");
 
     let has_watch = Command::new("cargo")
         .args(["watch", "--version"])
@@ -98,7 +113,7 @@ fn dev_command(addr: &str, skip_runtime: bool) -> Result<()> {
     Ok(())
 }
 
-fn build_command() -> Result<()> {
+fn build_command(static_export: bool, out: &Path, pages: &Path) -> Result<()> {
     ensure_runtime_built()?;
 
     println!("[resuma] cargo build --release");
@@ -109,7 +124,58 @@ fn build_command() -> Result<()> {
     if !status.success() {
         return Err(anyhow!("cargo build exited with {:?}", status.code()));
     }
+
+    if static_export {
+        static_export_routes(out, pages)?;
+    }
+
     println!("[resuma] build complete — binaries at target/release/");
+    Ok(())
+}
+
+fn static_export_routes(out: &Path, pages: &Path) -> Result<()> {
+    use crate::router::discover;
+    use crate::ssr::{render_to_string_at_path, PageOptions};
+
+    std::fs::create_dir_all(out).with_context(|| format!("create {}", out.display()))?;
+
+    let routes = discover(pages);
+    if routes.is_empty() {
+        println!(
+            "[resuma] static export: no routes under {}",
+            pages.display()
+        );
+        return Ok(());
+    }
+
+    let opts = PageOptions {
+        title: "Static Export".into(),
+        ..Default::default()
+    };
+
+    for route in routes.iter().filter(|r| !r.is_layout) {
+        let file_path = if route.pattern == "/" {
+            out.join("index.html")
+        } else {
+            out.join(route.pattern.trim_start_matches('/'))
+                .join("index.html")
+        };
+        if let Some(parent) = file_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let pattern = route.pattern.clone();
+        let label = pattern.clone();
+        let html = render_to_string_at_path(&opts, &pattern, move || {
+            crate::core::View::Text(format!(
+                "Static export shell for {label} — customize `resuma build --static` with your page factories."
+            ))
+        });
+        std::fs::write(&file_path, html)
+            .with_context(|| format!("write {}", file_path.display()))?;
+        println!("[resuma] exported {}", route.pattern);
+    }
+
     Ok(())
 }
 

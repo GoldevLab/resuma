@@ -1,17 +1,41 @@
-//! `#[island]` — like `#[component]` but the compiler also emits a JS chunk
-//! containing every event handler registered by the component, so the
-//! browser can resume interactivity without reloading server-only code.
-//!
-//! Implementation note: the actual chunk emission happens at SSR time via
-//! the `RenderContext`, which already collects every handler. The macro
-//! only needs to mark the resulting `View` as an `Island` so the SSR layer
-//! knows to wrap it in a `<resuma-island>` boundary.
+//! `#[island]` — interactive boundary with optional lazy load policy.
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse2, ItemFn};
+use syn::parse::{Parse, ParseStream};
+use syn::{parse2, ItemFn, LitStr, Token};
 
-pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
+struct IslandArgs {
+    load: Option<LitStr>,
+}
+
+impl Parse for IslandArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut load = None;
+        while !input.is_empty() {
+            let key: syn::Ident = input.parse()?;
+            input.parse::<Token![=]>()?;
+            if key == "load" {
+                load = Some(input.parse()?);
+            } else {
+                return Err(syn::Error::new(key.span(), "unknown island attribute"));
+            }
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+            }
+        }
+        Ok(Self { load })
+    }
+}
+
+pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
+    let island_args = syn::parse2::<IslandArgs>(args).unwrap_or(IslandArgs { load: None });
+    let load_policy = island_args
+        .load
+        .as_ref()
+        .map(|s| s.value())
+        .unwrap_or_else(|| "eager".to_string());
+
     let func: ItemFn = match parse2(input) {
         Ok(f) => f,
         Err(e) => return e.to_compile_error(),
@@ -29,7 +53,7 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
                 .map(|c| c.next_signal_id().0)
                 .unwrap_or(0);
             let __view: ::resuma::__private::View = (|| #block)();
-            ::resuma::__private::wrap_in_island(#name_str, __island_id, __view)
+            ::resuma::__private::wrap_in_island(#name_str, __island_id, __view, #load_policy)
         }
     }
 }

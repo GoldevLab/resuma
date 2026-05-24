@@ -17,6 +17,7 @@ interface ResumePayload {
   handlers: Record<string, Record<string, string>>;
   islands: string[];
   visible_tasks?: Record<string, string>;
+  lazy_chunks?: string[];
 }
 
 const KNOWN_EVENTS = [
@@ -67,8 +68,9 @@ function needsCoreNow(payload: ResumePayload, scope: HTMLElement): boolean {
   if (payload.signals.length) return true;
   if (payload.islands.length) return true;
   if (payload.visible_tasks && Object.keys(payload.visible_tasks).length) return true;
+  if (payload.lazy_chunks?.length) return true;
   return !!scope.querySelector(
-    "resuma-island, resuma-dyn, [data-r-bind], [data-r-submit], template[data-r-portal], template[data-r-stream-chunk], [data-r-vt]",
+    "resuma-island, resuma-boundary, resuma-dyn, [data-r-bind], [data-r-submit], template[data-r-portal], template[data-r-stream-chunk], [data-r-vt]",
   );
 }
 

@@ -125,7 +125,7 @@ pub(crate) fn client_scripts(
     if !page_needs_client(payload, body_html) {
         return String::new();
     }
-    let mut payload = payload.clone();
+    let mut payload = payload.for_client();
     if !opts.csrf_token.is_empty() {
         payload.csrf_token = Some(opts.csrf_token.clone());
     }
@@ -152,7 +152,7 @@ pub fn render_body_and_payload(view: &View) -> (String, ResumePayload) {
         write_view(&mut buf, view);
         buf
     });
-    (body, ctx.snapshot())
+    (body, ctx.snapshot_full())
 }
 
 /// Render only the body of a `View`, no document scaffolding.
@@ -251,6 +251,7 @@ fn write_view(buf: &mut String, view: &View) {
         }
         View::Component(c) => write_view(buf, &c.view),
         View::Island(island) => write_island(buf, island),
+        View::Boundary(boundary) => write_boundary(buf, boundary),
         View::Slot(slot) => {
             let resolved = crate::core::resolve_slot(slot.name.as_deref());
             write_view(buf, &resolved);
@@ -358,16 +359,38 @@ fn write_island(buf: &mut String, island: &Island) {
         .collect::<Vec<_>>()
         .join(",");
     let props = serde_json::to_string(&island.props).unwrap_or_else(|_| "{}".into());
+    let load = match island.load {
+        crate::core::view::IslandLoad::Visible => "visible",
+        crate::core::view::IslandLoad::Eager => "eager",
+    };
+    let mut inner = String::new();
+    write_view(&mut inner, &island.view);
+    crate::server::island_cache::cache_island_html(
+        &island.instance_id,
+        &inner,
+        &island.chunk_id,
+        load,
+    );
     let _ = write!(
         buf,
-        r#"<resuma-island data-r-chunk="{chunk}" data-r-instance="{inst}" data-r-signals="{signals}" data-r-props="{props}">"#,
+        r#"<resuma-island data-r-chunk="{chunk}" data-r-instance="{inst}" data-r-signals="{signals}" data-r-props="{props}" data-r-load="{load}">"#,
         chunk = island.chunk_id,
         inst = island.instance_id,
         signals = signals,
         props = escape_attr(&props),
+        load = load,
     );
-    write_view(buf, &island.view);
+    buf.push_str(&inner);
     let _ = write!(buf, "</resuma-island>");
+}
+
+fn write_boundary(buf: &mut String, boundary: &crate::core::view::Boundary) {
+    let _ = write!(
+        buf,
+        r#"<resuma-boundary data-r-chunk="{chunk}" hidden aria-hidden="true"></resuma-boundary>"#,
+        chunk = escape_attr(&boundary.chunk_id),
+    );
+    write_view(buf, &boundary.view);
 }
 
 fn is_void_element(tag: &str) -> bool {

@@ -6,8 +6,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.3.0] - 2026-05-23
 
+Major release since v0.2.2: resumability-first model, client effect replay, dev tooling, and Flow improvements.
+
 ### Added
 
+- **Resumability everywhere:** each `#[component]` is a lazy handler boundary (`<resuma-boundary>`)
+- Handler chunks externalized from HTML payload — fetched from `/_resuma/handler/{Component}.js`
+- Viewport prefetch for lazy chunks via `IntersectionObserver` (`runtime/boundaries.ts`)
+- Client effect replay: `computed!`, `debounce!`, and `effect!` macros (rs2js → payload `effects` → runtime)
+- `payload.lazy_chunks` — chunk ids referenced on the page
+- `#[island(load = "visible")]` — lazy island hydration via IntersectionObserver
+- `GET /_resuma/island/:instance` — serves cached island HTML for HMR refresh
+- Dev WebSocket at `/_resuma/dev/ws` when `RESUMA_DEV=1` (`resuma dev` sets this)
+- `resuma build --static --out dist` — static HTML export scaffold from `src/pages/`
+- HTTP integration tests (`crates/resuma/tests/integration.rs`, `lazy_chunks.rs`)
 - `ServeOptions::from_env()` / `FlowServeOptions::from_env()` — bind via `RESUMA_ADDR` or `HOST`+`PORT`
 - `ResumaApp::page_with_request()` / `fallback_with_request()` — HTTP context in page factories
 - Flow static routes pass full `FlowRequest` (query, headers, method)
@@ -19,9 +31,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- `ResumePayload::for_client()` strips external handler sources (≤256 B `__page__` handlers stay inline)
+- `#[island]` reframed as optional — resumability is the default for every `#[component]`
+- Runtime `core.js` initializes client effects, boundary prefetch, and dev bridge
+- `use_computed` / `use_effect` / plain `use_debounce` remain SSR-only; use macros for client replay
 - `resuma build` copies JS assets to `.resuma/assets/` outside the monorepo (or `crates/resuma/assets/` in-tree)
 - Scaffold templates target `resuma = "0.3"`
-- `use_effect` / `use_computed` documented as SSR-only until client replay ships
+- `merge_payload_handlers` registers all chunks including `__page__` when oversized
 
 ### Fixed
 

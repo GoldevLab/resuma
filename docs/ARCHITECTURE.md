@@ -37,9 +37,9 @@ The `view!` macro tokenizes the JSX-ish input and walks it. When it sees `onClic
 1. Parses the closure with `syn`.
 2. Hands the body to `rs2js::translate_handler(...)` (inside `resuma-macros`).
 3. Receives back a `{ js: String, captures: BTreeSet<String>, ... }` translation.
-4. Generates Rust code that registers the chunk + symbol with the active `RenderContext`, returning an `AttrValue::Handler(HandlerRef { … })`.
+4. Generates Rust code that registers the chunk + symbol with the active `RenderContext` (component boundary or `__page__`), returning an `AttrValue::Handler(HandlerRef { … })`.
 
-The Rust expansion looks roughly like:
+Handler JS for component boundaries is **not** embedded in the HTML payload — the client lazy-imports `/_resuma/handler/{Component}.js`. Only tiny `__page__` handlers (≤256 bytes) stay inline.
 
 ```rust
 View::element("button")
@@ -47,10 +47,10 @@ View::element("button")
         "onClick".into(),
         register_handler(
             "click",
-            "__page__",
+            "Counter", // current #[component] boundary
             "h_8d3a9c…",
             "(_) => { state.count.update((c) => (c + 1)) }",
-            vec![ResumeCapture::Signal(count.id())],
+            vec![ResumeCapture::Signal { name: "count".into(), id: count.id() }],
             vec![],
         ),
     ))
@@ -58,23 +58,25 @@ View::element("button")
     .build()
 ```
 
+Each `#[component]` wraps its output in `<resuma-boundary data-r-chunk="Counter">` for viewport prefetch.
+
 ### 2.2 SSR rendering
 
 `resuma::ssr` walks the resulting `View` tree.
 
 ```html
-<button data-r-on:click="__page__#h_8d3a9c…"
-        data-r-cap:click="s1"
-        data-r-inline:click="(_)=>{state.count.update((c)=>(c+1))}">+</button>
+<button data-r-on:click="Counter#h_8d3a9c…"
+        data-r-cap:click="count:s1">+</button>
+<resuma-boundary data-r-chunk="Counter" hidden aria-hidden="true"></resuma-boundary>
 ```
 
-At the bottom of the page, the renderer also emits the resumability payload:
+The resumability payload carries signals and **lazy chunk refs** — not full handler sources for components:
 
 ```html
 <script type="resuma/state" id="resuma-state">
-{"signals":[{"id":{"0":1},"value":0}],"handlers":{"__page__":{"h_8d3a…":"(_)=>{...}"}},"islands":[],"actions":[]}
+{"signals":[{"id":{"0":1},"value":0}],"handlers":{},"lazy_chunks":["Counter"],"islands":[],"actions":[]}
 </script>
-<script type="module" src="/_resuma/runtime.js"></script>
+<script type="module" src="/_resuma/loader.js"></script>
 ```
 
 ### 2.3 The runtime resumes interactions

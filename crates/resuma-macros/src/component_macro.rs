@@ -95,7 +95,11 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
             fn render(props: Self::Props) -> #return_ty {
                 #(#prop_destructure)*
                 let _slot_guard = ::resuma::__private::push_slots(props.__resuma_slotted);
-                #body
+                ::resuma::__private::with_handler_chunk(stringify!(#name), || {
+                    ::resuma::__private::View::boundary(stringify!(#name), {
+                        #body
+                    })
+                })
             }
         }
     };

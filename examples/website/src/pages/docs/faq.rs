@@ -16,7 +16,7 @@ pub fn page(_req: FlowRequest) -> View {
             <p>"Static pages ship zero JS. Interactive pages load loader.js (~1–2 KB gzipped), then core.js on first interaction. Handler and island chunks load on demand. See the " <a href="/docs/benchmark">"benchmark page"</a> " for measured numbers."</p>
 
             <h2>"How does resumability compare to hydration?"</h2>
-            <p>"Hydration re-runs components on the client to attach listeners. Resumability serializes signals and handler references during SSR; the client resumes only the interactions users trigger. Resuma splits at Rust handler closures and " <code>"#[island]"</code> " boundaries — all business logic stays on the server."</p>
+            <p>"Hydration re-runs components on the client to attach listeners. Resumability serializes signals and handler references during SSR; the client resumes only the interactions users trigger. Every " <code>"#[component]"</code> " is a resumable boundary; " <code>"#[island]"</code> " is optional for heavy lazy bundles."</p>
 
             <h2>"Do I need Node.js?"</h2>
             <p>"Only if you rebuild the JS runtime from source. Prebuilt assets ship inside the " <code>"resuma"</code> " crate (" <code>"assets/"</code> "). For app development, Rust + cargo (or " <code>"cargo install resuma"</code> ") is enough."</p>

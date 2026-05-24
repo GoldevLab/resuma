@@ -35,9 +35,12 @@ pub mod view_transition;
 pub use app_context::{provide_context, push_context_frame, use_context, ContextGuard, ContextId};
 pub use component::{Component, IntoView};
 pub use context::{
-    current_context, page_needs_client, with_context, RenderContext, RenderMode, ResumePayload,
+    current_context, page_needs_client, with_context, with_handler_chunk, RenderContext,
+    RenderMode, ResumePayload,
 };
-pub use effect::{use_computed, use_effect, Computed, Effect};
+pub use effect::{
+    attach_client_effect, use_computed, use_computed_with_js, use_effect, Computed, Effect,
+};
 pub use error::{Result, ResumaError};
 pub use flow_request::FlowRequest;
 pub use handler::{HandlerCapture, HandlerRef, IslandRef, ServerActionRef};
@@ -48,7 +51,10 @@ pub use signal::{use_signal, ReadSignal, Signal, SignalId, WriteSignal};
 pub use slot::{push_slots, resolve_slot, with_default_slot, SlotGuard, SlottedChild};
 pub use store::{no_serialize, use_store, NoSerialize, Store};
 pub use stream::{stream_chunk, stream_slot};
-pub use task::{use_debounce, use_task, use_visible_task, visible_task_js, VisibleTaskId};
+pub use task::{
+    register_debounce_effect, use_debounce, use_task, use_visible_task, visible_task_js,
+    VisibleTaskId,
+};
 pub use theme::{provide_theme, theme_css_vars, use_theme, Theme};
 pub use view::{Attr, AttrValue, Child, Element, Fragment, SlotView, View};
 pub use view_transition::with_view_transition;

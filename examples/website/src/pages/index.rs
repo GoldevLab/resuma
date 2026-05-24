@@ -50,7 +50,7 @@ fn Counter() -> View {
                 <p class="section-sub">"Resumable SSR in Rust — without shipping a WASM hydration bundle."</p>
                 <div class="grid-3">
                     {feature_card("⚡", "Resumable, not hydrated", "Components run on the server only. State and handlers serialize into HTML — the client resumes lazily.")}
-                    {feature_card("🏝️", "Islands by default", "Mark interactive regions with #[island]. Each island ships its own JS chunk on demand.")}
+                    {feature_card("🧩", "Resumability everywhere", "Every #[component] is a lazy boundary. Handlers load on demand — no #[island] required for basic UI.")}
                     {feature_card("🦀", "Server actions", "#[server] async fn registers RPC at /_resuma/action/:name — callable from handlers and forms.")}
                     {feature_card("🌊", "Resuma Flow", "Full-stack layer: #[load], #[submit], layouts, middleware, file-based pages — one dependency.")}
                     {feature_card("📦", "One package", "cargo add resuma gives you core + Flow + macros + server in a single dependency.")}
@@ -67,7 +67,7 @@ fn Counter() -> View {
                         <h3>"Components & resumability"</h3>
                         <ul>
                             <li>"view!, #[component], use_signal"</li>
-                            <li>"#[server], #[island]"</li>
+                            <li>"#[server], #[island] (optional)"</li>
                             <li>"ResumaApp, SSR, ~3KB runtime"</li>
                         </ul>
                     </article>
@@ -101,7 +101,7 @@ fn Counter() -> View {
                         <tr><td>"After first paint"</td><td>"Re-run components on the client"</td><td class="yes">"Resume handlers only"</td></tr>
                         <tr><td>"Initial JS"</td><td>"App bundle scales with UI"</td><td class="yes">"~3KB runtime + lazy chunks"</td></tr>
                         <tr><td>"Static pages"</td><td>"Often still ship framework JS"</td><td class="yes">"Zero client JS"</td></tr>
-                        <tr><td>"Islands"</td><td>"Manual code splitting"</td><td class="yes">"First-class #[island]"</td></tr>
+                        <tr><td>"Islands"</td><td>"Manual code splitting"</td><td class="yes">"Optional #[island]; #[component] resumable by default"</td></tr>
                         <tr><td>"Full-stack"</td><td>"Separate routing layer"</td><td class="yes">"Flow built in (one crate)"</td></tr>
                     </tbody>
                 </table>

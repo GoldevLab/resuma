@@ -24,6 +24,8 @@ pub enum View {
     /// A self-contained interactive island. Renders its own SSR HTML and
     /// declares the chunk that will be lazy-loaded on first interaction.
     Island(Island),
+    /// Resumable component boundary — lazy handler chunk + viewport prefetch.
+    Boundary(Boundary),
     /// Content projection slot — resolved from parent slotted children.
     Slot(SlotView),
     /// A rendered chunk of raw HTML — used for trusted output and for nested
@@ -57,6 +59,14 @@ pub struct SlotView {
     pub name: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum IslandLoad {
+    #[default]
+    Eager,
+    Visible,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Island {
     /// Stable, build-time id of the island chunk on disk (e.g. `counter`).
@@ -70,6 +80,15 @@ pub struct Island {
     pub view: Box<View>,
     /// Props serialized as JSON, passed to the island's resume() entry.
     pub props: Value,
+    /// When to load island JS (`eager` default, `visible` uses IntersectionObserver).
+    #[serde(default)]
+    pub load: IslandLoad,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Boundary {
+    pub chunk_id: String,
+    pub view: Box<View>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -158,6 +177,14 @@ impl View {
 
     pub fn slot(name: Option<String>) -> Self {
         View::Slot(SlotView { name })
+    }
+
+    /// Wrap a component view in a resumable boundary (lazy handler chunk).
+    pub fn boundary(chunk_id: impl Into<String>, view: View) -> Self {
+        View::Boundary(Boundary {
+            chunk_id: chunk_id.into(),
+            view: Box::new(view),
+        })
     }
 }
 

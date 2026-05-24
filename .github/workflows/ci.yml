@@ -28,7 +28,7 @@ jobs:
         run: cargo clippy -p resuma-macros -p resuma -- -D warnings
 
       - name: Test
-        run: cargo test -p resuma
+        run: cargo test -p resuma --all-targets
 
       - name: Check workspace
         run: cargo check --workspace

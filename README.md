@@ -8,7 +8,7 @@
 
 **The first Rust web framework with SSR + Resumability + Islands + Server Actions + a friendly JS Bridge.**
 
-*Zero hydration, true resumability, native islands, automatic Rust→JS handler compilation.*
+*Zero hydration, true resumability, lazy handler chunks, automatic Rust→JS handler compilation.*
 
 **Install:** [`cargo install resuma`](https://crates.io/crates/resuma) · **Docs:** [resuma-docs.fly.dev](https://resuma-docs.fly.dev) · **API:** [docs.rs/resuma](https://docs.rs/resuma) · **Repo:** [GitHub](https://github.com/GolfredoPerezFernandez/resuma)
 
@@ -26,12 +26,12 @@ Resuma is a from-scratch Rust framework for building modern web apps with **resu
 | --- | --- | --- |
 | Client work after load | Re-run components to attach listeners | **Resume** serialized state and handlers |
 | Initial JS | Grows with app size | ~3KB runtime + lazy chunks |
-| Interactive boundaries | Often manual | First-class `#[island]` |
+| Interactive boundaries | Often manual | Every `#[component]` is resumable; `#[island]` optional |
 | Server RPC | Custom wiring | `#[server] async fn` + built-in endpoint |
 | Handler code on client | Ship framework runtime + app logic | Compile handlers to small JS via rs2js |
 | Templates | Varies | JSX-like `view!{}` — no extra sigils |
 
-The mental model: **components only run on the server**. The browser never re-executes them. Instead, the SSR pass serialises every signal, handler reference and island into the HTML, and the tiny client runtime *resumes* execution lazily — exactly when the user clicks something.
+The mental model: **components only run on the server**. The browser never re-executes them. SSR serialises signals and handler references into HTML; the tiny client runtime *resumes* execution lazily — on first interaction or when a boundary scrolls into view.
 
 ## Hello, Resuma
 
@@ -89,19 +89,17 @@ fn LiveSearch() -> View {
 
 `#[server]` registers an RPC endpoint at `/_resuma/action/search`. The handler is dispatched there transparently.
 
-## Islands
+## Islands (optional)
 
 ```rust
-#[island]
-fn LiveCounter() -> View {
-    let count = use_signal(0);
-    view! {
-        <button onClick={ move |_| count.update(|c| *c += 1) }>{count}</button>
-    }
+#[island(load = "visible")]
+fn LiveChart() -> View {
+    let points = use_signal(vec![1, 4, 2, 8]);
+    view! { /* heavy widget — JS loads when visible */ }
 }
 ```
 
-Mark any component with `#[island]` and Resuma will package its handlers into an isolated chunk that ships only when the island scrolls into view (or immediately, configurable).
+Every `#[component]` is already resumable (lazy handler chunks + viewport prefetch). Use `#[island]` only for heavy client bundles, `load = "visible"`, or dev HMR.
 
 ## Resuma Flow (full-stack layer)
 
@@ -127,7 +125,7 @@ resuma new my-app --template todo    # full Resuma showcase
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                   resuma crate (v0.2)                    │
+│                   resuma crate (v0.3)                    │
 │                                                          │
 │   core ──► ssr ──► server (axum)                         │
 │     │              GET  /_resuma/runtime.js              │
@@ -214,37 +212,57 @@ cargo run -p example-website   # docs site
 
 ## What works in v0.3
 
-✅ `Signal<T>`, `use_signal`, `use_effect`, `use_computed` (effects/computed SSR-only for now)
+✅ `Signal<T>`, `use_signal`, `use_effect`, `use_computed` (SSR-only; use macros for client replay)
 ✅ `view!{}` macro with JSX-like syntax (no `$` noise)
-✅ `#[component]` with auto-generated props builder
+✅ `#[component]` with auto-generated props builder — **resumable boundary by default**
 ✅ `#[server]` async actions with JSON-RPC endpoint
-✅ `#[island]` interactive component boundary
+✅ `#[island]` optional — heavy widgets, visible load, dev HMR
 ✅ `js!{}` escape hatch for raw JS handlers
 ✅ Rust → JS compiler for common handler patterns
 ✅ SSR with resumability payload embedded in HTML
-✅ Lazy handler/island chunks registered automatically from SSR
+✅ Lazy handler chunks externalized from payload + viewport prefetch
 ✅ ~3KB client runtime (lazy event delegation + signals + RPC)
 ✅ axum-based server with built-in `/_resuma/*` routes
 ✅ File-based routing scanner (`src/pages/[id].rs` → `/users/:id`)
 ✅ Flow static routes receive `FlowRequest` (query, headers, method)
-✅ `RESUMA_ADDR` / `HOST`+`PORT` bind configuration
+✅ `computed!` / `debounce!` / `effect!` — client-replayable (rs2js)
+✅ `#[island(load = "visible")]` lazy island loading
+✅ Island HMR refresh + dev WebSocket (`resuma dev`)
+✅ `resuma build --static` export scaffold
 ✅ `resuma` CLI: `new` (basic/todo/flow), `dev`, `build`, `routes`
 
-## Client-side reactivity (v0.3)
+## Resumability model (default)
 
-`use_signal` updates work on the client via the resumability payload. `use_effect` and `use_computed` currently run during **SSR only** — use `js!` handlers or manual signal updates for client-driven derived state until full client effect replay lands in a future release.
+Every `#[component]` is a **resumable boundary**:
+
+- **SSR always** — Rust renders HTML on the server
+- **Handlers** register under the component chunk (lazy-fetched from `/_resuma/handler/{Component}.js`)
+- **Small page handlers** stay inline in the payload (`__page__`, under 256 bytes)
+- **Signals + `computed!` / `effect!`** — client replay without re-running components
+
+`#[island]` is **optional** — use it only for heavy lazy JS bundles, `load = "visible"`, or dev HMR. Most apps need only `#[component]` + `view!`.
+
+```rust
+#[component]
+fn Counter() -> View {
+    let n = use_signal(0);
+    let doubled = computed!([n], move || n.get() * 2); // client + SSR
+    view! { <p>{doubled}</p> <button onClick={move |_| n.update(|v| *v += 1)}>"+"</button> }
+}
+```
+
+## Client-side reactivity
+
+`use_signal` updates work on the client via the resumability payload. For derived state and effects in the browser, use **`computed!([deps], move || …)`**, **`effect!([deps], move || …)`**, and **`debounce!([deps], ms, move || …)`** (rs2js-translated). Plain `use_computed()` / `use_effect()` run on SSR only.
 
 ## Roadmap (v0.4+)
 
-- [ ] Hot Module Reload via `resuma` CLI + websocket bridge
-- [ ] Build-time pre-rendering for static sites
-- [ ] Partial pre-rendering (PPR) — server shell + dynamic islands
-- [ ] `#[island(load = "visible")]` lazy load policies
+- [ ] Partial pre-rendering (PPR) — server shell + dynamic boundaries
 - [ ] Devtools extension for resumability payload inspection
 - [ ] First-class TypeScript bindings for `js!{}` blocks
 - [ ] WASM-backed islands for compute-heavy code (opt-in)
 
-Already shipped in v0.3: HTTP context in Flow routes, env-based bind address, flow scaffold template, crypto CSRF, lazy chunk registration, expanded CI. v0.2 brought single-crate layout, streaming SSR (Flow), layouts, file-based routing, security defaults, [crates.io publish](https://crates.io/crates/resuma).
+Already shipped in v0.3: resumability everywhere, client effect replay, lazy handler externalization, viewport prefetch, dev HMR, static export, HTTP context in Flow routes, env-based bind, flow scaffold, crypto CSRF. v0.2 brought single-crate layout, streaming SSR (Flow), layouts, file-based routing, security defaults, [crates.io publish](https://crates.io/crates/resuma).
 
 ## Why "Resuma"?
 

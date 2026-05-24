@@ -38,8 +38,7 @@ export async function resolveHandler(ref: string, inline: string | null): Promis
 
   if (chunk === "__page__") {
     const src = r.handlers[chunk]?.[symbol];
-    if (!src) throw new Error(`[resuma] missing inline handler ${ref}`);
-    return compileInline(src);
+    if (src) return compileInline(src);
   }
 
   let mod = r.loaded.get(chunk);

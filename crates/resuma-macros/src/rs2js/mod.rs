@@ -51,6 +51,29 @@ pub struct Translation {
     pub actions: BTreeSet<String>,
 }
 
+/// Translate a zero-arg reactive closure body for client effect replay.
+pub fn translate_computed(closure: &ExprClosure) -> Result<Translation, Rs2JsError> {
+    let mut t = Translator::default();
+    t.locals.push(BTreeSet::new());
+    for input in &closure.inputs {
+        let (name, _) = pat_to_param(input)?;
+        t.locals.last_mut().unwrap().insert(name);
+    }
+    let body_is_block = matches!(&*closure.body, Expr::Block(_));
+    let body = t.expr(&closure.body)?;
+    let body = if body_is_block {
+        body
+    } else {
+        format!("return {};", body)
+    };
+    t.locals.pop();
+    Ok(Translation {
+        js: format!("(state, __resuma) => {{ {body} }}", body = body),
+        captures: t.captures,
+        actions: t.actions,
+    })
+}
+
 /// Convenience entry point: translate a closure expression into a JS arrow
 /// function. The closure must be a literal (e.g. `move |ev| ...`).
 pub fn translate_handler(closure: &ExprClosure) -> Result<Translation, Rs2JsError> {

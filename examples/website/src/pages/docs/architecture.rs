@@ -23,11 +23,14 @@ serialize signals              delegate events
 
             <h2>"Payload format"</h2>
             {code_block(r#"<script type="resuma/state" id="resuma-state">
-{"signals":[...],"handlers":{...},"islands":[],"actions":[]}
+{"signals":[...],"handlers":{},"lazy_chunks":["Counter"],"islands":[],"actions":[]}
 </script>
 <script type="module" src="/_resuma/loader.js"></script>"#)}
 
-            <h2>"Crates (v0.2)"</h2>
+            <h2>"Component boundaries"</h2>
+            <p>"Each " <code>"#[component]"</code> " emits " <code>"<resuma-boundary data-r-chunk=\"Counter\">"</code> " for viewport prefetch. Handler JS loads from " <code>"/_resuma/handler/Counter.js"</code> " — not inlined in the payload."</p>
+
+            <h2>"Crates"</h2>
             <table class="docs-table">
                 <thead><tr><th>"Crate / module"</th><th>"Role"</th></tr></thead>
                 <tbody>

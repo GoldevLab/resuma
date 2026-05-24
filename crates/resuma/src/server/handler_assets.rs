@@ -32,7 +32,7 @@ pub fn merge_payload_handlers(
 ) {
     let mut handlers = handler_chunks.write();
     for (chunk, symbols) in &payload.handlers {
-        if chunk == "__page__" || handlers.contains_key(chunk) {
+        if handlers.contains_key(chunk) {
             continue;
         }
         handlers.insert(chunk.clone(), handler_chunk_module(symbols));

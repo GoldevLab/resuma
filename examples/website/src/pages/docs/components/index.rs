@@ -27,7 +27,7 @@ pub fn page(_req: FlowRequest) -> View {
                 </a>
                 <a href="/docs/components/islands" class="card" style="text-decoration: none;">
                     <h3>"Islands"</h3>
-                    <p>"#[island] boundaries for isolated client bundles."</p>
+                    <p>"computed! / effect! for client replay; #[island] optional for heavy widgets."</p>
                 </a>
                 <a href="/docs/components/server" class="card" style="text-decoration: none;">
                     <h3>"Server actions"</h3>

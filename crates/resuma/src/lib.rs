@@ -15,15 +15,19 @@ pub mod ssr;
 #[cfg(feature = "cli")]
 pub mod cli;
 
-pub use resuma_macros::{component, island, js, layout, load, middleware, server, submit, view};
+pub use resuma_macros::{
+    component, computed, debounce, effect, island, js, layout, load, middleware, server, submit,
+    view,
+};
 
 pub use crate::core::{
     combine_js, nav_link, no_serialize, portal, provide_context, provide_theme, push_slots,
-    resolve_slot, stream_chunk, stream_slot, theme_css_vars, use_computed, use_context,
-    use_debounce, use_effect, use_signal, use_store, use_task, use_theme, use_visible_task,
-    visible_task_js, with_default_slot, with_view_transition, Child, Component, Computed,
-    ContextId, Effect, FlowRequest, IntoView, NoSerialize, ReadSignal, RenderContext, RenderMode,
-    Result, ResumaError, Signal, SlotGuard, SlottedChild, Store, Theme, View, WriteSignal,
+    resolve_slot, stream_chunk, stream_slot, theme_css_vars, use_computed, use_computed_with_js,
+    use_context, use_debounce, use_effect, use_signal, use_store, use_task, use_theme,
+    use_visible_task, visible_task_js, with_default_slot, with_view_transition, Child, Component,
+    Computed, ContextId, Effect, FlowRequest, IntoView, NoSerialize, ReadSignal, RenderContext,
+    RenderMode, Result, ResumaError, Signal, SlotGuard, SlottedChild, Store, Theme, View,
+    WriteSignal,
 };
 
 pub use crate::server::{
@@ -51,25 +55,28 @@ pub fn run() -> anyhow::Result<()> {
 pub mod prelude {
     //! Glob-friendly re-exports.
     pub use super::{
-        combine_js, component, configure_security, current_request, error_page, form, island, js,
-        layout, load, middleware, nav_link, not_found_page, portal, provide_context, provide_theme,
-        push_slots, render_to_string, render_view, resolve_slot, server, set_action_middleware,
-        stream_slot, submit, theme_css_vars, try_use_load, try_use_load_value, use_computed,
-        use_context, use_debounce, use_effect, use_load, use_signal, use_store, use_task,
-        use_theme, use_visible_task, view, with_view_transition, Child, Component, Computed,
-        Effect, FlowApp, FlowError, FlowPageRegistry, FlowRequest, FlowServeOptions, IntoView,
-        LoadValue, LoaderError, PageOptions, ReadSignal, Result, ResumaApp, ResumaError,
-        SecurityConfig, ServeOptions, Signal, SlottedChild, Store, SubmitError, Theme, View,
-        WriteSignal, CSRF_FIELD, CSRF_HEADER,
+        combine_js, component, computed, configure_security, current_request, debounce, effect,
+        error_page, form, island, js, layout, load, middleware, nav_link, not_found_page, portal,
+        provide_context, provide_theme, push_slots, render_to_string, render_view, resolve_slot,
+        server, set_action_middleware, stream_slot, submit, theme_css_vars, try_use_load,
+        try_use_load_value, use_computed, use_computed_with_js, use_context, use_debounce,
+        use_effect, use_load, use_signal, use_store, use_task, use_theme, use_visible_task, view,
+        with_view_transition, Child, Component, Computed, Effect, FlowApp, FlowError,
+        FlowPageRegistry, FlowRequest, FlowServeOptions, IntoView, LoadValue, LoaderError,
+        PageOptions, ReadSignal, Result, ResumaApp, ResumaError, SecurityConfig, ServeOptions,
+        Signal, SlottedChild, Store, SubmitError, Theme, View, WriteSignal, CSRF_FIELD,
+        CSRF_HEADER,
     };
 }
 
 #[doc(hidden)]
 pub mod __private {
     //! Re-exports used by the macro-generated code.
+    pub use crate::core::effect::{attach_client_effect, use_computed_with_js};
+    pub use crate::core::task::register_debounce_effect;
     pub use crate::core::{combine_js, nav_link};
     pub use crate::core::{
-        context::{current_context, RenderContext, RenderMode},
+        context::{current_context, with_handler_chunk, RenderContext, RenderMode},
         handler::{HandlerCapture, HandlerRef},
         signal::SignalId,
         slot::{push_slots, resolve_slot, with_default_slot, SlottedChild},
@@ -101,14 +108,18 @@ pub mod __private {
 
     pub fn register_handler(
         event: &str,
-        chunk: &str,
+        _chunk: &str,
         symbol: &str,
         js_source: &str,
         captures: Vec<ResumeCapture>,
         actions: Vec<String>,
     ) -> AttrValue {
+        let chunk = current_context()
+            .map(|c| c.current_handler_chunk())
+            .unwrap_or_else(|| "__page__".to_string());
+
         if let Some(ctx) = current_context() {
-            ctx.register_handler(chunk, symbol, js_source);
+            ctx.register_handler(&chunk, symbol, js_source);
             for a in &actions {
                 ctx.register_action(a);
             }
@@ -122,12 +133,20 @@ pub mod __private {
             })
             .collect();
 
+        let inline = if chunk == "__page__"
+            && js_source.len() <= crate::core::context::INLINE_HANDLER_MAX_BYTES
+        {
+            Some(js_source.to_string())
+        } else {
+            None
+        };
+
         AttrValue::Handler(HandlerRef {
             event: event.to_string(),
-            chunk: chunk.to_string(),
+            chunk,
             symbol: symbol.to_string(),
             captures: signal_captures,
-            inline: Some(js_source.to_string()),
+            inline,
         })
     }
 
@@ -215,16 +234,22 @@ pub mod __private {
         }
     }
 
-    pub fn wrap_in_island(name: &str, instance: u32, view: View) -> View {
+    pub fn wrap_in_island(name: &str, instance: u32, view: View, load: &str) -> View {
         if let Some(ctx) = current_context() {
             ctx.register_island(name);
         }
+        let load = match load {
+            "visible" | "Visible" => view_mod::IslandLoad::Visible,
+            _ => view_mod::IslandLoad::Eager,
+        };
+        let inner = crate::core::context::with_handler_chunk(name, || view);
         View::Island(IslandView {
             chunk_id: name.to_string(),
             instance_id: format!("{}-{}", name, instance),
             signal_ids: Vec::new(),
-            view: Box::new(view),
+            view: Box::new(inner),
             props: serde_json::Value::Null,
+            load,
         })
     }
 

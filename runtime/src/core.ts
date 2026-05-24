@@ -5,6 +5,8 @@
 
 import { initSignals, type SignalCell, applyDom, bindReactiveText, bindReactiveAttrs } from "./signals.js";
 import { initIslands } from "./islands.js";
+import { initEffects, type ClientEffectSpec } from "./effects.js";
+import { prefetchLazyChunks } from "./boundaries.js";
 import { resolveHandler, type Handler } from "./handler-loader.js";
 
 interface ResumePayload {
@@ -14,6 +16,8 @@ interface ResumePayload {
   actions: string[];
   contexts?: Record<string, unknown>;
   visible_tasks?: Record<string, string>;
+  effects?: ClientEffectSpec[];
+  lazy_chunks?: string[];
   csrf_token?: string;
 }
 
@@ -113,6 +117,9 @@ export async function bootstrap(): Promise<void> {
   initPortals(root());
   initViewTransitions(root());
   runVisibleTasks(payload.visible_tasks ?? {}, state);
+  initEffects(payload.effects ?? [], signals, __resuma);
+  prefetchLazyChunks(payload.lazy_chunks ?? [], root());
+  connectDevBridge();
 }
 
 export function buildLocalState(captures: string[]): Record<string, SignalCell<unknown>> {
@@ -306,4 +313,23 @@ async function refreshIsland(instance: string): Promise<void> {
   const target = document.querySelector(`resuma-island[data-r-instance="${instance}"]`);
   if (target) target.outerHTML = html;
   applyDom();
+}
+
+function connectDevBridge(): void {
+  if (typeof WebSocket === "undefined") return;
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${proto}://${location.host}/_resuma/dev/ws`);
+  ws.addEventListener("message", (ev) => {
+    const msg = String(ev.data);
+    if (msg === "reload") {
+      location.reload();
+      return;
+    }
+    if (msg.startsWith("island:")) {
+      void refreshIsland(msg.slice("island:".length));
+    }
+  });
+  ws.addEventListener("error", () => {
+    /* dev server optional */
+  });
 }

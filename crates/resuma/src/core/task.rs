@@ -1,7 +1,10 @@
 //! Tasks & lifecycle hooks (`use_task`, `use_visible_task`).
 
+use std::collections::BTreeMap;
+
 use super::context::current_context;
-use super::effect::{use_effect, Effect};
+use super::effect::{register_client_effect, use_effect, Effect};
+use super::signal::Signal;
 
 /// Side effect that runs during SSR and re-runs when tracked signals change.
 pub fn use_task<F>(callback: F) -> Effect
@@ -29,18 +32,35 @@ pub fn visible_task_js(body: &str) -> String {
     format!("(async (state, __resuma) => {{ {} }})", body)
 }
 
-/// Debounced signal updates — cookbook pattern.
-pub fn use_debounce<T, F>(signal: &super::signal::Signal<T>, ms: u64, mut on_change: F)
+/// Debounced signal reaction — SSR runs immediately; use `debounce!` for client replay.
+pub fn use_debounce<T, F>(signal: &Signal<T>, ms: u64, mut on_change: F)
 where
     T: Clone + serde::Serialize + Send + Sync + 'static,
     F: FnMut(T) + Send + Sync + 'static,
 {
     let signal = signal.clone();
     use_effect(move || {
-        let value = signal.peek();
-        // SSR: run once. Client debounce is handled by registering a visible
-        // task when needed; for now invoke immediately on server.
-        on_change(value);
-        let _ = ms; // client-side debounce wired in runtime v0.3
+        on_change(signal.peek());
+        let _ = ms;
     });
+}
+
+/// Register a debounced client effect with an rs2js-translated callback body.
+pub fn register_debounce_effect<T>(
+    signal: &Signal<T>,
+    ms: u64,
+    captures: BTreeMap<String, super::signal::SignalId>,
+    js_body: &str,
+) where
+    T: Clone + serde::Serialize + Send + Sync + 'static,
+{
+    let signal_id = signal.id();
+    let body = format!(
+        "(state, __resuma) => {{ const src = state.{sid}; const key = '__deb_{n}'; const run = {js_body}; src.subscribe(() => {{ clearTimeout(state[key]); state[key] = setTimeout(() => run(state, __resuma), {ms}); }}); }}",
+        sid = signal_id,
+        n = signal_id.0,
+        js_body = js_body,
+        ms = ms
+    );
+    register_client_effect("debounce", body, captures, None, Some(ms));
 }
