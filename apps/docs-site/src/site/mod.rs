@@ -68,3 +68,32 @@ pub fn metric_item(value: &str, label: &str) -> View {
         </div>
     }
 }
+
+pub fn compare_column(title: &str, body: &str, highlight: bool) -> View {
+    let class = if highlight {
+        "compare-column compare-column-highlight"
+    } else {
+        "compare-column"
+    };
+    view! {
+        <article class={class}>
+            <h3>{title.to_string()}</h3>
+            <p>{body.to_string()}</p>
+        </article>
+    }
+}
+
+pub fn bench_row(framework: &str, initial: &str, first_click: &str, highlight: bool) -> View {
+    let class = if highlight {
+        "bench-row bench-row-highlight"
+    } else {
+        "bench-row"
+    };
+    view! {
+        <tr class={class}>
+            <td><strong>{framework.to_string()}</strong></td>
+            <td>{initial.to_string()}</td>
+            <td>{first_click.to_string()}</td>
+        </tr>
+    }
+}

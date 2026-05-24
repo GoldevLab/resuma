@@ -1,0 +1,7 @@
+{
+  "name": "templ-htmx-counter-bench",
+  "private": true,
+  "dependencies": {
+    "htmx.org": "^2.0.4"
+  }
+}

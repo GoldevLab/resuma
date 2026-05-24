@@ -1,0 +1,5 @@
+.next/
+.output/
+.vinxi/
+.svelte-kit/
+build-output.txt

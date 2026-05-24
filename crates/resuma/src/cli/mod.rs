@@ -6,8 +6,11 @@ use std::process::Command;
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 
-mod scaffold;
 mod add;
+mod doctor;
+mod prompt;
+mod scaffold;
+mod update;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -22,17 +25,31 @@ enum Commands {
     /// Create a new Resuma app from a template.
     #[command(alias = "create")]
     New {
-        /// Project directory name.
-        name: String,
-        /// Template: `basic`, `todo`, `flow`, or `flow-fullstack` (Flow + SQLx).
-        #[arg(long, default_value = "basic")]
-        template: String,
+        /// Project directory name (prompted when omitted in an interactive terminal).
+        name: Option<String>,
+        /// Template: `basic`, `todo`, `flow`, or `flow-fullstack` (prompted when omitted).
+        #[arg(long)]
+        template: Option<String>,
     },
     /// Add an integration scaffold (sqlx, turso) to the current project.
     Add {
-        /// Integration name: `sqlx` or `turso`.
-        name: String,
+        /// Integration name: `sqlx` or `turso` (prompted when omitted).
+        name: Option<String>,
     },
+    /// Update `resuma` / `resuma-macros` in the current project, or reinstall the CLI.
+    Update {
+        /// Reinstall the global `resuma` CLI (`cargo install resuma --force`).
+        #[arg(long)]
+        cli: bool,
+        /// Show installed vs available versions without changing anything.
+        #[arg(long)]
+        check: bool,
+        /// Target version (default: this CLI's version).
+        #[arg(long)]
+        version: Option<String>,
+    },
+    /// Check Rust toolchain, CLI, and project setup.
+    Doctor,
     /// Run the app with hot reload.
     Dev {
         /// Bind address (default: 127.0.0.1:3000).
@@ -74,8 +91,14 @@ pub fn run() -> Result<()> {
 
     let args = Cli::parse();
     match args.command {
-        Commands::New { name, template } => scaffold::create_project(&name, &template),
-        Commands::Add { name } => add::add_integration(&name),
+        Commands::New { name, template } => new_command(name, template),
+        Commands::Add { name } => add_command(name),
+        Commands::Update {
+            cli,
+            check,
+            version,
+        } => update::update_command(cli, check, version.as_deref()),
+        Commands::Doctor => doctor::doctor_command(),
         Commands::Dev {
             addr,
             open,
@@ -90,8 +113,33 @@ pub fn run() -> Result<()> {
     }
 }
 
+fn new_command(name: Option<String>, template: Option<String>) -> Result<()> {
+    let name = match name {
+        Some(n) => n,
+        None if prompt::is_interactive() => prompt::prompt_required("Project name: ")?,
+        None => return prompt::missing_arg("project name required — resuma new my-app"),
+    };
+
+    let template = match template {
+        Some(t) => t,
+        None if prompt::is_interactive() => prompt::prompt_template()?,
+        None => "basic".to_string(),
+    };
+
+    scaffold::create_project(&name, &template)
+}
+
+fn add_command(name: Option<String>) -> Result<()> {
+    let name = match name {
+        Some(n) => n,
+        None if prompt::is_interactive() => prompt::prompt_integration()?,
+        None => return prompt::missing_arg("integration required — resuma add sqlx"),
+    };
+    add::add_integration(&name)
+}
+
 /// Ensure `cargo` works — auto-select `stable` when rustup has no default toolchain.
-fn ensure_rust_toolchain() -> Result<()> {
+pub(crate) fn ensure_rust_toolchain() -> Result<()> {
     let probe = Command::new("cargo")
         .arg("--version")
         .output()

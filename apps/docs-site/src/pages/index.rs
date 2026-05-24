@@ -1,6 +1,6 @@
 use resuma::prelude::*;
 
-use crate::site::{code_block, feature_card, metric_item, pillar_card, pipeline_step};
+use crate::site::{bench_row, code_block, compare_column, feature_card, metric_item, pillar_card, pipeline_step};
 
 pub fn page(_req: FlowRequest) -> View {
     view! {
@@ -67,6 +67,62 @@ fn Counter() -> View {
             </div>
 
             <section class="section">
+                <p class="section-eyebrow">"Positioning"</p>
+                <h2 class="section-title">"Resuma vs Hydration"</h2>
+                <p class="section-sub">"Three ways to ship interactive Rust or SSR UI — and what each one does after the first paint."</p>
+                <div class="compare-3">
+                    {compare_column(
+                        "Classic SSR + hydration",
+                        "Fast HTML first — then the client re-runs components to attach listeners.",
+                        false,
+                    )}
+                    {compare_column(
+                        "Leptos",
+                        "Rust SSR + WASM hydration and optional islands.",
+                        false,
+                    )}
+                    {compare_column(
+                        "Resuma",
+                        "Rust SSR + resumability + lazy JS handlers.",
+                        true,
+                    )}
+                </div>
+            </section>
+
+            <section class="section section-alt">
+                <p class="section-eyebrow">"Measured"</p>
+                <h2 class="section-title">"Counter page benchmark"</h2>
+                <p class="section-sub">"Same UX across frameworks: SSR heading + one increment button. Gzip transfer sizes from production build artifacts (May 2026)."</p>
+                <div class="bench-wrap">
+                    <table class="bench">
+                        <thead>
+                            <tr>
+                                <th>"Framework"</th>
+                                <th>"Initial load"</th>
+                                <th>"First interaction"</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {bench_row("Resuma", "901 B", "4.20 KiB", true)}
+                            {bench_row("Qwik", "1.96 KiB", "22.32 KiB", false)}
+                            {bench_row("templ + HTMX", "16.21 KiB", "16.21 KiB", false)}
+                            {bench_row("SolidStart", "16.75 KiB", "16.75 KiB", false)}
+                            {bench_row("SvelteKit", "27.71 KiB", "27.71 KiB", false)}
+                            {bench_row("Astro", "57.76 KiB", "57.76 KiB", false)}
+                            {bench_row("React (Vite)", "57.99 KiB", "57.99 KiB", false)}
+                            {bench_row("Leptos", "79.02 KiB", "79.02 KiB", false)}
+                            {bench_row("Next.js", "142.43 KiB", "142.43 KiB", false)}
+                        </tbody>
+                    </table>
+                </div>
+                <p class="bench-note">
+                    "Resuma static pages ship " <strong>"0 B"</strong> " client JS. "
+                    "Reproduce: " <code>"node benchmark/run.mjs"</code> " · "
+                    <a href="/docs/benchmark">"full methodology"</a>
+                </p>
+            </section>
+
+            <section class="section">
                 <p class="section-eyebrow">"Performance model"</p>
                 <h2 class="section-title">"Interactive from the first click"</h2>
                 <p class="section-sub">"Resumability means the client never re-runs your component tree. State and handlers are already in the HTML — the tiny runtime wires them up lazily."</p>
@@ -78,7 +134,7 @@ fn Counter() -> View {
                 </div>
             </section>
 
-            <section class="section section-alt">
+            <section class="section">
                 <p class="section-eyebrow">"Under the hood"</p>
                 <h2 class="section-title">"How does it work?"</h2>
                 <p class="section-sub">"One SSR pass. One resumability payload. Lazy execution on the client."</p>
@@ -225,30 +281,6 @@ fn LiveSearch() -> View {
                     " · "
                     <a href="/docs/search">"Search docs"</a>
                 </p>
-            </section>
-
-            <section class="section">
-                <p class="section-eyebrow">"Compare"</p>
-                <h2 class="section-title">"Resumability vs hydration"</h2>
-                <p class="section-sub">"Classic frameworks re-run components on the client to attach listeners. Resuma resumes serialized state instead."</p>
-                <div class="compare-wrap">
-                    <table class="compare">
-                        <thead>
-                            <tr>
-                                <th></th>
-                                <th>"Classic SSR + hydration"</th>
-                                <th>"Resuma"</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr><td>"After first paint"</td><td>"Re-run components on the client"</td><td class="yes">"Resume handlers only"</td></tr>
-                            <tr><td>"Initial JS"</td><td>"App bundle scales with UI"</td><td class="yes">"~3KB runtime + lazy chunks"</td></tr>
-                            <tr><td>"Static pages"</td><td>"Often still ship framework JS"</td><td class="yes">"Zero client JS"</td></tr>
-                            <tr><td>"Interactive boundaries"</td><td>"Manual code splitting"</td><td class="yes">"Every #[component] resumable"</td></tr>
-                            <tr><td>"Full-stack"</td><td>"Separate routing layer"</td><td class="yes">"Flow built in (one crate)"</td></tr>
-                        </tbody>
-                    </table>
-                </div>
             </section>
 
             <section class="cta-section">

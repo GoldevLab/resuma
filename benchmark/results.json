@@ -1,0 +1,556 @@
+{
+  "generatedAt": "2026-05-24T20:15:51.136Z",
+  "methodology": "SSR counter page (heading + increment button). Gzip/brotli from minified artifacts or framework build output.",
+  "frameworks": [
+    {
+      "framework": "Resuma",
+      "version": "0.3.1",
+      "initial": {
+        "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\runtime\\dist\\loader.js",
+        "name": "loader.js",
+        "raw": 1865,
+        "gzip": 901,
+        "brotli": 746
+      },
+      "firstInteraction": {
+        "raw": 10752,
+        "gzip": 4299,
+        "brotli": 3747,
+        "note": "loader.js + core.js"
+      },
+      "staticPage": {
+        "raw": 0,
+        "gzip": 0,
+        "brotli": 0
+      },
+      "details": {
+        "loader": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\runtime\\dist\\loader.js",
+          "name": "loader.js",
+          "raw": 1865,
+          "gzip": 901,
+          "brotli": 746
+        },
+        "core": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\runtime\\dist\\core.js",
+          "name": "core.js",
+          "raw": 8887,
+          "gzip": 3398,
+          "brotli": 3001
+        }
+      },
+      "note": "Rust SSR + resumability",
+      "initialRow": {
+        "label": "Initial load",
+        "raw": 1865,
+        "gzip": 901,
+        "brotli": 746,
+        "rawFmt": "1.82 KiB",
+        "gzipFmt": "901 B",
+        "brotliFmt": "746 B"
+      },
+      "firstRow": {
+        "label": "First interaction",
+        "raw": 10752,
+        "gzip": 4299,
+        "brotli": 3747,
+        "rawFmt": "10.50 KiB",
+        "gzipFmt": "4.20 KiB",
+        "brotliFmt": "3.66 KiB"
+      },
+      "staticRow": {
+        "label": "Static page",
+        "raw": 0,
+        "gzip": 0,
+        "brotli": 0,
+        "rawFmt": "0 B",
+        "gzipFmt": "0 B",
+        "brotliFmt": "0 B"
+      }
+    },
+    {
+      "framework": "Qwik",
+      "version": "1.20.0",
+      "initial": {
+        "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\qwik-counter\\dist\\build\\q-BKZ00VYc.js",
+        "name": "q-BKZ00VYc.js",
+        "raw": 3729,
+        "gzip": 2002,
+        "brotli": 1797
+      },
+      "firstInteraction": {
+        "raw": 54647,
+        "gzip": 22855,
+        "brotli": 20547
+      },
+      "staticPage": null,
+      "details": {
+        "preloader": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\qwik-counter\\dist\\build\\q-BKZ00VYc.js",
+          "name": "q-BKZ00VYc.js",
+          "raw": 3729,
+          "gzip": 2002,
+          "brotli": 1797
+        },
+        "core": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\qwik-counter\\dist\\build\\q-k0x6LYnk.js",
+          "name": "q-k0x6LYnk.js",
+          "raw": 50132,
+          "gzip": 20280,
+          "brotli": 18238
+        },
+        "routeEntry": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\qwik-counter\\dist\\build\\q-v8s_kalg.js",
+          "name": "q-v8s_kalg.js",
+          "raw": 201,
+          "gzip": 184,
+          "brotli": 181
+        },
+        "counterChunk": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\qwik-counter\\dist\\build\\q-TI7XYZCF.js",
+          "name": "q-TI7XYZCF.js",
+          "raw": 585,
+          "gzip": 389,
+          "brotli": 331
+        }
+      },
+      "note": "Resumability (JS)",
+      "initialRow": {
+        "label": "Initial load",
+        "raw": 3729,
+        "gzip": 2002,
+        "brotli": 1797,
+        "rawFmt": "3.64 KiB",
+        "gzipFmt": "1.96 KiB",
+        "brotliFmt": "1.75 KiB"
+      },
+      "firstRow": {
+        "label": "First interaction",
+        "raw": 54647,
+        "gzip": 22855,
+        "brotli": 20547,
+        "rawFmt": "53.37 KiB",
+        "gzipFmt": "22.32 KiB",
+        "brotliFmt": "20.07 KiB"
+      }
+    },
+    {
+      "framework": "templ + HTMX",
+      "version": "htmx 2",
+      "initial": {
+        "raw": 51238,
+        "gzip": 16603,
+        "brotli": 14996,
+        "note": "htmx.min.js only — server-side templ, no client app bundle"
+      },
+      "firstInteraction": {
+        "raw": 51238,
+        "gzip": 16603,
+        "brotli": 14996,
+        "note": "htmx.min.js only — server-side templ, no client app bundle"
+      },
+      "staticPage": null,
+      "details": {
+        "htmx": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\templ-htmx-counter\\static\\htmx.min.js",
+          "name": "htmx.min.js",
+          "raw": 51238,
+          "gzip": 16603,
+          "brotli": 14996
+        }
+      },
+      "note": "Go SSR + HTMX (server round-trip)",
+      "initialRow": {
+        "label": "Initial load",
+        "raw": 51238,
+        "gzip": 16603,
+        "brotli": 14996,
+        "rawFmt": "50.04 KiB",
+        "gzipFmt": "16.21 KiB",
+        "brotliFmt": "14.64 KiB"
+      },
+      "firstRow": {
+        "label": "First interaction",
+        "raw": 51238,
+        "gzip": 16603,
+        "brotli": 14996,
+        "rawFmt": "50.04 KiB",
+        "gzipFmt": "16.21 KiB",
+        "brotliFmt": "14.64 KiB"
+      }
+    },
+    {
+      "framework": "SolidStart",
+      "version": "1.2.1",
+      "initial": {
+        "raw": 42448,
+        "gzip": 17148,
+        "brotli": 15559
+      },
+      "firstInteraction": {
+        "raw": 42448,
+        "gzip": 17148,
+        "brotli": 15559
+      },
+      "staticPage": null,
+      "details": {
+        "script0": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\solidstart-counter\\.output\\public\\_build\\assets\\client-CMNLW0BO.js",
+          "name": "client-CMNLW0BO.js",
+          "raw": 21021,
+          "gzip": 8711,
+          "brotli": 7873
+        },
+        "script1": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\solidstart-counter\\.output\\public\\_build\\assets\\index-Ch3nfPlJ.js",
+          "name": "index-Ch3nfPlJ.js",
+          "raw": 416,
+          "gzip": 309,
+          "brotli": 276
+        },
+        "script2": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\solidstart-counter\\.output\\public\\_build\\assets\\web-N1Z5RrHY.js",
+          "name": "web-N1Z5RrHY.js",
+          "raw": 21011,
+          "gzip": 8128,
+          "brotli": 7410
+        }
+      },
+      "note": "Solid SSR + hydration",
+      "initialRow": {
+        "label": "Initial load",
+        "raw": 42448,
+        "gzip": 17148,
+        "brotli": 15559,
+        "rawFmt": "41.45 KiB",
+        "gzipFmt": "16.75 KiB",
+        "brotliFmt": "15.19 KiB"
+      },
+      "firstRow": {
+        "label": "First interaction",
+        "raw": 42448,
+        "gzip": 17148,
+        "brotli": 15559,
+        "rawFmt": "41.45 KiB",
+        "gzipFmt": "16.75 KiB",
+        "brotliFmt": "15.19 KiB"
+      }
+    },
+    {
+      "framework": "SvelteKit",
+      "version": "2.57.0",
+      "initial": {
+        "raw": 72254,
+        "gzip": 28370,
+        "brotli": 25649
+      },
+      "firstInteraction": {
+        "raw": 72254,
+        "gzip": 28370,
+        "brotli": 25649
+      },
+      "staticPage": null,
+      "details": {
+        "script0": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\sveltekit-counter\\dist\\_app\\immutable\\entry\\start.CCK6Dq0X.js",
+          "name": "start.CCK6Dq0X.js",
+          "raw": 77,
+          "gzip": 89,
+          "brotli": 81
+        },
+        "script1": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\sveltekit-counter\\dist\\_app\\immutable\\chunks\\D0SlMIFa.js",
+          "name": "D0SlMIFa.js",
+          "raw": 26160,
+          "gzip": 10090,
+          "brotli": 9147
+        },
+        "script2": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\sveltekit-counter\\dist\\_app\\immutable\\chunks\\DiBw0A2o.js",
+          "name": "DiBw0A2o.js",
+          "raw": 39206,
+          "gzip": 14895,
+          "brotli": 13560
+        },
+        "script3": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\sveltekit-counter\\dist\\_app\\immutable\\entry\\app.DL-DYUqz.js",
+          "name": "app.DL-DYUqz.js",
+          "raw": 2665,
+          "gzip": 1201,
+          "brotli": 1063
+        },
+        "script4": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\sveltekit-counter\\dist\\_app\\immutable\\chunks\\kNaey6uv.js",
+          "name": "kNaey6uv.js",
+          "raw": 1208,
+          "gzip": 688,
+          "brotli": 570
+        },
+        "script5": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\sveltekit-counter\\dist\\_app\\immutable\\chunks\\xihTtKlq.js",
+          "name": "xihTtKlq.js",
+          "raw": 65,
+          "gzip": 80,
+          "brotli": 69
+        },
+        "script6": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\sveltekit-counter\\dist\\_app\\immutable\\nodes\\0.DIbii2gi.js",
+          "name": "0.DIbii2gi.js",
+          "raw": 2448,
+          "gzip": 1018,
+          "brotli": 870
+        },
+        "script7": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\sveltekit-counter\\dist\\_app\\immutable\\nodes\\2.BdxOaUy0.js",
+          "name": "2.BdxOaUy0.js",
+          "raw": 425,
+          "gzip": 309,
+          "brotli": 289
+        }
+      },
+      "note": "SSR + client hydration",
+      "initialRow": {
+        "label": "Initial load",
+        "raw": 72254,
+        "gzip": 28370,
+        "brotli": 25649,
+        "rawFmt": "70.56 KiB",
+        "gzipFmt": "27.71 KiB",
+        "brotliFmt": "25.05 KiB"
+      },
+      "firstRow": {
+        "label": "First interaction",
+        "raw": 72254,
+        "gzip": 28370,
+        "brotli": 25649,
+        "rawFmt": "70.56 KiB",
+        "gzipFmt": "27.71 KiB",
+        "brotliFmt": "25.05 KiB"
+      }
+    },
+    {
+      "framework": "Astro",
+      "version": "5.7.0",
+      "initial": {
+        "raw": 187614,
+        "gzip": 59145,
+        "brotli": 50976
+      },
+      "firstInteraction": {
+        "raw": 187614,
+        "gzip": 59145,
+        "brotli": 50976
+      },
+      "staticPage": null,
+      "details": {
+        "script0": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\astro-counter\\dist\\_astro\\Counter.CpT8GavL.js",
+          "name": "Counter.CpT8GavL.js",
+          "raw": 995,
+          "gzip": 609,
+          "brotli": 510
+        },
+        "script1": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\astro-counter\\dist\\_astro\\client.CbHKJimV.js",
+          "name": "client.CbHKJimV.js",
+          "raw": 186619,
+          "gzip": 58536,
+          "brotli": 50466
+        }
+      },
+      "note": "SSR + React island (client:load)",
+      "initialRow": {
+        "label": "Initial load",
+        "raw": 187614,
+        "gzip": 59145,
+        "brotli": 50976,
+        "rawFmt": "183.22 KiB",
+        "gzipFmt": "57.76 KiB",
+        "brotliFmt": "49.78 KiB"
+      },
+      "firstRow": {
+        "label": "First interaction",
+        "raw": 187614,
+        "gzip": 59145,
+        "brotli": 50976,
+        "rawFmt": "183.22 KiB",
+        "gzipFmt": "57.76 KiB",
+        "brotliFmt": "49.78 KiB"
+      }
+    },
+    {
+      "framework": "React (Vite)",
+      "version": "19.2.6",
+      "initial": {
+        "raw": 190646,
+        "gzip": 59378,
+        "brotli": 51029
+      },
+      "firstInteraction": {
+        "raw": 190646,
+        "gzip": 59378,
+        "brotli": 51029
+      },
+      "staticPage": null,
+      "details": {
+        "chunk0": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\react-counter\\dist\\assets\\index-EiiApqnG.js",
+          "name": "index-EiiApqnG.js",
+          "raw": 190646,
+          "gzip": 59378,
+          "brotli": 51029
+        }
+      },
+      "note": "Client-rendered SPA baseline",
+      "initialRow": {
+        "label": "Initial load",
+        "raw": 190646,
+        "gzip": 59378,
+        "brotli": 51029,
+        "rawFmt": "186.18 KiB",
+        "gzipFmt": "57.99 KiB",
+        "brotliFmt": "49.83 KiB"
+      },
+      "firstRow": {
+        "label": "First interaction",
+        "raw": 190646,
+        "gzip": 59378,
+        "brotli": 51029,
+        "rawFmt": "186.18 KiB",
+        "gzipFmt": "57.99 KiB",
+        "brotliFmt": "49.83 KiB"
+      }
+    },
+    {
+      "framework": "Leptos",
+      "version": "0.7.8",
+      "initial": {
+        "raw": 254802,
+        "gzip": 80915,
+        "brotli": 66781
+      },
+      "firstInteraction": {
+        "raw": 254802,
+        "gzip": 80915,
+        "brotli": 66781
+      },
+      "staticPage": null,
+      "details": {
+        "wasm": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\leptos-counter\\pkg\\leptos_counter_bench_bg.wasm",
+          "name": "leptos_counter_bench_bg.wasm",
+          "raw": 226249,
+          "gzip": 74836,
+          "brotli": 61538
+        },
+        "glue": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\leptos-counter\\pkg\\leptos_counter_bench.js",
+          "name": "leptos_counter_bench.js",
+          "raw": 28553,
+          "gzip": 6079,
+          "brotli": 5243
+        }
+      },
+      "note": "Rust SSR + WASM hydrate",
+      "initialRow": {
+        "label": "Initial load",
+        "raw": 254802,
+        "gzip": 80915,
+        "brotli": 66781,
+        "rawFmt": "248.83 KiB",
+        "gzipFmt": "79.02 KiB",
+        "brotliFmt": "65.22 KiB"
+      },
+      "firstRow": {
+        "label": "First interaction",
+        "raw": 254802,
+        "gzip": 80915,
+        "brotli": 66781,
+        "rawFmt": "248.83 KiB",
+        "gzipFmt": "79.02 KiB",
+        "brotliFmt": "65.22 KiB"
+      }
+    },
+    {
+      "framework": "Next.js",
+      "version": "16.2.6",
+      "initial": {
+        "raw": 514817,
+        "gzip": 145851,
+        "brotli": 124755,
+        "note": "firstLoadChunkPaths from next build diagnostics"
+      },
+      "firstInteraction": {
+        "raw": 514817,
+        "gzip": 145851,
+        "brotli": 124755,
+        "note": "firstLoadChunkPaths from next build diagnostics"
+      },
+      "staticPage": null,
+      "details": {
+        "chunk0": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\next-counter\\.next\\static\\chunks\\0dbhjjzl8qfwv.js",
+          "name": "0dbhjjzl8qfwv.js",
+          "raw": 57909,
+          "gzip": 13828,
+          "brotli": 12086
+        },
+        "chunk1": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\next-counter\\.next\\static\\chunks\\0-7~x4qnk_741.js",
+          "name": "0-7~x4qnk_741.js",
+          "raw": 429,
+          "gzip": 304,
+          "brotli": 243
+        },
+        "chunk2": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\next-counter\\.next\\static\\chunks\\0ht900cau6_ur.js",
+          "name": "0ht900cau6_ur.js",
+          "raw": 17474,
+          "gzip": 6099,
+          "brotli": 5350
+        },
+        "chunk3": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\next-counter\\.next\\static\\chunks\\03cnjj9mnzy_p.js",
+          "name": "03cnjj9mnzy_p.js",
+          "raw": 200921,
+          "gzip": 50476,
+          "brotli": 42665
+        },
+        "chunk4": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\next-counter\\.next\\static\\chunks\\07lhk_q6pmm3r.js",
+          "name": "07lhk_q6pmm3r.js",
+          "raw": 227537,
+          "gzip": 71012,
+          "brotli": 60686
+        },
+        "chunk5": {
+          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\benchmark\\next-counter\\.next\\static\\chunks\\turbopack-0bxcrz71-nfi1.js",
+          "name": "turbopack-0bxcrz71-nfi1.js",
+          "raw": 10547,
+          "gzip": 4132,
+          "brotli": 3725
+        }
+      },
+      "note": "React SSR + App Router hydration",
+      "initialRow": {
+        "label": "Initial load",
+        "raw": 514817,
+        "gzip": 145851,
+        "brotli": 124755,
+        "rawFmt": "502.75 KiB",
+        "gzipFmt": "142.43 KiB",
+        "brotliFmt": "121.83 KiB"
+      },
+      "firstRow": {
+        "label": "First interaction",
+        "raw": 514817,
+        "gzip": 145851,
+        "brotli": 124755,
+        "rawFmt": "502.75 KiB",
+        "gzipFmt": "142.43 KiB",
+        "brotliFmt": "121.83 KiB"
+      }
+    }
+  ],
+  "errors": []
+}
