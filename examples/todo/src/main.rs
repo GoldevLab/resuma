@@ -641,24 +641,19 @@ fn App() -> View {
                         class="theme-toggle"
                         aria-label={if theme.get().mode == "dark" { "Switch to light theme" } else { "Switch to dark theme" }}
                         onClick={
-                            js! {
-                                const t = state.theme.value;
-                                if (t.mode === "dark") {
-                                    state.theme.set({
-                                        mode: "light",
-                                        primary: "#4f46e5",
-                                        background: "#f4f7fb",
-                                        foreground: "#0f172a",
-                                    });
+                            move |_| theme.update(|t| {
+                                if t.mode == "dark" {
+                                    t.mode = "light".into();
+                                    t.primary = "#4f46e5".into();
+                                    t.background = "#f4f7fb".into();
+                                    t.foreground = "#0f172a".into();
                                 } else {
-                                    state.theme.set({
-                                        mode: "dark",
-                                        primary: "#818cf8",
-                                        background: "#0c1022",
-                                        foreground: "#e8ecf7",
-                                    });
+                                    t.mode = "dark".into();
+                                    t.primary = "#818cf8".into();
+                                    t.background = "#0c1022".into();
+                                    t.foreground = "#e8ecf7".into();
                                 }
-                            }
+                            })
                         }
                     >
                         {if theme.get().mode == "dark" { "☀ Light" } else { "🌙 Dark" }}

@@ -21,6 +21,38 @@ pub fn dev_mode_enabled() -> bool {
     )
 }
 
+/// Inline script injected in dev mode so every page reloads after `cargo watch` rebuilds.
+pub fn dev_reload_script() -> String {
+    if !dev_mode_enabled() {
+        return String::new();
+    }
+    r#"<script>
+(function () {
+  if (typeof WebSocket === "undefined") return;
+  var proto = location.protocol === "https:" ? "wss" : "ws";
+  var hadConnection = false;
+  function connect() {
+    var ws = new WebSocket(proto + "://" + location.host + "/_resuma/dev/ws");
+    ws.addEventListener("open", function () {
+      if (hadConnection) location.reload();
+      hadConnection = true;
+    });
+    ws.addEventListener("message", function (ev) {
+      if (String(ev.data) === "reload") location.reload();
+    });
+    ws.addEventListener("close", function () {
+      setTimeout(connect, 500);
+    });
+    ws.addEventListener("error", function () {
+      ws.close();
+    });
+  }
+  connect();
+})();
+</script>"#
+        .into()
+}
+
 /// Broadcast a dev event to connected browsers (`reload`, `island:instance-id`, …).
 pub fn broadcast_dev_event(event: impl Into<String>) {
     if dev_mode_enabled() {

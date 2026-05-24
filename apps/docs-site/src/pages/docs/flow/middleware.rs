@@ -29,7 +29,7 @@ async fn log_all(req: FlowRequest) -> Result<FlowRequest> {
             <p>"Session cookies, guards, and ResumaApp action middleware: " <a href="/docs/security/middleware">"Auth middleware guide"</a>"."</p>
 
             <h2>"Built-in security"</h2>
-            <p>"CSRF, Helmet-style headers, rate limits, and Origin checks are enabled by default. See " <a href="/docs/security">"Security overview"</a>"."</p>
+            <p>"CSRF, security headers, rate limits, and Origin checks are enabled by default. See " <a href="/docs/security">"Security overview"</a>"."</p>
         </>
     }
 }

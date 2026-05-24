@@ -6,7 +6,7 @@ pub fn page(_req: FlowRequest) -> View {
         <>
             <h1>"Todo example — backend reference"</h1>
             <p class="lead">
-                <code>"cargo run -p example-todo"</code> " — full Resuma showcase plus production backend patterns (NestJS / Next.js equivalents in Rust)."
+                <code>"cargo run -p example-todo"</code> " — full Resuma showcase plus production backend patterns in Rust."
             </p>
 
             <h2>"Files"</h2>
@@ -31,14 +31,14 @@ pub fn page(_req: FlowRequest) -> View {
 
             <h2>"Patterns implemented"</h2>
             <ul>
-                <li><strong>"Guard"</strong>" — " <code>"attach_session()"</code> " in action middleware"</li>
-                <li><strong>"ValidationPipe"</strong>" — " <code>"AddTodoInput"</code> ", " <code>"RenameTodoInput"</code></li>
-                <li><strong>"Service"</strong>" — " <code>"todo_store::add()"</code> " etc."</li>
-                <li><strong>"Controller"</strong>" — thin " <code>"#[server]"</code> " → delegates to store"</li>
-                <li><strong>"Server Action"</strong>" — " <code>"__resuma.action()"</code> " with CSRF"</li>
-                <li><strong>"Revalidate"</strong>" — " <code>"list_todos"</code> " on island mount via " <code>"use_visible_task"</code></li>
-                <li><strong>"Interceptor"</strong>" — request id + audit log"</li>
-                <li><strong>"Exception filter"</strong>" — " <code>"Result<T>"</code> " → HTTP status"</li>
+                <li><strong>"Session guard"</strong>" — " <code>"attach_session()"</code> " in action middleware"</li>
+                <li><strong>"DTO validation"</strong>" — " <code>"AddTodoInput"</code> ", " <code>"RenameTodoInput"</code></li>
+                <li><strong>"Domain service"</strong>" — " <code>"todo_store::add()"</code> " etc."</li>
+                <li><strong>"Server action"</strong>" — thin " <code>"#[server]"</code> " → delegates to store"</li>
+                <li><strong>"Client RPC"</strong>" — " <code>"__resuma.action()"</code> " with CSRF"</li>
+                <li><strong>"Loader refresh"</strong>" — " <code>"list_todos"</code> " on island mount via " <code>"use_visible_task"</code></li>
+                <li><strong>"Audit log"</strong>" — request id + structured action log"</li>
+                <li><strong>"Error mapping"</strong>" — " <code>"Result<T>"</code> " → HTTP status"</li>
             </ul>
 
             <h2>"Env vars"</h2>
@@ -52,7 +52,7 @@ pub fn page(_req: FlowRequest) -> View {
                 </tbody>
             </table>
 
-            <p>"Conceptual map: " <a href="/docs/security/backend_patterns">"NestJS + Next.js → Resuma"</a> " · Authorization: " <a href="/docs/security/authorization">"RLS guide"</a>"."</p>
+            <p>"See also: " <a href="/docs/security/backend_patterns">"Backend patterns"</a> " · Authorization: " <a href="/docs/security/authorization">"RLS guide"</a>"."</p>
         </>
     }
 }

@@ -13,8 +13,7 @@ async fn log_requests(req: FlowRequest) -> resuma::Result<FlowRequest> {
 
 #[layout("/")]
 fn RootLayout() -> View {
-    provide_theme(Theme::default());
-    let theme = use_theme();
+    let theme = Theme::default();
 
     view! {
         <div class="shell" style={theme_css_vars(&theme)}>

@@ -20,7 +20,7 @@ pub const ENTRIES: &[DocEntry] = &[
     DocEntry { title: "i18n", href: "/docs/integrations/i18n", keywords: "translation locale fluent" },
     DocEntry { title: "Tailwind CSS", href: "/docs/integrations/tailwind", keywords: "css styling utility" },
     DocEntry { title: "OG Image", href: "/docs/integrations/og_image", keywords: "open graph social preview" },
-    DocEntry { title: "Loaders", href: "/docs/flow/loaders", keywords: "load routeLoader data fetch" },
+    DocEntry { title: "Loaders", href: "/docs/flow/loaders", keywords: "load data fetch server" },
     DocEntry { title: "Prefetch", href: "/docs/flow/prefetch", keywords: "viewport lazy handler" },
     DocEntry { title: "Caching", href: "/docs/flow/caching", keywords: "cache-control max-age" },
     DocEntry { title: "Loader invalidation", href: "/docs/cookbook/loader_invalidation", keywords: "revalidate stale" },

@@ -5,7 +5,7 @@ pub fn page(_req: FlowRequest) -> View {
     view! {
         <>
             <h1>"Validation"</h1>
-            <p class="lead">"Typed form validation in " <code>"#[submit]"</code> " with the " <code>"validator"</code> " crate — Rust equivalent of Zod in Qwik actions."</p>
+            <p class="lead">"Typed form validation in " <code>"#[submit]"</code> " with the " <code>"validator"</code> " crate."</p>
 
             <h2>"Install"</h2>
             {code_block(r#"validator = { version = "0.19", features = ["derive"] }"#)}

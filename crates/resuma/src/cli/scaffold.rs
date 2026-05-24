@@ -13,7 +13,7 @@ h1 { margin: 0 0 .5rem; font-size: 2rem; }
 p { margin: .5rem 0; color: #4338ca; }
 </style>"#;
 
-fn Home() -> View {
+fn home() -> View {
     view! {
         <main>
             <h1>"Hello, Resuma"</h1>
@@ -28,7 +28,7 @@ async fn main() -> std::io::Result<()> {
     ResumaApp::new()
         .with_title("%NAME%")
         .with_head(CSS)
-        .page("/", || Home())
+        .page("/", || home())
         .serve(ServeOptions::default())
         .await
 }
@@ -45,7 +45,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-resuma = { version = "0.3", default-features = false }
+resuma = "0.3"
 tokio  = { version = "1", features = ["full"] }
 "#;
 
@@ -55,7 +55,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-resuma      = { version = "0.3", default-features = false }
+resuma      = "0.3"
 tokio       = { version = "1", features = ["full"] }
 serde       = { version = "1", features = ["derive"] }
 serde_json  = { version = "1" }
@@ -69,7 +69,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-resuma = { version = "0.3", default-features = false }
+resuma = "0.3"
 tokio  = { version = "1", features = ["full"] }
 serde  = { version = "1", features = ["derive"] }
 "#;
@@ -86,7 +86,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-resuma = { version = "0.3", default-features = false }
+resuma = "0.3"
 tokio  = { version = "1", features = ["full"] }
 serde  = { version = "1", features = ["derive"] }
 sqlx   = { version = "0.8", features = ["runtime-tokio", "sqlite", "macros", "migrate"] }
@@ -100,6 +100,10 @@ const FULLSTACK_INDEX: &str = include_str!("../../templates/flow-fullstack/pages
 const FULLSTACK_USERS: &str = include_str!("../../templates/flow-fullstack/pages/users.rs");
 const FULLSTACK_REGISTRY: &str = include_str!("../../templates/flow-fullstack/pages/_registry.rs");
 const FULLSTACK_MIGRATION: &str = include_str!("../../templates/add/sqlx/001_users.sql");
+
+const RUST_TOOLCHAIN: &str = r#"[toolchain]
+channel = "stable"
+"#;
 
 const README: &str = r##"# %NAME%
 
@@ -137,6 +141,7 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
     let readme = README.replace("%NAME%", name);
     fs::write(dir.join("README.md"), readme).context("write README.md")?;
     fs::write(dir.join(".gitignore"), "target/\nCargo.lock\n").context("write .gitignore")?;
+    fs::write(dir.join("rust-toolchain.toml"), RUST_TOOLCHAIN).context("write rust-toolchain.toml")?;
 
     match template {
         "basic" => {

@@ -200,6 +200,7 @@ fn wrap_document(
         .map(|s| format!(r#"<link rel="stylesheet" href="{}" />"#, s))
         .unwrap_or_default();
     let scripts = client_scripts(opts, body_html, payload);
+    let dev_script = crate::server::dev::dev_reload_script();
     let head = apply_head_csp_nonce(&opts.head, &opts.csp_nonce);
 
     format!(
@@ -217,6 +218,7 @@ fn wrap_document(
 <body>
 <div id="resuma-root">{body}</div>
 {scripts}
+{dev_script}
 </body>
 </html>"#,
         lang = lang,
@@ -228,6 +230,7 @@ fn wrap_document(
         stylesheet = stylesheet,
         body = body_html,
         scripts = scripts,
+        dev_script = dev_script,
     )
 }
 

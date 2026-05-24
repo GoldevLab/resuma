@@ -38,8 +38,8 @@ pub fn page(_req: FlowRequest) -> View {
                     <span>"Flow #[middleware] vs ResumaApp action pipeline"</span>
                 </a>
                 <a href="/docs/security/backend_patterns" class="template-pill" style="text-decoration: none;">
-                    <strong>"NestJS + Next.js map"</strong>
-                    <span>"Conceptual mapping table"</span>
+                    <strong>"Backend patterns"</strong>
+                    <span>"Pattern mapping table"</span>
                 </a>
                 <a href="/docs/security/authorization" class="template-pill" style="text-decoration: none;">
                     <strong>"Authorization & RLS"</strong>

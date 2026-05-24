@@ -5,7 +5,7 @@ pub fn page(_req: FlowRequest) -> View {
     view! {
         <>
             <h1>"Configure security"</h1>
-            <p class="lead">"Tune Resuma's HTTP hardening from Rust or environment variables — like Express Helmet + body-parser limits."</p>
+            <p class="lead">"Tune Resuma's HTTP hardening from Rust or environment variables."</p>
 
             <h2>"ServeOptions + SecurityConfig"</h2>
             {code_block(r#"use resuma::prelude::*;

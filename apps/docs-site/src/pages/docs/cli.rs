@@ -25,6 +25,7 @@ resuma new my-app --template flow-fullstack # Flow + SQLx sample"#)}
 resuma add turso  # src/turso.rs, .env.example"#)}
 
             <h2>"resuma dev"</h2>
+            <p>"Starts the app with hot reload. Installs " <code>"cargo-watch"</code> " automatically if missing. Saves to " <code>"src/"</code> " or " <code>"Cargo.toml"</code> " trigger a rebuild; the browser refreshes when the dev server comes back."</p>
             {code_block(r#"resuma dev
 resuma dev --open
 resuma dev --addr 0.0.0.0:8080

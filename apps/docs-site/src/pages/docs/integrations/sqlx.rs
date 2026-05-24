@@ -6,9 +6,7 @@ pub fn page(_req: FlowRequest) -> View {
         <>
             <h1>"SQLx"</h1>
             <p class="lead">
-                "SQLx is the Rust data layer closest to "
-                <a href="https://qwik.dev/docs/integrations/drizzle/" target="_blank">"Qwik's Drizzle"</a>
-                ": async, SQL-native, and type-safe. "
+                "SQLx is an async, SQL-native, type-safe database layer for Rust. "
                 "Use it inside " <code>"#[load]"</code> ", " <code>"#[submit]"</code> ", and " <code>"#[server]"</code> " — all server-only."
             </p>
 
@@ -17,7 +15,7 @@ pub fn page(_req: FlowRequest) -> View {
                 <li>"Async-first — matches Tokio + Axum under the hood"</li>
                 <li>"Compile-time query checking with " <code>"sqlx::query!"</code> " / " <code>"sqlx::query_as!"</code></li>
                 <li>"Works with PostgreSQL, SQLite, MySQL — same Flow patterns everywhere"</li>
-                <li>"Migrations via " <code>"sqlx migrate"</code> " (similar role to Drizzle Kit)"</li>
+                <li>"Migrations via " <code>"sqlx migrate"</code></li>
             </ul>
 
             <h2>"Install"</h2>
@@ -50,7 +48,7 @@ pub fn pool() -> &'static sqlx::PgPool {
     POOL.get().expect("call init_db() before serve()")
 }"#)}
 
-            <h2>"Listing users - " <code>"#[load]"</code> " (routeLoader$)"</h2>
+            <h2>"Listing users with " <code>"#[load]"</code></h2>
             {code_block(r#"#[derive(Clone, Serialize, Deserialize, sqlx::FromRow)]
 struct User {
     id: i64,
@@ -96,7 +94,7 @@ async fn user_detail(req: &FlowRequest) -> Option<User> {
         .flatten()
 }"#)}
 
-            <h2>"Adding a user - " <code>"#[submit]"</code> " (routeAction$)"</h2>
+            <h2>"Adding a user with " <code>"#[submit]"</code></h2>
             {code_block(r#"#[derive(Deserialize)]
 struct CreateUserForm {
     name: String,

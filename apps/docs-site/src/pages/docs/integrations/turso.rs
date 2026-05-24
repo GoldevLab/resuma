@@ -9,9 +9,7 @@ pub fn page(_req: FlowRequest) -> View {
                 "Turso is an edge database built on "
                 <a href="https://github.com/tursodatabase/libsql" target="_blank">"libSQL"</a>
                 " (open-source SQLite fork). "
-                "Same model as "
-                <a href="https://qwik.dev/docs/integrations/turso/" target="_blank">"Qwik's Turso integration"</a>
-                ": " <code>"file:"</code> " locally, remote URL + auth token in production."
+                "Use " <code>"file:"</code> " locally and a remote URL + auth token in production."
             </p>
 
             <h2>"Why Turso with Resuma"</h2>

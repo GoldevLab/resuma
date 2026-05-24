@@ -30,7 +30,7 @@ required-features = ["cli"]
 
 [features]
 default = ["cli"]
-cli = ["dep:clap", "dep:anyhow", "dep:notify", "dep:walkdir", "dep:tracing-subscriber"]
+cli = ["dep:clap", "dep:anyhow", "dep:notify", "dep:tracing-subscriber"]
 
 [dependencies]
 resuma-macros = { workspace = true }
@@ -52,11 +52,11 @@ flate2        = "1"
 brotli        = "7"
 getrandom         = { workspace = true }
 ctor              = { workspace = true }
+walkdir           = { workspace = true }
 # CLI (optional)
 clap                = { workspace = true, optional = true }
 anyhow              = { workspace = true, optional = true }
 notify              = { workspace = true, optional = true }
-walkdir             = { workspace = true, optional = true }
 tracing-subscriber  = { workspace = true, optional = true }
 
 [dev-dependencies]

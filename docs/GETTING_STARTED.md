@@ -22,7 +22,7 @@ Static pages ship **zero client JS** until you interact.
 
 ## Prerequisites
 
-* [Rust 1.91+](https://rustup.rs)
+* [Rust 1.91+](https://rustup.rs) — if `cargo` fails with “no default toolchain”, run `rustup default stable`
 * [Node.js 18+](https://nodejs.org) (optional — rebuild JS runtime only)
 
 ## Install CLI
@@ -38,8 +38,17 @@ From source while developing the monorepo:
 cargo install --path crates/resuma --features cli
 ```
 
+New projects include `rust-toolchain.toml` (stable) so `cargo`/`resuma dev` work even without a global rustup default.
+
 ```toml
-# App Cargo.toml — library only, no CLI deps
+# App Cargo.toml (what `resuma new` generates)
+resuma = "0.3"
+tokio  = { version = "1", features = ["full"] }
+```
+
+For library-only dependency trees (no CLI crates like clap/notify in the graph):
+
+```toml
 resuma = { version = "0.3", default-features = false }
 ```
 

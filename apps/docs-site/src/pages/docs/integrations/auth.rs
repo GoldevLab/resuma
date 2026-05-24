@@ -6,8 +6,8 @@ pub fn page(_req: FlowRequest) -> View {
         <>
             <h1>"Auth"</h1>
             <p class="lead">
-                "Session-based auth with Flow middleware — the Rust equivalent of "
-                <a href="https://qwik.dev/docs/integrations/authjs/" target="_blank">"Qwik Auth.js"</a>"."
+                "Session-based auth with Flow middleware — attach the user to "
+                <code>"FlowRequest"</code> " extensions and gate loaders and submits."
             </p>
 
             <h2>"Pattern"</h2>

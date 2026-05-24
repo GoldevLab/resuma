@@ -5,7 +5,7 @@ pub fn page(_req: FlowRequest) -> View {
     view! {
         <>
             <h1>"OG Image"</h1>
-            <p class="lead">"Dynamic social preview images — like Qwik's OG Image integration."</p>
+            <p class="lead">"Dynamic social preview images for link sharing."</p>
 
             <h2>"Static default"</h2>
             <p>"Set " <code>"FlowApp::with_og_image(\"/og.svg\")"</code> " (this docs site). Good for most pages."</p>

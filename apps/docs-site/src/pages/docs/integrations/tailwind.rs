@@ -5,7 +5,7 @@ pub fn page(_req: FlowRequest) -> View {
     view! {
         <>
             <h1>"Tailwind CSS"</h1>
-            <p class="lead">"Utility-first CSS with a build step — same role as Qwik's Tailwind integration."</p>
+            <p class="lead">"Utility-first CSS with a build step in your Resuma app."</p>
 
             <h2>"Option A: Standalone CSS file"</h2>
             {code_block(r#"# Build tailwind.css in dev/CI (npm)

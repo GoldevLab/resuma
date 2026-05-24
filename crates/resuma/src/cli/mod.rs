@@ -90,7 +90,82 @@ pub fn run() -> Result<()> {
     }
 }
 
+/// Ensure `cargo` works — auto-select `stable` when rustup has no default toolchain.
+fn ensure_rust_toolchain() -> Result<()> {
+    let probe = Command::new("cargo")
+        .arg("--version")
+        .output()
+        .context("cargo not found — install Rust from https://rustup.rs")?;
+
+    if probe.status.success() {
+        return Ok(());
+    }
+
+    let err = format!(
+        "{}{}",
+        String::from_utf8_lossy(&probe.stderr),
+        String::from_utf8_lossy(&probe.stdout)
+    );
+    let needs_default = err.contains("no default is configured")
+        || err.contains("could not choose a version of cargo");
+
+    if !needs_default {
+        return Err(anyhow!(
+            "cargo failed: {}",
+            err.lines().next().unwrap_or("unknown error")
+        ));
+    }
+
+    eprintln!("[resuma] no default Rust toolchain — running `rustup default stable`…");
+    let status = Command::new("rustup")
+        .args(["default", "stable"])
+        .status()
+        .context("rustup not found — install from https://rustup.rs")?;
+    if !status.success() {
+        return Err(anyhow!(
+            "could not set default toolchain — run: rustup default stable"
+        ));
+    }
+
+    let verify = Command::new("cargo")
+        .arg("--version")
+        .output()
+        .context("cargo not found after rustup default stable")?;
+    if verify.status.success() {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "cargo still unavailable after `rustup default stable` — restart your terminal and try again"
+        ))
+    }
+}
+
+fn ensure_cargo_watch() -> Result<()> {
+    let ok = Command::new("cargo")
+        .args(["watch", "--version"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if ok {
+        return Ok(());
+    }
+
+    eprintln!("[resuma] installing cargo-watch (one-time) for hot reload…");
+    let status = Command::new("cargo")
+        .args(["install", "cargo-watch"])
+        .status()
+        .context("failed to run cargo install cargo-watch")?;
+    if !status.success() {
+        return Err(anyhow!(
+            "could not install cargo-watch — run manually: cargo install cargo-watch"
+        ));
+    }
+    Ok(())
+}
+
 fn dev_command(addr: &str, open: bool, skip_runtime: bool) -> Result<()> {
+    ensure_rust_toolchain()?;
+    ensure_cargo_watch()?;
     if !skip_runtime {
         ensure_runtime_built()?;
     }
@@ -102,28 +177,29 @@ fn dev_command(addr: &str, open: bool, skip_runtime: bool) -> Result<()> {
     }
     std::env::set_var("RESUMA_DEV", "1");
 
-    let has_watch = Command::new("cargo")
-        .args(["watch", "--version"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
+    let mut watch_args = vec![
+        "watch".to_string(),
+        "-c".to_string(),
+        "-q".to_string(),
+        "-w".to_string(),
+        "src".to_string(),
+        "-w".to_string(),
+        "Cargo.toml".to_string(),
+    ];
+    #[cfg(windows)]
+    watch_args.push("--poll".to_string());
+    watch_args.push("-x".to_string());
+    watch_args.push("run".to_string());
 
-    let status = if has_watch {
-        Command::new("cargo")
-            .args(["watch", "-c", "-q", "-x", "run"])
-            .env("RESUMA_ADDR", addr)
-            .env("RUST_LOG", "info,resuma=debug")
-            .status()
-            .context("failed to spawn cargo-watch")?
-    } else {
-        eprintln!("[resuma] cargo-watch not found — install with `cargo install cargo-watch` for hot reload");
-        Command::new("cargo")
-            .args(["run"])
-            .env("RESUMA_ADDR", addr)
-            .env("RUST_LOG", "info,resuma=debug")
-            .status()
-            .context("failed to spawn cargo run")?
-    };
+    println!("[resuma] hot reload enabled — save a file to rebuild and refresh the browser");
+
+    let status = Command::new("cargo")
+        .args(&watch_args)
+        .env("RESUMA_ADDR", addr)
+        .env("RESUMA_DEV", "1")
+        .env("RUST_LOG", "info,resuma=debug")
+        .status()
+        .context("failed to spawn cargo watch")?;
 
     if !status.success() {
         return Err(anyhow!("dev exited with status {:?}", status.code()));
@@ -141,6 +217,7 @@ fn open_browser(url: &str) {
 }
 
 fn build_command(static_export: bool, out: &Path, pages: &Path) -> Result<()> {
+    ensure_rust_toolchain()?;
     ensure_runtime_built()?;
 
     println!("[resuma] cargo build --release");

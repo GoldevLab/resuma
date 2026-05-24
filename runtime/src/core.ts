@@ -318,18 +318,34 @@ async function refreshIsland(instance: string): Promise<void> {
 function connectDevBridge(): void {
   if (typeof WebSocket === "undefined") return;
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(`${proto}://${location.host}/_resuma/dev/ws`);
-  ws.addEventListener("message", (ev) => {
-    const msg = String(ev.data);
-    if (msg === "reload") {
-      location.reload();
-      return;
-    }
-    if (msg.startsWith("island:")) {
-      void refreshIsland(msg.slice("island:".length));
-    }
-  });
-  ws.addEventListener("error", () => {
-    /* dev server optional */
-  });
+  let hadConnection = false;
+
+  const connect = (): void => {
+    const ws = new WebSocket(`${proto}://${location.host}/_resuma/dev/ws`);
+    ws.addEventListener("open", () => {
+      if (hadConnection) {
+        location.reload();
+        return;
+      }
+      hadConnection = true;
+    });
+    ws.addEventListener("message", (ev) => {
+      const msg = String(ev.data);
+      if (msg === "reload") {
+        location.reload();
+        return;
+      }
+      if (msg.startsWith("island:")) {
+        void refreshIsland(msg.slice("island:".length));
+      }
+    });
+    ws.addEventListener("close", () => {
+      setTimeout(connect, 500);
+    });
+    ws.addEventListener("error", () => {
+      ws.close();
+    });
+  };
+
+  connect();
 }

@@ -34,7 +34,7 @@ pub fn doc_sidebar(_active_path: &str) -> View {
                 "/docs/security/server_actions" => "Server actions",
                 "/docs/security/middleware" => "Auth middleware",
                 "/docs/security/authorization" => "Authorization & RLS",
-                "/docs/security/backend_patterns" => "NestJS + Next.js",
+                "/docs/security/backend_patterns" => "Backend patterns",
                 "/docs/security/todo" => "Todo example",
             )}
 

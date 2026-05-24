@@ -205,7 +205,7 @@ fn LiveSearch() -> View {
             <section class="section">
                 <p class="section-eyebrow">"Integrations"</p>
                 <h2 class="section-title">"Database, auth, and tooling"</h2>
-                <p class="section-sub">"Qwik-style integration guides for SQLx, Turso, auth, validation, i18n, and E2E testing."</p>
+                <p class="section-sub">"Integration guides for SQLx, Turso, auth, validation, i18n, and E2E testing."</p>
                 <div class="grid-3">
                     <a href="/docs/integrations/sqlx" class="card" style="text-decoration: none;">
                         <h3>"SQLx"</h3>

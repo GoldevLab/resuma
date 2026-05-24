@@ -5,7 +5,7 @@ pub fn page(_req: FlowRequest) -> View {
     view! {
         <>
             <h1>"E2E testing"</h1>
-            <p class="lead">"End-to-end tests for Resuma apps — comparable to Qwik's Playwright integration."</p>
+            <p class="lead">"End-to-end tests for Resuma apps with Playwright."</p>
 
             <h2>"Approach"</h2>
             <ul>

@@ -25,7 +25,7 @@ pub fn page(_req: FlowRequest) -> View {
             <article class="card">
                 <h1>{data.message.clone()}</h1>
                 <p>"Pages discovered from " <code>"src/pages/"</code> " and wired via " <code>"PagesRegistry"</code></p>
-                {stream_slot("details")}
+                <p>"Data loaded with " <code>"#[load]"</code> " and cached for 120s."</p>
             </article>
         })],
     )

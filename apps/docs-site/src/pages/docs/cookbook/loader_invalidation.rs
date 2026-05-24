@@ -5,7 +5,7 @@ pub fn page(_req: FlowRequest) -> View {
     view! {
         <>
             <h1>"Loader invalidation"</h1>
-            <p class="lead">"Refresh stale " <code>"#[load]"</code> " data after mutations — similar to revalidatePath in Next.js."</p>
+            <p class="lead">"Refresh stale " <code>"#[load]"</code> " data after mutations by re-running loaders or invalidating cached responses."</p>
 
             <h2>"Short cache TTL"</h2>
             {code_block(r#"#[load(cache = "public, max-age=10")]

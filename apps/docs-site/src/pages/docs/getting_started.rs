@@ -98,9 +98,12 @@ cd my-app"#)}
             <p>"The CLI generates " <code>"Cargo.toml"</code> " and " <code>"src/main.rs"</code> "."</p>
 
             <h2>"Start the development server"</h2>
-            <p>"Inside your project directory:"</p>
+            <p>
+                "Inside your project directory. "
+                <code>"resuma dev"</code> " installs " <code>"cargo-watch"</code> " if needed, rebuilds on save, and refreshes the browser automatically."
+            </p>
             {code_block(r#"resuma dev
-    # hot reload at http://127.0.0.1:3000"#)}
+resuma dev --open   # open http://127.0.0.1:3000"#)}
             <p>"Without the CLI, plain Cargo works too:"</p>
             {code_block("cargo run")}
 

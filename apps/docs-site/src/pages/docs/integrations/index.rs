@@ -6,8 +6,7 @@ pub fn page(_req: FlowRequest) -> View {
         <>
             <h1>"Integrations"</h1>
             <p class="lead">
-                "Connect Resuma Flow to databases, auth, styling, and testing — "
-                "same role as Qwik City Integrations."
+                "Connect Resuma Flow to databases, auth, styling, and testing using first-class Rust crates and Flow APIs."
             </p>
 
             <h2>"Recommended stack"</h2>
@@ -75,15 +74,16 @@ pub fn page(_req: FlowRequest) -> View {
             <h2>"CLI scaffolding"</h2>
             {code_block("resuma new my-app --template flow-fullstack\nresuma add sqlx\nresuma add turso")}
 
-            <h2>"Flow API mapping"</h2>
+            <h2>"Flow API overview"</h2>
             <table class="docs-table">
                 <thead>
-                    <tr><th>"Qwik City"</th><th>"Resuma Flow"</th></tr>
+                    <tr><th>"Task"</th><th>"Resuma Flow"</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td><code>"routeLoader$"</code></td><td><code>"#[load]"</code></td></tr>
-                    <tr><td><code>"routeAction$"</code></td><td><code>"#[submit]"</code></td></tr>
-                    <tr><td><code>"server$"</code></td><td><code>"#[server]"</code></td></tr>
+                    <tr><td>"Load data for a page"</td><td><code>"#[load]"</code></td></tr>
+                    <tr><td>"Handle form POST"</td><td><code>"#[submit]"</code></td></tr>
+                    <tr><td>"RPC from the client"</td><td><code>"#[server]"</code></td></tr>
+                    <tr><td>"Per-request pipeline"</td><td><code>"#[middleware]"</code></td></tr>
                 </tbody>
             </table>
         </>
