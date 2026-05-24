@@ -32,6 +32,14 @@ pub fn page(_req: FlowRequest) -> View {
                     <h3>"Docker deploy"</h3>
                     <p>"Minimal container image for production."</p>
                 </a>
+                <a href="/docs/cookbook/prg" class="card" style="text-decoration: none;">
+                    <h3>"PRG pattern"</h3>
+                    <p>"Post/Redirect/Get after form submits."</p>
+                </a>
+                <a href="/docs/cookbook/loader_invalidation" class="card" style="text-decoration: none;">
+                    <h3>"Loader invalidation"</h3>
+                    <p>"Refresh stale #[load] data after mutations."</p>
+                </a>
             </div>
         </>
     }

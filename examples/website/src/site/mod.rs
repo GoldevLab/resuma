@@ -1,12 +1,14 @@
 //! Shared UI for the Resuma documentation site.
 
 mod css;
+mod docs_search;
 mod pwa;
 mod seo;
 mod sidebar;
 
 pub use css::SITE_CSS;
 pub use pwa::config as pwa_config;
+pub use docs_search::search;
 pub use seo::{json_ld, site_description, site_title, site_url};
 pub use sidebar::doc_sidebar;
 

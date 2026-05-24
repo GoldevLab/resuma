@@ -203,6 +203,31 @@ fn LiveSearch() -> View {
             </section>
 
             <section class="section">
+                <p class="section-eyebrow">"Integrations"</p>
+                <h2 class="section-title">"Database, auth, and tooling"</h2>
+                <p class="section-sub">"Qwik-style integration guides for SQLx, Turso, auth, validation, i18n, and E2E testing."</p>
+                <div class="grid-3">
+                    <a href="/docs/integrations/sqlx" class="card" style="text-decoration: none;">
+                        <h3>"SQLx"</h3>
+                        <p>"Type-safe SQL in #[load] and #[submit]."</p>
+                    </a>
+                    <a href="/docs/integrations/turso" class="card" style="text-decoration: none;">
+                        <h3>"Turso"</h3>
+                        <p>"Edge libSQL — file in dev, remote in prod."</p>
+                    </a>
+                    <a href="/docs/integrations/auth" class="card" style="text-decoration: none;">
+                        <h3>"Auth"</h3>
+                        <p>"Sessions and middleware for protected routes."</p>
+                    </a>
+                </div>
+                <p style="text-align: center; margin-top: 1rem;">
+                    <a href="/docs/integrations">"All integrations"</a>
+                    " · "
+                    <a href="/docs/search">"Search docs"</a>
+                </p>
+            </section>
+
+            <section class="section">
                 <p class="section-eyebrow">"Compare"</p>
                 <h2 class="section-title">"Resumability vs hydration"</h2>
                 <p class="section-sub">"Classic frameworks re-run components on the client to attach listeners. Resuma resumes serialized state instead."</p>

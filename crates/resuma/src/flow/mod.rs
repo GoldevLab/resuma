@@ -8,6 +8,7 @@ pub mod action_hook;
 pub mod app;
 pub mod cache;
 pub mod errors;
+pub mod extensions;
 pub mod form;
 pub mod layout;
 pub mod load;
@@ -25,6 +26,7 @@ pub mod stream_load;
 
 pub use app::{FlowApp, FlowServeOptions};
 pub use cache::{loader_cache, merge_cache_control, register_loader_cache};
+pub use extensions::FlowExtensions;
 pub use errors::{error_page, not_found_page, FlowError};
 pub use form::form;
 pub use layout::{apply_layouts, register_layout};

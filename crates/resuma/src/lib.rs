@@ -91,6 +91,7 @@ pub use crate::ssr::{render_to_stream, render_to_string, render_view, PageOption
 pub use crate::flow::{
     apply_layouts, current_request, discover_pages, encode_submit_result, error_page, form,
     not_found_page, register_layout, register_loader, register_loader_cache, register_middleware,
+    FlowExtensions,
     register_stream_chunk, register_stream_loader, register_submit, try_use_load,
     try_use_load_value, use_load, with_request, DiscoveredPage, FlowApp, FlowError,
     FlowPageRegistry, FlowPwaConfig, FlowServeOptions, LoadValue, LoaderError, SubmitError,

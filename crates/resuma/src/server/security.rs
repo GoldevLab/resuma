@@ -297,6 +297,11 @@ pub fn apply_security_headers(mut response: Response, opts: &SecurityHeaderOptio
     insert_header(headers, header::X_CONTENT_TYPE_OPTIONS, "nosniff");
     insert_header(
         headers,
+        header::HeaderName::from_static("x-xss-protection"),
+        "0",
+    );
+    insert_header(
+        headers,
         header::REFERRER_POLICY,
         "strict-origin-when-cross-origin",
     );

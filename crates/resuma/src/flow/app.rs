@@ -37,6 +37,7 @@ pub struct FlowApp {
     streaming: bool,
     not_found: Option<Arc<dyn Fn() -> View + Send + Sync>>,
     pwa: Option<super::pwa::FlowPwaConfig>,
+    extensions: super::extensions::FlowExtensions,
 }
 
 /// Listen and security options for [`FlowApp::serve`].
@@ -76,7 +77,24 @@ impl FlowApp {
             streaming: false,
             not_found: None,
             pwa: None,
+            extensions: super::extensions::FlowExtensions::default(),
         }
+    }
+
+    /// Attach a JSON-serializable value to every request (`req.extension("key")` in loads/submits).
+    pub fn with_extension(mut self, key: impl Into<String>, value: impl serde::Serialize) -> Self {
+        if let Ok(v) = serde_json::to_value(value) {
+            self.extensions.insert(key, v);
+        }
+        self
+    }
+
+    /// Merge a map of extensions into every request (e.g. `"db": "ready"` marker after pool init).
+    pub fn with_extensions(mut self, extensions: super::extensions::FlowExtensions) -> Self {
+        for (k, v) in extensions.0 {
+            self.extensions.insert(k, v);
+        }
+        self
     }
 
     pub fn with_title(mut self, title: impl Into<String>) -> Self {
@@ -199,6 +217,7 @@ impl FlowApp {
 
         let deferred_streaming = self.streaming;
         let not_found = self.not_found.clone();
+        let global_extensions = self.extensions.clone();
 
         let static_pages: Vec<(String, PageEntry)> = self
             .pages
@@ -208,8 +227,9 @@ impl FlowApp {
             .collect();
 
         for (pattern, entry) in static_pages {
+            let ext = global_extensions.clone();
             app = app.page_with_request(&pattern, move |req| {
-                render_with_flow(req, entry.clone(), deferred_streaming)
+                render_with_flow(req, entry.clone(), deferred_streaming, ext.clone())
             });
         }
 
@@ -225,8 +245,9 @@ impl FlowApp {
 
         if !dynamic_pages.is_empty() {
             let ds = deferred_streaming;
+            let ext = global_extensions.clone();
             app = app.fallback_with_request(move |path, req| {
-                dispatch_dynamic(&dynamic_pages, path, req, ds)
+                dispatch_dynamic(&dynamic_pages, path, req, ds, ext.clone())
                     .or_else(|| not_found.as_ref().map(|f| f()))
             });
         } else if let Some(nf) = not_found {
@@ -270,18 +291,30 @@ fn dispatch_dynamic(
     path: &str,
     mut req: FlowRequest,
     deferred_streaming: bool,
+    extensions: super::extensions::FlowExtensions,
 ) -> Option<View> {
     for (pattern, entry) in pages {
         if let Some(m) = match_route(pattern, path) {
             req.path = path.to_string();
             req.params = m.params;
-            return Some(render_with_flow(req, entry.clone(), deferred_streaming));
+            return Some(render_with_flow(
+                req,
+                entry.clone(),
+                deferred_streaming,
+                extensions,
+            ));
         }
     }
     None
 }
 
-fn render_with_flow(mut req: FlowRequest, entry: PageEntry, deferred_streaming: bool) -> View {
+fn render_with_flow(
+    mut req: FlowRequest,
+    entry: PageEntry,
+    deferred_streaming: bool,
+    extensions: super::extensions::FlowExtensions,
+) -> View {
+    extensions.merge_into(&mut req);
     if let Ok(h) = tokio::runtime::Handle::try_current() {
         let updated = tokio::task::block_in_place(|| h.block_on(run_middleware(req.clone())));
         match updated {

@@ -7,7 +7,7 @@ pub fn page(_req: FlowRequest) -> View {
             <p class="lead">
                 "Resumable SSR in Rust — core components, full-stack Flow, production security, and deploy guides. "
                 "Published as "
-                <a href="https://crates.io/crates/resuma" target="_blank">"resuma 0.2"</a>
+                <a href="https://crates.io/crates/resuma" target="_blank">"resuma 0.3.1"</a>
                 " on crates.io · "
                 <a href="https://docs.rs/resuma" target="_blank">"API on docs.rs"</a>"."
             </p>
@@ -41,6 +41,10 @@ pub fn page(_req: FlowRequest) -> View {
                 <a href="/docs/cookbook" class="card" style="text-decoration: none;">
                     <h3>"Cookbook"</h3>
                     <p>"Theme, portals, streaming loaders, Docker deploy."</p>
+                </a>
+                <a href="/docs/integrations" class="card" style="text-decoration: none;">
+                    <h3>"Integrations"</h3>
+                    <p>"SQLx and Turso — database layer for loaders and submits."</p>
                 </a>
                 <a href="/docs/architecture" class="card" style="text-decoration: none;">
                     <h3>"Architecture"</h3>

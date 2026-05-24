@@ -21,7 +21,7 @@ pub fn page(_req: FlowRequest) -> View {
             <h2>"Install"</h2>
             <p>"Users depend on a single crate:"</p>
             {code_block(r#"[dependencies]
-resuma = "0.2"
+resuma = "0.3"
 tokio  = { version = "1", features = ["full"] }"#)}
 
             <p>"Everything re-exports through " <code>"resuma::prelude"</code>":"</p>
@@ -51,7 +51,11 @@ tokio  = { version = "1", features = ["full"] }"#)}
             {code_block(r#"cargo install resuma
 resuma new my-app                    # static SSR (default)
 resuma new my-app --template todo    # full showcase
+resuma new my-app --template flow-fullstack  # Flow + SQLx + users CRUD
+resuma add sqlx                      # add SQLx to existing project
+resuma add turso                     # add Turso/libSQL client
 resuma dev
+resuma dev --open                    # open browser
 resuma build
 resuma routes --generate --path src/pages   # Flow apps only"#)}
 

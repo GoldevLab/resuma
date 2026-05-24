@@ -20,6 +20,7 @@ pub fn stream_head(opts: &PageOptions, path: &str) -> String {
     let title = seo::page_title(opts, path);
     let description = seo::page_description(opts, path);
     let seo_tags = seo::seo_head_tags(opts, path);
+    let json_ld = seo::json_ld_script(&opts.json_ld);
     let head = super::apply_head_csp_nonce(&opts.head, &opts.csp_nonce);
 
     let stylesheet = opts
@@ -36,7 +37,7 @@ pub fn stream_head(opts: &PageOptions, path: &str) -> String {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="description" content="{description}" />
 <title>{title}</title>
-{seo_tags}
+{json_ld}{seo_tags}
 {stylesheet}
 {head}
 </head>
@@ -46,6 +47,7 @@ pub fn stream_head(opts: &PageOptions, path: &str) -> String {
         title = escape_text(&title),
         description = escape_text(&description),
         seo_tags = seo_tags,
+        json_ld = json_ld,
         head = head,
         stylesheet = stylesheet,
     )

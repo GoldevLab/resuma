@@ -25,7 +25,9 @@ pub mod docs {
         pub mod debouncer;
         pub mod docker;
         pub mod index;
+        pub mod loader_invalidation;
         pub mod portals;
+        pub mod prg;
         pub mod streaming_loaders;
         pub mod theme;
         pub mod view_transitions;
@@ -41,14 +43,28 @@ pub mod docs {
         pub mod loaders;
         pub mod middleware;
         pub mod pages;
+        pub mod prefetch;
         pub mod routing;
         pub mod streaming;
         pub mod submits;
     }
     pub mod getting_started;
     pub mod index;
+    pub mod integrations {
+        pub mod auth;
+        pub mod e2e;
+        pub mod i18n;
+        pub mod index;
+        pub mod og_image;
+        pub mod sqlx;
+        pub mod supabase;
+        pub mod tailwind;
+        pub mod turso;
+        pub mod validator;
+    }
     pub mod package;
     pub mod project_structure;
+    pub mod search;
     pub mod security {
         pub mod authorization;
         pub mod backend_patterns;

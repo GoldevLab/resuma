@@ -14,30 +14,27 @@ pub fn page(_req: FlowRequest) -> View {
 cargo install --path crates/resuma --features cli"#)}
 
             <h2>"resuma new / resuma create"</h2>
-            <p>"Scaffold a new project from a template. " <code>"create"</code> " is an alias for " <code>"new"</code>"."</p>
             {code_block(r#"resuma new my-app
-resuma new my-app --template basic   # static SSR page (default)
-resuma new my-app --template todo    # signals, server, islands"#)}
+resuma new my-app --template basic          # static SSR (default)
+resuma new my-app --template todo           # full showcase
+resuma new my-app --template flow           # file-based pages
+resuma new my-app --template flow-fullstack # Flow + SQLx sample"#)}
+
+            <h2>"resuma add"</h2>
+            {code_block(r#"resuma add sqlx    # src/db.rs, migrations/, deps
+resuma add turso  # src/turso.rs, .env.example"#)}
 
             <h2>"resuma dev"</h2>
-            <p>"Run the app with hot reload. Binds to 127.0.0.1:3000 by default. Rebuilds the JS runtime unless " <code>"--skip-runtime"</code> " is passed."</p>
             {code_block(r#"resuma dev
+resuma dev --open
 resuma dev --addr 0.0.0.0:8080
 resuma dev --skip-runtime"#)}
 
             <h2>"resuma build"</h2>
-            <p>"Build a production release binary and JS bundles (" <code>"cargo build --release"</code> " + runtime npm build)."</p>
             {code_block("resuma build")}
 
             <h2>"resuma routes"</h2>
-            <p>"Discover file-based routes under a pages directory. With " <code>"--generate"</code> ", writes " <code>"mod.rs"</code> " and " <code>"_registry.rs"</code>"."</p>
             {code_block(r#"resuma routes --path src/pages
-    resuma routes --generate --path src/pages"#)}
-
-            <h2>"Without the CLI"</h2>
-            <p>"All commands map to plain Cargo workflows:"</p>
-            {code_block(r#"cargo run                              # dev server
-cargo build --release                  # production build
 resuma routes --generate --path src/pages"#)}
         </>
     }

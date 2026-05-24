@@ -7,6 +7,7 @@ use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 
 mod scaffold;
+mod add;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -23,15 +24,23 @@ enum Commands {
     New {
         /// Project directory name.
         name: String,
-        /// Template: `basic`, `todo`, or `flow` (file-based pages).
+        /// Template: `basic`, `todo`, `flow`, or `flow-fullstack` (Flow + SQLx).
         #[arg(long, default_value = "basic")]
         template: String,
+    },
+    /// Add an integration scaffold (sqlx, turso) to the current project.
+    Add {
+        /// Integration name: `sqlx` or `turso`.
+        name: String,
     },
     /// Run the app with hot reload.
     Dev {
         /// Bind address (default: 127.0.0.1:3000).
         #[arg(long, default_value = "127.0.0.1:3000")]
         addr: String,
+        /// Open the default browser once the server starts.
+        #[arg(long)]
+        open: bool,
         /// Skip building the JS runtime (useful when prebuilt).
         #[arg(long)]
         skip_runtime: bool,
@@ -66,7 +75,12 @@ pub fn run() -> Result<()> {
     let args = Cli::parse();
     match args.command {
         Commands::New { name, template } => scaffold::create_project(&name, &template),
-        Commands::Dev { addr, skip_runtime } => dev_command(&addr, skip_runtime),
+        Commands::Add { name } => add::add_integration(&name),
+        Commands::Dev {
+            addr,
+            open,
+            skip_runtime,
+        } => dev_command(&addr, open, skip_runtime),
         Commands::Build {
             static_export,
             out,
@@ -76,12 +90,16 @@ pub fn run() -> Result<()> {
     }
 }
 
-fn dev_command(addr: &str, skip_runtime: bool) -> Result<()> {
+fn dev_command(addr: &str, open: bool, skip_runtime: bool) -> Result<()> {
     if !skip_runtime {
         ensure_runtime_built()?;
     }
 
-    println!("[resuma] starting dev server at http://{}", addr);
+    let url = format!("http://{}", addr);
+    println!("[resuma] starting dev server at {}", url);
+    if open {
+        open_browser(&url);
+    }
     std::env::set_var("RESUMA_DEV", "1");
 
     let has_watch = Command::new("cargo")
@@ -111,6 +129,15 @@ fn dev_command(addr: &str, skip_runtime: bool) -> Result<()> {
         return Err(anyhow!("dev exited with status {:?}", status.code()));
     }
     Ok(())
+}
+
+fn open_browser(url: &str) {
+    #[cfg(windows)]
+    let _ = Command::new("cmd").args(["/C", "start", "", url]).spawn();
+    #[cfg(target_os = "macos")]
+    let _ = Command::new("open").arg(url).spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let _ = Command::new("xdg-open").arg(url).spawn();
 }
 
 fn build_command(static_export: bool, out: &Path, pages: &Path) -> Result<()> {

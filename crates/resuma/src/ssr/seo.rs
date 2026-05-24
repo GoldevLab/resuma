@@ -58,6 +58,16 @@ pub fn page_description(opts: &PageOptions, path: &str) -> String {
     opts.title.clone()
 }
 
+pub fn json_ld_script(json_ld: &str) -> String {
+    if json_ld.is_empty() {
+        return String::new();
+    }
+    format!(
+        "\n<script type=\"application/ld+json\">\n{}\n</script>\n",
+        json_ld.trim()
+    )
+}
+
 pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
     let mut out = String::new();
     let title = page_title(opts, path);
@@ -102,29 +112,26 @@ pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
 <meta property="og:image:type" content="image/svg+xml" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:image:alt" content="{site} — {title}" />
+<meta property="og:image:alt" content="{og_image_alt}" />
+<meta name="og:title" content="{title}" />
+<meta name="og:description" content="{description}" />
+<meta name="og:image" content="{og_image}" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="{title}" />
 <meta name="twitter:description" content="{description}" />
 <meta name="twitter:image" content="{og_image}" />
-<meta name="twitter:image:alt" content="{site} — {title}" />"#,
+<meta name="twitter:image:alt" content="{og_image_alt}" />"#,
             og_type = escape_attr(og_type),
             site = escape_attr(&opts.title),
             title = escape_attr(&title),
             description = escape_attr(&description),
             canonical = escape_attr(&canonical),
             og_image = escape_attr(&og_image),
+            og_image_alt = escape_attr("Resuma — resumable SSR web framework for Rust"),
         ));
     }
 
     out.push_str(r#"<meta name="robots" content="index, follow" />"#);
-
-    if !opts.json_ld.is_empty() {
-        out.push_str(&format!(
-            r#"<script type="application/ld+json">{json_ld}</script>"#,
-            json_ld = opts.json_ld.trim(),
-        ));
-    }
 
     if let Some(pwa) = &opts.pwa {
         out.push_str(&super::pwa::pwa_head_tags(pwa));

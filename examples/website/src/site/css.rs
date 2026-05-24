@@ -356,6 +356,19 @@ pre.code code { background: none; border: 0; padding: 0; }
 }
 .docs-sidebar h4:first-child { margin-top: 0; }
 .docs-sidebar nav { display: flex; flex-direction: column; gap: 0.05rem; margin-bottom: 0.25rem; }
+.docs-search-form { display: flex; gap: 0.35rem; margin-bottom: 1rem; }
+.docs-search-form input[type="search"] {
+  flex: 1; padding: 0.4rem 0.55rem; border: 1px solid var(--border); border-radius: 6px;
+  font: inherit; background: var(--bg); color: var(--text);
+}
+.docs-search-form button {
+  padding: 0.4rem 0.65rem; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg-subtle); cursor: pointer; font: inherit;
+}
+.docs-search-results { list-style: none; padding: 0; margin: 1rem 0; }
+.docs-search-results li { margin-bottom: 0.65rem; }
+.docs-search-results a { display: flex; flex-direction: column; gap: 0.15rem; text-decoration: none; }
+.docs-search-results span { color: var(--muted); font-size: 0.85rem; }
 .docs-sidebar a {
   padding: 0.32rem 0.55rem; border-radius: 6px; color: var(--muted);
   font-size: 0.875rem; text-decoration: none; line-height: 1.35;

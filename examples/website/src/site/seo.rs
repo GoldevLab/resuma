@@ -5,8 +5,8 @@ pub fn site_title() -> &'static str {
 }
 
 pub fn site_description() -> &'static str {
-    "Resumable Rust SSR framework: every #[component] is interactive by default. \
-     ~884 B loader, lazy handler chunks, server actions, and full-stack Flow — zero hydration."
+    "Resumable Rust SSR framework. Every component is interactive by default — \
+     ~884 B loader, lazy handler chunks, server actions, and Flow. Zero hydration."
 }
 
 pub fn json_ld(site_url: &str) -> String {

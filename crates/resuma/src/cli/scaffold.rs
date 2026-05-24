@@ -80,6 +80,27 @@ const FLOW_ABOUT: &str = include_str!("../../templates/flow/pages/about.rs");
 const FLOW_MOD: &str = include_str!("../../templates/flow/pages/mod.rs");
 const FLOW_REGISTRY: &str = include_str!("../../templates/flow/pages/_registry.rs");
 
+const CARGO_FULLSTACK: &str = r#"[package]
+name = "%NAME%"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+resuma = { version = "0.3", default-features = false }
+tokio  = { version = "1", features = ["full"] }
+serde  = { version = "1", features = ["derive"] }
+sqlx   = { version = "0.8", features = ["runtime-tokio", "sqlite", "macros", "migrate"] }
+anyhow = "1"
+"#;
+
+const FULLSTACK_MAIN: &str = include_str!("../../templates/flow-fullstack/main.rs");
+const FULLSTACK_DB: &str = include_str!("../../templates/flow-fullstack/db.rs");
+const FULLSTACK_PAGES_MOD: &str = include_str!("../../templates/flow-fullstack/pages/mod.rs");
+const FULLSTACK_INDEX: &str = include_str!("../../templates/flow-fullstack/pages/index.rs");
+const FULLSTACK_USERS: &str = include_str!("../../templates/flow-fullstack/pages/users.rs");
+const FULLSTACK_REGISTRY: &str = include_str!("../../templates/flow-fullstack/pages/_registry.rs");
+const FULLSTACK_MIGRATION: &str = include_str!("../../templates/add/sqlx/001_users.sql");
+
 const README: &str = r##"# %NAME%
 
 Created with [Resuma](https://github.com/GolfredoPerezFernandez/resuma).
@@ -89,10 +110,17 @@ Created with [Resuma](https://github.com/GolfredoPerezFernandez/resuma).
 - **basic** - static SSR page, zero client JS
 - **todo** - full Resuma showcase (signals, server, island, security, js!)
 - **flow** - multi-page app with `src/pages/` and FlowApp
+- **flow-fullstack** - Flow + SQLx (SQLite) with users CRUD sample
 
 ## Develop
 
     resuma dev
+    resuma dev --open
+
+## Add integrations
+
+    resuma add sqlx
+    resuma add turso
 
 ## Build
 
@@ -142,9 +170,34 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
             fs::write(pages.join("index.rs"), FLOW_INDEX).context("write pages/index.rs")?;
             fs::write(pages.join("about.rs"), FLOW_ABOUT).context("write pages/about.rs")?;
         }
+        "flow-fullstack" => {
+            fs::write(dir.join("Cargo.toml"), CARGO_FULLSTACK.replace("%NAME%", name))
+                .context("write Cargo.toml")?;
+            fs::write(
+                dir.join("src/main.rs"),
+                FULLSTACK_MAIN.replace("%NAME%", name),
+            )
+            .context("write src/main.rs")?;
+            fs::write(dir.join("src/db.rs"), FULLSTACK_DB).context("write src/db.rs")?;
+            let pages = dir.join("src/pages");
+            fs::create_dir_all(&pages)?;
+            fs::write(pages.join("mod.rs"), FULLSTACK_PAGES_MOD).context("write pages/mod.rs")?;
+            fs::write(pages.join("_registry.rs"), FULLSTACK_REGISTRY)
+                .context("write pages/_registry.rs")?;
+            fs::write(pages.join("index.rs"), FULLSTACK_INDEX).context("write pages/index.rs")?;
+            fs::write(pages.join("users.rs"), FULLSTACK_USERS).context("write pages/users.rs")?;
+            let mig = dir.join("migrations");
+            fs::create_dir_all(&mig)?;
+            fs::write(mig.join("001_users.sql"), FULLSTACK_MIGRATION)?;
+            fs::write(
+                dir.join(".env.example"),
+                "DATABASE_URL=sqlite:local.db\n",
+            )
+            .ok();
+        }
         other => {
             return Err(anyhow!(
-                "unknown template `{}` (try: basic, todo, flow)",
+                "unknown template `{}` (try: basic, todo, flow, flow-fullstack)",
                 other
             ));
         }

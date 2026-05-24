@@ -193,6 +193,7 @@ fn wrap_document(
     let title = seo::page_title(opts, path);
     let description = seo::page_description(opts, path);
     let seo_tags = seo::seo_head_tags(opts, path);
+    let json_ld = seo::json_ld_script(&opts.json_ld);
     let stylesheet = opts
         .stylesheet
         .as_ref()
@@ -209,7 +210,7 @@ fn wrap_document(
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="description" content="{description}" />
 <title>{title}</title>
-{seo_tags}
+{json_ld}{seo_tags}
 {stylesheet}
 {head}
 </head>
@@ -222,6 +223,7 @@ fn wrap_document(
         title = escape_text(&title),
         description = escape_text(&description),
         seo_tags = seo_tags,
+        json_ld = json_ld,
         head = head,
         stylesheet = stylesheet,
         body = body_html,

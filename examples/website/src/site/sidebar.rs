@@ -15,6 +15,9 @@ macro_rules! nav {
 pub fn doc_sidebar(_active_path: &str) -> View {
     view! {
         <aside class="docs-sidebar">
+            <form method="get" action="/docs/search" class="docs-search-form">
+                <input type="search" name="q" placeholder="Search docs..." aria-label="Search docs" />
+            </form>
             <h4>"Introduction"</h4>
             {nav!(
                 "/docs" => "Overview",
@@ -66,6 +69,21 @@ pub fn doc_sidebar(_active_path: &str) -> View {
                 "/docs/flow/errors" => "Error handling",
                 "/docs/flow/caching" => "Caching",
                 "/docs/flow/streaming" => "Streaming",
+                "/docs/flow/prefetch" => "Prefetch",
+            )}
+
+            <h4>"Integrations"</h4>
+            {nav!(
+                "/docs/integrations" => "Overview",
+                "/docs/integrations/sqlx" => "SQLx",
+                "/docs/integrations/turso" => "Turso",
+                "/docs/integrations/supabase" => "Supabase",
+                "/docs/integrations/auth" => "Auth",
+                "/docs/integrations/validator" => "Validation",
+                "/docs/integrations/i18n" => "i18n",
+                "/docs/integrations/tailwind" => "Tailwind",
+                "/docs/integrations/og_image" => "OG Image",
+                "/docs/integrations/e2e" => "E2E testing",
             )}
 
             <h4>"Cookbook"</h4>
@@ -76,6 +94,8 @@ pub fn doc_sidebar(_active_path: &str) -> View {
                 "/docs/cookbook/view_transitions" => "View transitions",
                 "/docs/cookbook/theme" => "Theme",
                 "/docs/cookbook/streaming_loaders" => "Streaming loaders",
+                "/docs/cookbook/prg" => "PRG pattern",
+                "/docs/cookbook/loader_invalidation" => "Loader invalidation",
                 "/docs/cookbook/docker" => "Docker deploy",
             )}
 
