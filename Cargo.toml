@@ -11,21 +11,21 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 rust-version = "1.91"
 authors = ["Resuma Contributors"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/GolfredoPerezFernandez/resuma"
-homepage = "https://github.com/GolfredoPerezFernandez/resuma"
-documentation = "https://docs.rs/resuma"
+homepage = "https://resuma-docs.fly.dev"
+documentation = "https://resuma-docs.fly.dev/docs"
 description = "Resuma - SSR + Resumability + Islands + Server Actions for Rust"
 keywords = ["web", "framework", "ssr", "resumability", "islands"]
 categories = ["web-programming", "asynchronous"]
 readme = "README.md"
 
 [workspace.dependencies]
-resuma-macros = { path = "crates/resuma-macros", version = "0.2.2" }
+resuma-macros = { path = "crates/resuma-macros", version = "0.2.3" }
 
 # 3rd-party
 serde       = { version = "1", features = ["derive"] }

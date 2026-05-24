@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.3] - 2026-05-24
+
+### Changed
+
+- crates.io `documentation` metadata points to the guide site (https://resuma-docs.fly.dev/docs); API remains on docs.rs
+
 ## [0.2.2] - 2026-05-23
 
 ### Changed
@@ -50,6 +56,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Examples: counter, todo (backend security reference), flow-demo, flow-pages, website
 - Documentation site and markdown guides under `docs/`
 
+[0.2.3]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.2.3
 [0.2.2]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.2.2
 [0.2.1]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.2.1
 [0.2.0]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.2.0

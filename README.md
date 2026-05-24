@@ -10,7 +10,7 @@
 
 *Zero hydration, true resumability, native islands, automatic Rust→JS handler compilation.*
 
-**Install:** [`cargo install resuma`](https://crates.io/crates/resuma) · **Docs:** [docs.rs/resuma](https://docs.rs/resuma) · **Repo:** [GitHub](https://github.com/GolfredoPerezFernandez/resuma)
+**Install:** [`cargo install resuma`](https://crates.io/crates/resuma) · **Docs:** [resuma-docs.fly.dev](https://resuma-docs.fly.dev) · **API:** [docs.rs/resuma](https://docs.rs/resuma) · **Repo:** [GitHub](https://github.com/GolfredoPerezFernandez/resuma)
 
 </div>
 
@@ -187,8 +187,8 @@ resuma dev
 ```
 
 - **Crate:** [crates.io/crates/resuma](https://crates.io/crates/resuma)
-- **API docs:** [docs.rs/resuma/0.2.2](https://docs.rs/resuma/0.2.2)
-- **Proc-macros:** [docs.rs/resuma-macros/0.2.2](https://docs.rs/resuma-macros/0.2.2)
+- **API docs:** [docs.rs/resuma/0.2.3](https://docs.rs/resuma/0.2.3)
+- **Proc-macros:** [docs.rs/resuma-macros/0.2.3](https://docs.rs/resuma-macros/0.2.3)
 
 Library only (no CLI binary):
 
