@@ -116,7 +116,11 @@ pre.code code { background: none; border: 0; padding: 0; }
   margin: 0 0 1rem; letter-spacing: -0.035em; color: var(--text); font-weight: 800;
 }
 .hero h1 .accent { color: var(--primary); }
-.hero h1 .line2 { display: block; font-weight: 700; color: var(--muted); font-size: 0.72em; margin-top: 0.15em; }
+.hero-tagline {
+  font-size: clamp(1.15rem, 2.5vw, 1.45rem); font-weight: 600;
+  color: var(--muted); margin: -0.35rem 0 1.1rem; line-height: 1.4;
+  letter-spacing: -0.02em; max-width: 34rem;
+}
 .hero-lead {
   color: var(--muted); font-size: 1.15rem; max-width: 34rem; margin: 0 0 1.5rem; line-height: 1.6;
 }

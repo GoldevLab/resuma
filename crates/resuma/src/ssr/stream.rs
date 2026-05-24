@@ -20,6 +20,7 @@ pub fn stream_head(opts: &PageOptions, path: &str) -> String {
     let title = seo::page_title(opts, path);
     let description = seo::page_description(opts, path);
     let seo_tags = seo::seo_head_tags(opts, path);
+    let head = super::apply_head_csp_nonce(&opts.head, &opts.csp_nonce);
 
     let stylesheet = opts
         .stylesheet
@@ -45,7 +46,7 @@ pub fn stream_head(opts: &PageOptions, path: &str) -> String {
         title = escape_text(&title),
         description = escape_text(&description),
         seo_tags = seo_tags,
-        head = opts.head,
+        head = head,
         stylesheet = stylesheet,
     )
 }

@@ -290,7 +290,7 @@ pub fn apply_security_headers(mut response: Response, opts: &SecurityHeaderOptio
         insert_header(
             headers,
             header::STRICT_TRANSPORT_SECURITY,
-            "max-age=31536000; includeSubDomains",
+            "max-age=63072000; includeSubDomains; preload",
         );
     }
     insert_header(headers, header::X_FRAME_OPTIONS, "DENY");
@@ -322,11 +322,19 @@ pub fn apply_security_headers(mut response: Response, opts: &SecurityHeaderOptio
     );
 
     let csp = if let Some(nonce) = &opts.csp_nonce {
-        format!(
-            "default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
-        )
+        let mut policy = format!(
+            "default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'nonce-{nonce}'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        );
+        if opts.https {
+            policy.push_str("; upgrade-insecure-requests");
+        }
+        policy
     } else {
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'".into()
+        let mut policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'".to_string();
+        if opts.https {
+            policy.push_str("; upgrade-insecure-requests");
+        }
+        policy
     };
     insert_header(headers, header::CONTENT_SECURITY_POLICY, &csp);
     response

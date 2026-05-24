@@ -190,12 +190,20 @@ fn sitemap_xml(seo: &FlowSeoConfig) -> String {
     let mut xml = String::from(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
     xml.push_str(r#"<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">"#);
     for path in paths {
+        let priority = if path == "/" { "1.0" } else { "0.8" };
+        let changefreq = if path == "/" { "weekly" } else { "monthly" };
         xml.push_str("<url><loc>");
         xml.push_str(base);
-        if path != "/" {
+        if path == "/" {
+            xml.push('/');
+        } else {
             xml.push_str(&path);
         }
-        xml.push_str("</loc></url>");
+        xml.push_str("</loc><changefreq>");
+        xml.push_str(changefreq);
+        xml.push_str("</changefreq><priority>");
+        xml.push_str(priority);
+        xml.push_str("</priority></url>");
     }
     xml.push_str("</urlset>");
     xml

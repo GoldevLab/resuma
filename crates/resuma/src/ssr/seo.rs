@@ -5,9 +5,15 @@ use super::PageOptions;
 
 fn normalize_path(path: &str) -> String {
     if path.is_empty() || path == "/" {
-        return String::new();
+        return "/".into();
     }
     path.to_string()
+}
+
+fn canonical_url(base: &str, path: &str) -> String {
+    let base = base.trim_end_matches('/');
+    let normalized = normalize_path(path);
+    format!("{base}{normalized}")
 }
 
 fn path_segment_title(path: &str) -> Option<String> {
@@ -62,7 +68,7 @@ pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
         let canonical = opts
             .canonical
             .clone()
-            .unwrap_or_else(|| format!("{base}{}", normalize_path(path)));
+            .unwrap_or_else(|| canonical_url(base, path));
 
         out.push_str(&format!(
             r#"<link rel="canonical" href="{canonical}" />"#,
@@ -88,17 +94,20 @@ pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
 <link rel="apple-touch-icon" href="/favicon.svg" />
 <meta property="og:type" content="{og_type}" />
 <meta property="og:site_name" content="{site}" />
+<meta property="og:locale" content="en_US" />
 <meta property="og:title" content="{title}" />
 <meta property="og:description" content="{description}" />
 <meta property="og:url" content="{canonical}" />
 <meta property="og:image" content="{og_image}" />
-<meta name="og:title" content="{title}" />
-<meta name="og:description" content="{description}" />
-<meta name="og:image" content="{og_image}" />
+<meta property="og:image:type" content="image/svg+xml" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="{site} — {title}" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="{title}" />
 <meta name="twitter:description" content="{description}" />
-<meta name="twitter:image" content="{og_image}" />"#,
+<meta name="twitter:image" content="{og_image}" />
+<meta name="twitter:image:alt" content="{site} — {title}" />"#,
             og_type = escape_attr(og_type),
             site = escape_attr(&opts.title),
             title = escape_attr(&title),
@@ -113,7 +122,7 @@ pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
     if !opts.json_ld.is_empty() {
         out.push_str(&format!(
             r#"<script type="application/ld+json">{json_ld}</script>"#,
-            json_ld = opts.json_ld,
+            json_ld = opts.json_ld.trim(),
         ));
     }
 

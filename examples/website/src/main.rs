@@ -23,7 +23,7 @@ fn SiteLayout() -> View {
                 </nav>
                 <div class="header-actions">
                     <a href="/docs/getting_started" class="btn btn-ghost">"Get Started"</a>
-                    <a href="https://docs.rs/resuma/0.3.0" class="btn btn-ghost" target="_blank">"docs.rs"</a>
+                    <a href="https://docs.rs/resuma/0.3.1" class="btn btn-ghost" target="_blank">"docs.rs"</a>
                     <a href="https://crates.io/crates/resuma" class="btn btn-ghost" target="_blank">"crates.io"</a>
                     <a href="https://github.com/GolfredoPerezFernandez/resuma" class="btn btn-primary">"GitHub"</a>
                 </div>
@@ -34,7 +34,7 @@ fn SiteLayout() -> View {
             <p>"Made with ❤️ by the Resuma team · MIT License"</p>
             <div class="site-footer-links">
                 <a href="https://crates.io/crates/resuma" target="_blank">"crates.io"</a>
-                <a href="https://docs.rs/resuma/0.3.0" target="_blank">"docs.rs"</a>
+                <a href="https://docs.rs/resuma/0.3.1" target="_blank">"docs.rs"</a>
                 <a href="/docs/package">"Install guide"</a>
                 <a href="/docs/architecture">"Architecture"</a>
                 <a href="/docs/benchmark">"Benchmarks"</a>
@@ -70,14 +70,14 @@ async fn main() -> std::io::Result<()> {
     let json_ld = site::json_ld(&site_url);
 
     FlowApp::new()
-        .with_title("Resuma — SSR + Resumability for Rust")
+        .with_title(site::site_title())
         .with_description(site::site_description())
         .with_site_url(site_url)
         .with_og_image("/og.svg")
         .with_json_ld(json_ld)
         .with_pwa(site::pwa_config())
         .with_head(site::SITE_CSS)
-        .streaming(true)
+        .streaming(false)
         .not_found(|| not_found_page())
         .auto_pages(pages_root, PagesRegistry)
         .serve(FlowServeOptions::default())

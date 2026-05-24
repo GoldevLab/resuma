@@ -171,6 +171,14 @@ pub fn render_with_context(ctx: Rc<RenderContext>, view: &View) -> String {
     })
 }
 
+pub(crate) fn apply_head_csp_nonce(head: &str, nonce: &str) -> String {
+    if nonce.is_empty() || !head.contains("<style") {
+        return head.to_string();
+    }
+    let nonce_attr = format!(r#" nonce="{}""#, escape_attr(nonce));
+    head.replace("<style>", &format!("<style{nonce_attr}>"))
+}
+
 fn wrap_document(
     opts: &PageOptions,
     body_html: &str,
@@ -191,6 +199,7 @@ fn wrap_document(
         .map(|s| format!(r#"<link rel="stylesheet" href="{}" />"#, s))
         .unwrap_or_default();
     let scripts = client_scripts(opts, body_html, payload);
+    let head = apply_head_csp_nonce(&opts.head, &opts.csp_nonce);
 
     format!(
         r#"<!doctype html>
@@ -213,7 +222,7 @@ fn wrap_document(
         title = escape_text(&title),
         description = escape_text(&description),
         seo_tags = seo_tags,
-        head = opts.head,
+        head = head,
         stylesheet = stylesheet,
         body = body_html,
         scripts = scripts,

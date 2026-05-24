@@ -10,21 +10,21 @@ pub fn page(_req: FlowRequest) -> View {
                     <div>
                         <span class="hero-badge">
                             <span class="hero-badge-dot"></span>
-                            "v0.3.0 · Rust · Resumability · Zero hydration"
+                            "v0.3.1 · Rust · Resumability · Zero hydration"
                         </span>
-                        <h1>
+        <h1>
                             "Build "
                             <span class="accent">"instantly-interactive"</span>
                             " web apps in Rust"
-                            <span class="line2">"Ship HTML. Resume interactivity — never rehydrate."</span>
                         </h1>
+                        <p class="hero-tagline">"Ship HTML. Resume interactivity — never rehydrate."</p>
                         <p class="hero-lead">
                             "Components run once on the server. Resuma serialises signals and handler references into the page — the browser resumes only what users touch. ~884 B loader, lazy handler chunks, native Rust end-to-end."
                         </p>
                         <div class="hero-actions">
                             <a href="/docs/getting_started" class="btn btn-primary">"Get Started"</a>
                             <a href="/docs" class="btn btn-ghost">"Read the Docs"</a>
-                            <a href="https://docs.rs/resuma/0.3.0" class="btn btn-ghost" target="_blank">"docs.rs"</a>
+                            <a href="https://docs.rs/resuma/0.3.1" class="btn btn-ghost" target="_blank">"docs.rs"</a>
                         </div>
                         <p class="hero-note">
                             "Install: " <code>"cargo install resuma"</code> " · one crate for core + Flow + CLI"

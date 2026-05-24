@@ -1,40 +1,19 @@
 //! Site-wide SEO defaults (JSON-LD, copy).
 
+pub fn site_title() -> &'static str {
+    "Resuma — Resumable SSR Web Framework for Rust | Docs"
+}
+
 pub fn site_description() -> &'static str {
-    "Resumable Rust web framework: SSR, islands, and server actions. Ship HTML plus a tiny loader — no hydration. Full-stack Flow included."
+    "Resumable Rust SSR framework: every #[component] is interactive by default. \
+     ~884 B loader, lazy handler chunks, server actions, and full-stack Flow — zero hydration."
 }
 
 pub fn json_ld(site_url: &str) -> String {
+    let base = site_url.trim_end_matches('/');
+    let description = site_description().replace('"', "\\\"");
     format!(
-        r#"{{
-  "@context": "https://schema.org",
-  "@graph": [
-    {{
-      "@type": "WebSite",
-      "@id": "{site_url}/#website",
-      "url": "{site_url}/",
-      "name": "Resuma",
-      "description": "{description}",
-      "inLanguage": "en"
-    }},
-    {{
-      "@type": "SoftwareApplication",
-      "@id": "{site_url}/#software",
-      "name": "Resuma",
-      "applicationCategory": "DeveloperApplication",
-      "operatingSystem": "Cross-platform",
-      "description": "{description}",
-      "url": "{site_url}/",
-      "offers": {{
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      }}
-    }}
-  ]
-}}"#,
-        site_url = site_url.trim_end_matches('/'),
-        description = site_description().replace('"', "\\\""),
+        r#"{{"@context":"https://schema.org","@graph":[{{"@type":"Organization","@id":"{base}/#organization","name":"Resuma","url":"{base}/","logo":"{base}/og.svg","sameAs":["https://github.com/GolfredoPerezFernandez/resuma","https://crates.io/crates/resuma","https://docs.rs/resuma"]}},{{"@type":"WebSite","@id":"{base}/#website","url":"{base}/","name":"Resuma Documentation","description":"{description}","inLanguage":"en","publisher":{{"@id":"{base}/#organization"}}}},{{"@type":"SoftwareApplication","@id":"{base}/#software","name":"Resuma","applicationCategory":"DeveloperApplication","applicationSubCategory":"Web Framework","operatingSystem":"Cross-platform","programmingLanguage":"Rust","softwareVersion":"0.3.1","description":"{description}","url":"{base}/","downloadUrl":"https://crates.io/crates/resuma","documentation":"https://docs.rs/resuma","offers":{{"@type":"Offer","price":"0","priceCurrency":"USD"}},"author":{{"@id":"{base}/#organization"}}}}]}}"#
     )
 }
 
