@@ -37,3 +37,32 @@ pub fn feature_card(icon: &str, title: &str, body: &str) -> View {
         </article>
     }
 }
+
+pub fn pillar_card(icon: &str, title: &str, body: &str) -> View {
+    view! {
+        <article class="pillar">
+            <div class="pillar-icon">{icon.to_string()}</div>
+            <h3>{title.to_string()}</h3>
+            <p>{body.to_string()}</p>
+        </article>
+    }
+}
+
+pub fn pipeline_step(num: &str, title: &str, body: &str) -> View {
+    view! {
+        <article class="pipeline-step">
+            <span class="pipeline-num">{num.to_string()}</span>
+            <h3>{title.to_string()}</h3>
+            <p>{body.to_string()}</p>
+        </article>
+    }
+}
+
+pub fn metric_item(value: &str, label: &str) -> View {
+    view! {
+        <div class="metric-item">
+            <strong>{value.to_string()}</strong>
+            <span>{label.to_string()}</span>
+        </div>
+    }
+}
