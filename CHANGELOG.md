@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-05-28
+
+Production hardening release: ops endpoints, graceful shutdown, request tracing,
+non-panicking loaders, a unified default client runtime, and two security/stability fixes.
+
+### Fixed
+
+- **Origin/Referer check on non-standard ports** — `Origin: http://host:PORT` (always sent by browsers) was compared against the port-stripped `Host`, rejecting same-origin `POST` submits and `#[server]` actions with `403` on any non-80/443 port (all local dev, and direct non-proxied deploys). Ports are now stripped on both sides.
+- **Production WebSocket reconnect loop** — `core.js` opened the dev HMR socket (`/_resuma/dev/ws`) unconditionally and retried every 500 ms; in production that route does not exist, causing an endless reconnect loop. The dev bridge now activates only when the dev-reload script (injected with `RESUMA_DEV=1`) sets `window.__resumaDev`.
+- **Loader failures no longer abort the request** — a failed `#[load]` accessed via the panicking `use_*_load()` accessor is now caught during render and turned into the Flow error page instead of dropping the connection.
+
+### Added
+
+- **Default client runtime parity** — `core.js` (the default lazy path) now wires NavLink SPA navigation (`initNavLinks`), follows submit/action redirects (`followRedirect`), and exposes `__resuma.safeAction()`. Previously these v0.3.3 features only worked when apps overrode `runtime_src` to the legacy `runtime.js`. The loader also eagerly loads `core.js` when `<NavLink>` is present.
+- **Ops endpoints** — built-in `GET /health` (liveness) and `GET /ready` (readiness) on `ResumaApp`/`FlowApp` (skipped if the app defines its own).
+- **Graceful shutdown** — `serve()` drains connections on `Ctrl+C` and `SIGTERM` (Fly.io / Kubernetes rolling deploys).
+- **Request tracing** — `x-request-id` middleware generates/propagates a correlation id (echoed on the response) and emits a `tracing` span with method, path, status, and latency. `RequestId` is available via request extensions.
+- **`try_<name>_load()`** — `#[load]` now also generates a fallible accessor returning `Result<T, LoaderError>` alongside the panicking `use_<name>_load()`.
+- **Flash-after-redirect** — `redirect_with_flash(path, msg)` + `flash_message(&req)`: stateless one-shot messages over a query param that survive PRG redirects (no-JS) and SPA navigation.
+- **NavLink polish** — scroll-to-top on new navigations, focus management for assistive tech after an SPA swap, and a safe `remountPage` (full reload if the core has not bootstrapped).
+- **Real `resuma build --static-export`** — crawls a running server over HTTP to emit actual SSR HTML (replacing the previous placeholder), with a `--base-url` flag (`RESUMA_EXPORT_BASE_URL`). `resuma build` now prints a pre-deploy checklist.
+
+### Changed
+
+- Runtime rebuilt: `loader.js` ~907 B gzip, `core.js` ~4.2 KiB gzip (now includes navigation + redirect + safeAction on the default path).
+
 ## [0.3.3] - 2026-05-24
 
 ### Added
@@ -145,6 +171,7 @@ Major release since v0.2.2: resumability-first model, client effect replay, dev 
 - Examples: counter, todo (backend security reference), flow-demo, flow-pages, website
 - Documentation site and markdown guides under `docs/`
 
+[0.4.0]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.0
 [0.3.3]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.3.3
 [0.3.2]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.3.2
 [0.3.1]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.3.1

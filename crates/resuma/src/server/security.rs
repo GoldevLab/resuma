@@ -251,6 +251,9 @@ fn origin_matches_host(origin: &str, host: &str) -> bool {
         .strip_prefix("http://")
         .or_else(|| origin.strip_prefix("https://"))
         .and_then(|rest| rest.split('/').next())
+        // Browsers include the port in `Origin` (e.g. `http://localhost:3000`);
+        // `host` arrives without it, so compare hostnames only.
+        .map(|authority| authority.split(':').next().unwrap_or(authority))
         .map(|h| {
             h.eq_ignore_ascii_case(host)
                 || h.strip_prefix("www.").unwrap_or(h) == host.strip_prefix("www.").unwrap_or(host)
@@ -263,6 +266,7 @@ fn referer_host_matches(referer: &str, host: &str) -> bool {
         .strip_prefix("http://")
         .or_else(|| referer.strip_prefix("https://"))
         .and_then(|rest| rest.split('/').next())
+        .map(|authority| authority.split(':').next().unwrap_or(authority))
         .map(|h| h.eq_ignore_ascii_case(host))
         .unwrap_or(false)
 }
@@ -387,5 +391,59 @@ impl SecurityState {
 
     pub fn current() -> Self {
         Self::new(config())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn origin_matches_ignoring_port() {
+        // Browsers send the port in `Origin`; `host` arrives without it.
+        assert!(origin_matches_host("http://localhost:3000", "localhost"));
+        assert!(origin_matches_host("http://127.0.0.1:3939", "127.0.0.1"));
+        assert!(origin_matches_host("https://example.com", "example.com"));
+        assert!(origin_matches_host(
+            "https://example.com:8443",
+            "example.com"
+        ));
+        assert!(origin_matches_host(
+            "https://www.example.com:443",
+            "example.com"
+        ));
+    }
+
+    #[test]
+    fn origin_rejects_other_hosts() {
+        assert!(!origin_matches_host("http://evil.test:3000", "localhost"));
+        assert!(!origin_matches_host(
+            "https://attacker.example",
+            "example.com"
+        ));
+    }
+
+    #[test]
+    fn referer_matches_ignoring_port() {
+        assert!(referer_host_matches(
+            "http://localhost:3000/items",
+            "localhost"
+        ));
+        assert!(referer_host_matches(
+            "https://example.com:8443/x",
+            "example.com"
+        ));
+        assert!(!referer_host_matches(
+            "http://evil.test:3000/x",
+            "localhost"
+        ));
+    }
+
+    #[test]
+    fn validate_origin_allows_same_host_with_port() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::ORIGIN, "http://localhost:3000".parse().unwrap());
+        // host carries the port as it would from the HTTP `Host` header.
+        assert!(validate_origin(&headers, "localhost:3000").is_ok());
     }
 }

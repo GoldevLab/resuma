@@ -53,6 +53,7 @@ pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
     let name = func.sig.ident.clone();
     let name_str = name.to_string();
     let use_fn = format_ident!("use_{}_load", name);
+    let try_fn = format_ident!("try_{}_load", name);
     let stream_view_fn = format_ident!("{}_stream_view", name);
     let vis = &func.vis;
     let inputs = &func.sig.inputs;
@@ -121,11 +122,21 @@ pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
             #vis fn #use_fn() -> ::resuma::LoadValue<#return_ty> {
                 ::resuma::try_use_load_value(#name_str)
             }
+
+            /// Fallible accessor — never panics; pair with `error_boundary`.
+            #vis fn #try_fn() -> ::std::result::Result<#return_ty, ::resuma::LoaderError> {
+                ::resuma::try_use_load(#name_str)
+            }
         }
     } else {
         quote! {
             #vis fn #use_fn() -> #return_ty {
                 ::resuma::use_load(#name_str)
+            }
+
+            /// Fallible accessor — returns the loader error instead of panicking.
+            #vis fn #try_fn() -> ::std::result::Result<#return_ty, ::resuma::LoaderError> {
+                ::resuma::try_use_load(#name_str)
             }
         }
     };

@@ -84,15 +84,20 @@ export function remountPage(): void {
   for (const [k, cell] of signals) state[k] = cell;
 
   const prev = window.__resuma;
+  if (!prev) {
+    // Core not yet bootstrapped — let the loader/core take over via full load.
+    window.location.reload();
+    return;
+  }
   const __resuma: ResumaGlobal = {
     state,
     signals,
     handlers: payload.handlers,
     contexts: payload.contexts ?? {},
-    loaded: prev?.loaded ?? new Map(),
-    action: prev!.action,
-    safeAction: prev!.safeAction,
-    refreshIsland: prev!.refreshIsland,
+    loaded: prev.loaded ?? new Map(),
+    action: prev.action,
+    safeAction: prev.safeAction,
+    refreshIsland: prev.refreshIsland,
     context: (key: string) => __resuma.contexts[key],
   };
   window.__resuma = __resuma;
@@ -102,6 +107,21 @@ export function remountPage(): void {
   bindReactiveAttrs(scope, signals);
   initIslands(scope, signals);
   updateNavActiveClasses(location.pathname + location.search);
+}
+
+/** Move focus to the page root for assistive tech after an SPA swap. */
+function focusMain(): void {
+  const scope = root();
+  const target =
+    scope.querySelector<HTMLElement>("[autofocus]") ??
+    scope.querySelector<HTMLElement>("h1, [role='heading'], main") ??
+    scope;
+  if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+  try {
+    target.focus({ preventScroll: true });
+  } catch {
+    target.focus();
+  }
 }
 
 export async function navigate(href: string, pushState = true): Promise<void> {
@@ -130,6 +150,9 @@ export async function navigate(href: string, pushState = true): Promise<void> {
 
     if (pushState) history.pushState({ resumaNav: true }, "", href);
     remountPage();
+    // New navigations land at the top; back/forward keep the browser's scroll.
+    if (pushState) window.scrollTo(0, 0);
+    focusMain();
   } catch (err) {
     console.error("[resuma] navigation failed", err);
     window.location.href = href;

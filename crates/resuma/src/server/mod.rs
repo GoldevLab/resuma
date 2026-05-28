@@ -10,6 +10,8 @@
 //!
 //! | Route | Purpose |
 //! |-------|---------|
+//! | `GET /health` | Liveness probe (process is up) |
+//! | `GET /ready` | Readiness probe (ready for traffic) |
 //! | `GET /_resuma/loader.js` | Tiny bootstrap (~884 B gzip) |
 //! | `GET /_resuma/core.js` | Lazy-loaded resumability core |
 //! | `GET /_resuma/runtime.js` | Legacy monolithic runtime |
@@ -28,6 +30,7 @@ pub mod handler_assets;
 pub mod handlers;
 pub mod island_cache;
 pub mod listen;
+pub mod ops;
 pub mod page_cache;
 pub mod request_path;
 pub mod runtime_asset;
@@ -38,6 +41,10 @@ pub use actions::{register_server_action, set_action_middleware, ActionFn};
 pub use app::{apply_security_headers, security_headers_middleware, ResumaApp, ServeOptions};
 pub use deferred_stream::{set_deferred_stream_hook, try_deferred_stream};
 pub use listen::listen_addr_from_env;
+pub use ops::{
+    health, ready, request_id_middleware, shutdown_signal, RequestId, HEALTH_PATH, READY_PATH,
+    REQUEST_ID_HEADER,
+};
 pub use page_cache::{
     page_csrf, stage_page_csrf, stage_response_cache_control, take_response_cache_control,
 };

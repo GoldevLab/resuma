@@ -203,7 +203,8 @@ impl ResumaApp {
         let router = self
             .into_router()
             .layer(DefaultBodyLimit::max(opts.security.body_limit_bytes))
-            .layer(middleware::from_fn(security_headers_middleware));
+            .layer(middleware::from_fn(security_headers_middleware))
+            .layer(middleware::from_fn(super::ops::request_id_middleware));
         let listener = tokio::net::TcpListener::bind(opts.addr).await?;
         info!(addr = %opts.addr, "resuma server listening");
         println!("resuma listening on http://{}", opts.addr);
@@ -211,6 +212,7 @@ impl ResumaApp {
             listener,
             router.into_make_service_with_connect_info::<SocketAddr>(),
         )
+        .with_graceful_shutdown(super::ops::shutdown_signal())
         .await
     }
 
@@ -230,6 +232,14 @@ impl ResumaApp {
         for path in state.pages.keys() {
             let p = path.clone();
             router = router.route(&p, get(serve_page));
+        }
+
+        // Liveness / readiness probes (skipped if the app defines its own).
+        if !state.pages.contains_key(super::ops::HEALTH_PATH) {
+            router = router.route(super::ops::HEALTH_PATH, get(super::ops::health));
+        }
+        if !state.pages.contains_key(super::ops::READY_PATH) {
+            router = router.route(super::ops::READY_PATH, get(super::ops::ready));
         }
 
         router = router.fallback(get(serve_fallback));

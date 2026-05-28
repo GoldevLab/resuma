@@ -70,7 +70,7 @@ function needsCoreNow(payload: ResumePayload, scope: HTMLElement): boolean {
   if (payload.visible_tasks && Object.keys(payload.visible_tasks).length) return true;
   if (payload.lazy_chunks?.length) return true;
   return !!scope.querySelector(
-    "resuma-island, resuma-boundary, resuma-dyn, [data-r-bind], [data-r-submit], template[data-r-portal], template[data-r-stream-chunk], [data-r-vt]",
+    "resuma-island, resuma-boundary, resuma-dyn, [data-r-bind], [data-r-submit], template[data-r-portal], template[data-r-stream-chunk], [data-r-vt], a[data-r-nav]",
   );
 }
 

@@ -8,6 +8,7 @@ import { initIslands } from "./islands.js";
 import { initEffects, type ClientEffectSpec } from "./effects.js";
 import { prefetchLazyChunks } from "./boundaries.js";
 import { resolveHandler, type Handler } from "./handler-loader.js";
+import { initNavLinks, followRedirect } from "./navigation.js";
 
 interface ResumePayload {
   signals: Array<{ id: { 0: number } | string; value: unknown }>;
@@ -27,6 +28,10 @@ export interface ResumaGlobal {
   handlers: Record<string, Record<string, string>>;
   contexts: Record<string, unknown>;
   action: (name: string, args: unknown[]) => Promise<unknown>;
+  safeAction: (
+    name: string,
+    args: unknown[],
+  ) => Promise<{ ok: true; value: unknown } | { ok: false; error: string }>;
   loaded: Map<string, Record<string, Function>>;
   refreshIsland: (id: string) => Promise<void>;
   context: (key: string) => unknown;
@@ -104,6 +109,7 @@ export async function bootstrap(): Promise<void> {
     contexts: payload.contexts ?? {},
     loaded: new Map(),
     action: callServerAction,
+    safeAction: callServerActionSafe,
     refreshIsland,
     context: (key: string) => __resuma.contexts[key],
   };
@@ -116,6 +122,7 @@ export async function bootstrap(): Promise<void> {
   applyStreamSlots(root());
   initPortals(root());
   initViewTransitions(root());
+  initNavLinks();
   runVisibleTasks(payload.visible_tasks ?? {}, state);
   initEffects(payload.effects ?? [], signals, __resuma);
   prefetchLazyChunks(payload.lazy_chunks ?? [], root());
@@ -177,6 +184,7 @@ function attachFormEnhancement(): void {
           throw new Error(data.error ?? `submit ${name} failed`);
         }
         clearFieldErrors(form);
+        if (data.redirect) followRedirect(data.redirect);
       } catch (err) {
         console.error("[resuma] submit error", err);
       }
@@ -303,7 +311,21 @@ async function callServerAction(name: string, args: unknown[]): Promise<unknown>
   if (!res.ok) throw new Error(`[resuma] action ${name} failed: ${res.status}`);
   const data = await res.json();
   if (data.ok === false) throw new Error(data.error ?? "action failed");
+  if (data.redirect) followRedirect(data.redirect);
   return data.value;
+}
+
+async function callServerActionSafe(
+  name: string,
+  args: unknown[],
+): Promise<{ ok: true; value: unknown } | { ok: false; error: string }> {
+  try {
+    const value = await callServerAction(name, args);
+    return { ok: true, value };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    return { ok: false, error };
+  }
 }
 
 async function refreshIsland(instance: string): Promise<void> {
@@ -316,6 +338,10 @@ async function refreshIsland(instance: string): Promise<void> {
 }
 
 function connectDevBridge(): void {
+  // Only in dev: the dev-reload script (injected when RESUMA_DEV=1) sets this
+  // flag. In production the /_resuma/dev/ws route does not exist, so connecting
+  // would loop on reconnects forever.
+  if (!(window as unknown as { __resumaDev?: boolean }).__resumaDev) return;
   if (typeof WebSocket === "undefined") return;
   const proto = location.protocol === "https:" ? "wss" : "ws";
   let hadConnection = false;

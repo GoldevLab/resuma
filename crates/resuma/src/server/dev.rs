@@ -28,6 +28,7 @@ pub fn dev_reload_script() -> String {
     }
     r#"<script>
 (function () {
+  window.__resumaDev = true;
   if (typeof WebSocket === "undefined") return;
   var proto = location.protocol === "https:" ? "wss" : "ws";
   var hadConnection = false;

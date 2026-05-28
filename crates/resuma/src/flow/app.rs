@@ -234,11 +234,13 @@ impl FlowApp {
         crate::server::configure_security(opts.security.clone());
         let router = self.into_router(opts.clone());
         let listener = tokio::net::TcpListener::bind(opts.addr).await?;
+        tracing::info!(addr = %opts.addr, "resuma flow listening");
         println!("resuma flow listening on http://{}", opts.addr);
         axum::serve(
             listener,
             router.into_make_service_with_connect_info::<SocketAddr>(),
         )
+        .with_graceful_shutdown(crate::server::shutdown_signal())
         .await
     }
 
@@ -312,6 +314,7 @@ impl FlowApp {
             .layer(middleware::from_fn(
                 crate::server::security_headers_middleware,
             ))
+            .layer(middleware::from_fn(crate::server::request_id_middleware))
     }
 }
 
@@ -360,11 +363,24 @@ fn render_with_flow(
 
     let (view, final_req, deferred) =
         with_request_deferred(req.clone(), deferred_streaming, || {
-            let page = (entry.handler)(req.clone());
-            if let Some(err) = first_load_error() {
-                return error_page(&FlowError::Loader(err));
+            // Render may panic if a page uses the panicking `use_*_load()` accessor
+            // on a failed loader. Catch it so the connection survives and the proper
+            // error page is served (loaders record their error before panicking).
+            let rendered = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                (entry.handler)(req.clone())
+            }));
+            match rendered {
+                Ok(page) => {
+                    if let Some(err) = first_load_error() {
+                        return error_page(&FlowError::Loader(err));
+                    }
+                    apply_layouts(&req, page, &entry.layouts)
+                }
+                Err(_) => match first_load_error() {
+                    Some(err) => error_page(&FlowError::Loader(err)),
+                    None => error_page(&FlowError::Render("page render failed".into())),
+                },
             }
-            apply_layouts(&req, page, &entry.layouts)
         });
 
     if deferred_streaming && !deferred.is_empty() {

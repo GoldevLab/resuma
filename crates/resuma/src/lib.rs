@@ -95,11 +95,12 @@ pub use crate::ssr::{render_to_stream, render_to_string, render_view, PageOption
 
 pub use crate::flow::{
     apply_layouts, current_request, discover_pages, encode_submit_result, error_page,
-    extract_redirect, form, load_boundary, not_found_page, redirect, register_layout,
-    register_loader, register_loader_cache, register_middleware, register_stream_chunk,
-    register_stream_loader, register_submit, try_use_load, try_use_load_value, use_load,
-    with_request, DiscoveredPage, FlowApp, FlowError, FlowExtensions, FlowPageRegistry,
-    FlowPwaConfig, FlowServeOptions, LoadValue, LoaderError, Redirect, SubmitError, SubmitValue,
+    extract_redirect, flash_message, form, load_boundary, not_found_page, redirect,
+    redirect_with_flash, register_layout, register_loader, register_loader_cache,
+    register_middleware, register_stream_chunk, register_stream_loader, register_submit,
+    try_use_load, try_use_load_value, use_load, with_request, DiscoveredPage, FlowApp, FlowError,
+    FlowExtensions, FlowPageRegistry, FlowPwaConfig, FlowServeOptions, LoadValue, LoaderError,
+    Redirect, SubmitError, SubmitValue,
 };
 
 /// CLI entry point (`cargo install resuma`).
@@ -132,15 +133,16 @@ pub mod prelude {
     //! import from [`crate::core`].
     pub use super::{
         client_component, client_script_url, combine_js, component, computed, configure_security,
-        current_request, debounce, effect, error_boundary, error_page, extract_redirect, form,
-        island, js, layout, load, load_boundary, middleware, nav_link, not_found_page, portal,
-        provide_context, provide_theme, push_slots, redirect, render_to_string, render_view,
-        resolve_slot, server, set_action_middleware, show, stream_slot, submit, theme_css_vars,
-        try_use_load, try_use_load_value, use_computed, use_computed_with_js, use_context,
-        use_debounce, use_effect, use_load, use_signal, use_store, use_task, use_theme,
-        use_visible_task, view, with_view_transition, Child, ClientComponent, Component, Computed,
-        Effect, FlowApp, FlowError, FlowPageRegistry, FlowRequest, FlowServeOptions, IntoView,
-        LoadValue, LoaderError, PageOptions, ReadSignal, Redirect, Result, ResumaApp, ResumaError,
+        current_request, debounce, effect, error_boundary, error_page, extract_redirect,
+        flash_message, form, island, js, layout, load, load_boundary, middleware, nav_link,
+        not_found_page, portal, provide_context, provide_theme, push_slots, redirect,
+        redirect_with_flash, render_to_string, render_view, resolve_slot, server,
+        set_action_middleware, show, stream_slot, submit, theme_css_vars, try_use_load,
+        try_use_load_value, use_computed, use_computed_with_js, use_context, use_debounce,
+        use_effect, use_load, use_signal, use_store, use_task, use_theme, use_visible_task, view,
+        with_view_transition, Child, ClientComponent, Component, Computed, Effect, FlowApp,
+        FlowError, FlowPageRegistry, FlowRequest, FlowServeOptions, IntoView, LoadValue,
+        LoaderError, PageOptions, ReadSignal, Redirect, Result, ResumaApp, ResumaError,
         SecurityConfig, ServeOptions, Signal, SlottedChild, Store, SubmitError, Theme, View,
         WriteSignal, CLIENT_SCRIPT_PREFIX, CSRF_FIELD, CSRF_HEADER,
     };

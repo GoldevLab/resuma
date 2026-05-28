@@ -1,10 +1,13 @@
 //! Redirect helpers for `#[submit]` and `#[server]` handlers (PRG / post-action navigation).
 
-use crate::core::{Result, ResumaError};
+use crate::core::{FlowRequest, Result, ResumaError};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Redirect as AxumRedirect, Response};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+/// Query-string key used by [`redirect_with_flash`] and [`flash_message`].
+pub const FLASH_KEY: &str = "flash";
 
 /// Redirect target returned from a submit or server action.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -37,6 +40,39 @@ impl Serialize for Redirect {
 /// Build a redirect value for `#[submit]` / `#[server]` return types.
 pub fn redirect(path: impl Into<String>) -> Redirect {
     Redirect::to(path)
+}
+
+/// Build a PRG redirect that carries a one-shot flash message as a query param.
+///
+/// Stateless: the message survives a 303 redirect (no-JS) and SPA navigation
+/// alike, and is read on the target page with [`flash_message`]. No session or
+/// cookie storage required.
+///
+/// ```ignore
+/// #[submit]
+/// async fn create(req: &FlowRequest) -> Redirect {
+///     // ...persist...
+///     redirect_with_flash("/items", "Item created")
+/// }
+/// // On the target page:
+/// if let Some(msg) = flash_message(req) { /* render banner */ }
+/// ```
+pub fn redirect_with_flash(path: impl Into<String>, message: impl AsRef<str>) -> Redirect {
+    Redirect::to(append_flash(&path.into(), message.as_ref()))
+}
+
+/// Read a one-shot flash message set by [`redirect_with_flash`] from the request query.
+pub fn flash_message(req: &FlowRequest) -> Option<String> {
+    req.query_param(FLASH_KEY)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+}
+
+fn append_flash(path: &str, message: &str) -> String {
+    let encoded = serde_urlencoded::to_string([(FLASH_KEY, message)])
+        .unwrap_or_else(|_| format!("{FLASH_KEY}="));
+    let sep = if path.contains('?') { '&' } else { '?' };
+    format!("{path}{sep}{encoded}")
 }
 
 /// Extract a same-origin redirect path from a serialized handler result.
@@ -97,5 +133,30 @@ mod tests {
             Some("/done".into())
         );
         assert_eq!(extract_redirect(&json!({ "ok": true })), None);
+    }
+
+    #[test]
+    fn flash_appends_query_param() {
+        assert_eq!(append_flash("/items", "Saved!"), "/items?flash=Saved%21");
+        assert_eq!(
+            append_flash("/items?page=2", "Saved!"),
+            "/items?page=2&flash=Saved%21"
+        );
+    }
+
+    #[test]
+    fn flash_roundtrips_through_request() {
+        let redirect = redirect_with_flash("/items", "Item created");
+        // Same-origin path is preserved and validates.
+        assert!(redirect.to.starts_with("/items?flash="));
+        let query = crate::flow::request::parse_query(redirect.to.split_once('?').map(|x| x.1));
+        let req = FlowRequest::from_parts(
+            "GET",
+            "/items",
+            Default::default(),
+            Default::default(),
+            query,
+        );
+        assert_eq!(flash_message(&req).as_deref(), Some("Item created"));
     }
 }

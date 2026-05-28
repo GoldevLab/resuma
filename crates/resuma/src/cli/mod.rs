@@ -73,6 +73,11 @@ enum Commands {
         /// Pages directory for Flow static export route discovery.
         #[arg(long, default_value = "src/pages")]
         pages: PathBuf,
+        /// Base URL of a running server to crawl for `--static-export`
+        /// (start your app first). Defaults to `RESUMA_EXPORT_BASE_URL` or
+        /// `http://127.0.0.1:3000`.
+        #[arg(long)]
+        base_url: Option<String>,
     },
     /// Print or generate routes from file-based routing.
     Routes {
@@ -108,7 +113,8 @@ pub fn run() -> Result<()> {
             static_export,
             out,
             pages,
-        } => build_command(static_export, &out, &pages),
+            base_url,
+        } => build_command(static_export, &out, &pages, base_url.as_deref()),
         Commands::Routes { path, generate } => routes_command(&path, generate),
     }
 }
@@ -264,7 +270,12 @@ fn open_browser(url: &str) {
     let _ = Command::new("xdg-open").arg(url).spawn();
 }
 
-fn build_command(static_export: bool, out: &Path, pages: &Path) -> Result<()> {
+fn build_command(
+    static_export: bool,
+    out: &Path,
+    pages: &Path,
+    base_url: Option<&str>,
+) -> Result<()> {
     ensure_rust_toolchain()?;
     ensure_runtime_built()?;
 
@@ -278,16 +289,29 @@ fn build_command(static_export: bool, out: &Path, pages: &Path) -> Result<()> {
     }
 
     if static_export {
-        static_export_routes(out, pages)?;
+        static_export_routes(out, pages, base_url)?;
     }
 
     println!("[resuma] build complete — binaries at target/release/");
+    print_predeploy_checklist();
     Ok(())
 }
 
-fn static_export_routes(out: &Path, pages: &Path) -> Result<()> {
+/// Resolve the crawl base URL: CLI flag → `RESUMA_EXPORT_BASE_URL` → localhost.
+fn export_base_url(base_url: Option<&str>) -> String {
+    base_url
+        .map(str::to_string)
+        .or_else(|| std::env::var("RESUMA_EXPORT_BASE_URL").ok())
+        .unwrap_or_else(|| "http://127.0.0.1:3000".to_string())
+}
+
+/// Pre-render discovered static routes by crawling a running server.
+///
+/// Resuma pages are real Rust modules compiled into the app binary, so the CLI
+/// cannot render them in-process. Instead it fetches each route's real SSR HTML
+/// over HTTP — start the app (`resuma dev` or the release binary) first.
+fn static_export_routes(out: &Path, pages: &Path, base_url: Option<&str>) -> Result<()> {
     use crate::router::discover;
-    use crate::ssr::{render_to_string_at_path, PageOptions};
 
     std::fs::create_dir_all(out).with_context(|| format!("create {}", out.display()))?;
 
@@ -300,12 +324,40 @@ fn static_export_routes(out: &Path, pages: &Path) -> Result<()> {
         return Ok(());
     }
 
-    let opts = PageOptions {
-        title: "Static Export".into(),
-        ..Default::default()
-    };
+    let base = export_base_url(base_url);
+    let (host, port) = parse_host_port(&base)
+        .with_context(|| format!("invalid base URL `{base}` (expected http://host:port)"))?;
 
-    for route in routes.iter().filter(|r| !r.is_layout) {
+    // Static routes only — params (`:id`) and wildcards (`*`) need request data.
+    let exportable: Vec<_> = routes
+        .iter()
+        .filter(|r| !r.is_layout && !r.pattern.contains(':') && !r.pattern.contains('*'))
+        .collect();
+
+    let skipped = routes
+        .iter()
+        .filter(|r| !r.is_layout && (r.pattern.contains(':') || r.pattern.contains('*')))
+        .count();
+
+    println!(
+        "[resuma] static export: crawling {} route(s) from {base}",
+        exportable.len()
+    );
+
+    let mut ok = 0usize;
+    for route in &exportable {
+        let html = match http_get(&host, port, &route.pattern) {
+            Ok(body) => body,
+            Err(e) => {
+                return Err(anyhow!(
+                    "failed to fetch {} from {base}: {e}\n\
+                     Start the server first, e.g. `resuma dev` or run the release binary, \
+                     then re-run `resuma build --static-export`.",
+                    route.pattern
+                ));
+            }
+        };
+
         let file_path = if route.pattern == "/" {
             out.join("index.html")
         } else {
@@ -315,20 +367,97 @@ fn static_export_routes(out: &Path, pages: &Path) -> Result<()> {
         if let Some(parent) = file_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-
-        let pattern = route.pattern.clone();
-        let label = pattern.clone();
-        let html = render_to_string_at_path(&opts, &pattern, move || {
-            crate::core::View::Text(format!(
-                "Static export shell for {label} — customize `resuma build --static` with your page factories."
-            ))
-        });
         std::fs::write(&file_path, html)
             .with_context(|| format!("write {}", file_path.display()))?;
-        println!("[resuma] exported {}", route.pattern);
+        println!(
+            "[resuma] exported {} -> {}",
+            route.pattern,
+            file_path.display()
+        );
+        ok += 1;
     }
 
+    println!(
+        "[resuma] static export complete — {ok} page(s) written to {}",
+        out.display()
+    );
+    if skipped > 0 {
+        println!(
+            "[resuma] {skipped} dynamic route(s) skipped (params/wildcards need runtime data)"
+        );
+    }
     Ok(())
+}
+
+/// Parse `http://host:port` (or `host:port`) into `(host, port)`.
+fn parse_host_port(base: &str) -> Option<(String, u16)> {
+    let rest = base
+        .strip_prefix("http://")
+        .or_else(|| base.strip_prefix("https://"))
+        .unwrap_or(base)
+        .trim_end_matches('/');
+    let authority = rest.split('/').next().unwrap_or(rest);
+    let (host, port) = match authority.rsplit_once(':') {
+        Some((h, p)) => (h.to_string(), p.parse().ok()?),
+        None => (authority.to_string(), 80),
+    };
+    if host.is_empty() {
+        return None;
+    }
+    Some((host, port))
+}
+
+/// Minimal blocking HTTP/1.1 GET (no TLS) — sufficient for crawling a local
+/// Resuma server during static export. Returns the response body on `200 OK`.
+fn http_get(host: &str, port: u16, path: &str) -> Result<String> {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    use std::time::Duration;
+
+    let mut stream =
+        TcpStream::connect((host, port)).with_context(|| format!("connect to {host}:{port}"))?;
+    stream.set_read_timeout(Some(Duration::from_secs(15))).ok();
+    stream.set_write_timeout(Some(Duration::from_secs(15))).ok();
+
+    let request = format!(
+        "GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nAccept: text/html\r\n\
+         User-Agent: resuma-build\r\nConnection: close\r\n\r\n"
+    );
+    stream.write_all(request.as_bytes())?;
+
+    let mut raw = Vec::new();
+    stream.read_to_end(&mut raw)?;
+
+    let split = raw
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .ok_or_else(|| anyhow!("malformed HTTP response (no header terminator)"))?;
+    let header = String::from_utf8_lossy(&raw[..split]);
+    let status_ok = header
+        .lines()
+        .next()
+        .map(|line| line.contains(" 200"))
+        .unwrap_or(false);
+    if !status_ok {
+        let status_line = header.lines().next().unwrap_or("(no status)");
+        return Err(anyhow!("non-200 response: {status_line}"));
+    }
+
+    let body = &raw[split + 4..];
+    Ok(String::from_utf8_lossy(body).into_owned())
+}
+
+/// Print a concise production pre-deploy checklist after a release build.
+fn print_predeploy_checklist() {
+    println!();
+    println!("Pre-deploy checklist:");
+    println!("  [ ] RESUMA_ENV=production set in the runtime environment");
+    println!("  [ ] RESUMA_TRUST_PROXY=1 when behind Fly/nginx/Cloudflare");
+    println!("  [ ] HOST=0.0.0.0 and PORT set for the platform (Fly sets PORT)");
+    println!("  [ ] SITE_URL set to the public origin (sitemap, OG tags)");
+    println!("  [ ] Container runs as a non-root user");
+    println!("  [ ] /health and /ready wired into platform health checks");
+    println!("  [ ] JS runtime assets embedded (loader/core/runtime) — built above");
 }
 
 fn ensure_runtime_built() -> Result<()> {

@@ -36,7 +36,10 @@ pub use match_route::{match_route, RouteMatch};
 pub use middleware::{register_middleware, run_middleware};
 pub use pages::{discover_pages, DiscoveredPage, DiscoveredRoute, FlowPageRegistry};
 pub use pwa::FlowPwaConfig;
-pub use redirect::{extract_redirect, redirect, redirect_response, Redirect};
+pub use redirect::{
+    extract_redirect, flash_message, redirect, redirect_response, redirect_with_flash, Redirect,
+    FLASH_KEY,
+};
 pub use registry::{dispatch_load, dispatch_submit, register_loader, register_submit};
 pub use request::FlowRequest;
 pub use routes::{attach_flow_routes, FlowSeoConfig, SubmitResponse};
