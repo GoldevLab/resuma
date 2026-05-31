@@ -241,6 +241,47 @@ fn form_submit_accepts_qualified_handler_paths() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn flow_form_renders_csrf_hidden_field_for_no_js_submit() {
+    let app = FlowApp::new()
+        .page("/", |_req| {
+            view! {
+                <main>
+                    <Form submit={crate::ops_flow_invalid_submit}>
+                        <input name="title" />
+                        <button type="submit">"Save"</button>
+                    </Form>
+                </main>
+            }
+        })
+        .into_router(FlowServeOptions::default());
+
+    let res = app
+        .oneshot(Request::get("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+    let set_cookie = res
+        .headers()
+        .get("set-cookie")
+        .and_then(|v| v.to_str().ok())
+        .expect("page should set CSRF cookie")
+        .to_string();
+    let token = set_cookie
+        .strip_prefix("__resuma-csrf=")
+        .and_then(|rest| rest.split(';').next())
+        .expect("CSRF cookie should include token");
+
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let html = String::from_utf8_lossy(&body);
+
+    assert!(html.contains(r#"name="_csrf""#), "{html}");
+    assert!(html.contains(&format!(r#"value="{token}""#)), "{html}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn unknown_submit_returns_404_json() {
     let app = FlowApp::new()
         .page("/", |_req| view! { <main>"home"</main> })

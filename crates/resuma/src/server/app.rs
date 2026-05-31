@@ -337,11 +337,10 @@ fn render_page_response(
     state: &AppState,
     view: View,
     ctx: Rc<RenderContext>,
+    opts: PageOptions,
     path: &str,
     https: bool,
 ) -> Response {
-    let opts = page_security_opts(&state.page_options);
-    super::page_cache::stage_page_csrf(opts.csrf_token.clone());
     let cache = take_response_cache_control();
     if state.streaming {
         use axum::body::Body;
@@ -412,9 +411,11 @@ async fn serve_page(uri: Uri, State(state): State<Arc<AppState>>, req: Request<B
     };
 
     let flow_req = crate::flow::request::from_http_request(&req, &path, Default::default());
+    let opts = page_security_opts(&state.page_options);
+    super::page_cache::stage_page_csrf(opts.csrf_token.clone());
     let ctx = RenderContext::new(RenderMode::Ssr);
     let view = with_context(ctx.clone(), || factory(flow_req));
-    render_page_response(&state, view, ctx, &path, request_is_https(&req))
+    render_page_response(&state, view, ctx, opts, &path, request_is_https(&req))
 }
 
 async fn serve_fallback(
@@ -425,9 +426,11 @@ async fn serve_fallback(
     let path = uri.path();
     let flow_req = crate::flow::request::from_http_request(&req, path, Default::default());
     if let Some(fb) = &state.fallback {
+        let opts = page_security_opts(&state.page_options);
+        super::page_cache::stage_page_csrf(opts.csrf_token.clone());
         let ctx = RenderContext::new(RenderMode::Ssr);
         if let Some(view) = with_context(ctx.clone(), || fb(path, flow_req)) {
-            return render_page_response(&state, view, ctx, path, request_is_https(&req));
+            return render_page_response(&state, view, ctx, opts, path, request_is_https(&req));
         }
     }
     (StatusCode::NOT_FOUND, "not found").into_response()
