@@ -11,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 rust-version = "1.91"
 authors = ["Resuma Contributors"]
@@ -19,13 +19,13 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/GolfredoPerezFernandez/resuma"
 homepage = "https://resuma-docs.fly.dev"
 documentation = "https://resuma-docs.fly.dev/docs"
-description = "Resumable SSR web framework for Rust — zero hydration, ~901 B client loader, server actions, islands, and Flow"
+description = "Resumable SSR web framework for Rust - zero hydration, ~907 B client loader, server actions, islands, and Flow"
 keywords = ["web", "framework", "ssr", "rust", "axum"]
 categories = ["web-programming", "asynchronous"]
 readme = "README.md"
 
 [workspace.dependencies]
-resuma-macros = { path = "crates/resuma-macros", version = "0.4.1" }
+resuma-macros = { path = "crates/resuma-macros", version = "0.4.2" }
 
 # 3rd-party
 serde       = { version = "1", features = ["derive"] }

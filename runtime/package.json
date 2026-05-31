@@ -1,6 +1,6 @@
 {
   "name": "@resuma/runtime",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Tiny client runtime for Resuma. Reads serialized state, lazy-loads event handlers, dispatches server actions. No hydration.",
   "type": "module",
   "main": "dist/loader.js",

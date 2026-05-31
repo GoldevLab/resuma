@@ -1,4 +1,4 @@
-//! `resuma new <name>` — scaffold a brand new Resuma project.
+//! `resuma new <name>` - scaffold a brand new Resuma project.
 
 use std::fs;
 use std::path::Path;
@@ -13,11 +13,11 @@ h1 { margin: 0 0 .5rem; font-size: 2rem; }
 p { margin: .5rem 0; color: #4338ca; }
 </style>"#;
 
-fn home() {
+fn home() -> View {
     view! {
         <main>
             <h1>"Hello, Resuma"</h1>
-            <p>"A static page — zero client JavaScript, pure SSR."</p>
+            <p>"A static page - zero client JavaScript, pure SSR."</p>
             <p>"Add signals, #[server], and islands when you need interactivity."</p>
         </main>
     }
@@ -34,7 +34,7 @@ async fn main() -> std::io::Result<()> {
 }
 "##;
 
-/// Full-feature todo showcase (kept in sync with `examples/todo` — update `templates/todo/` when editing the example).
+/// Full-feature todo showcase (kept in sync with `examples/todo` - update `templates/todo/` when editing the example).
 const TODO_MAIN: &str = include_str!("../../templates/todo/main.rs");
 const TODO_SECURITY: &str = include_str!("../../templates/todo/security.rs");
 const TODO_STORE: &str = include_str!("../../templates/todo/todo_store.rs");
@@ -45,7 +45,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-resuma = "0.4"
+resuma = "%RESUMA_VERSION%"
 tokio  = { version = "1", features = ["full"] }
 "#;
 
@@ -55,7 +55,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-resuma      = "0.4"
+resuma      = "%RESUMA_VERSION%"
 tokio       = { version = "1", features = ["full"] }
 serde       = { version = "1", features = ["derive"] }
 serde_json  = { version = "1" }
@@ -69,7 +69,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-resuma = "0.4"
+resuma = "%RESUMA_VERSION%"
 tokio  = { version = "1", features = ["full"] }
 serde  = { version = "1", features = ["derive"] }
 "#;
@@ -86,7 +86,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-resuma = "0.4"
+resuma = "%RESUMA_VERSION%"
 tokio  = { version = "1", features = ["full"] }
 serde  = { version = "1", features = ["derive"] }
 sqlx   = { version = "0.8", features = ["runtime-tokio", "sqlite", "macros", "migrate"] }
@@ -131,6 +131,12 @@ Created with [Resuma](https://github.com/GolfredoPerezFernandez/resuma).
     resuma build
 "##;
 
+fn render_cargo(template: &str, name: &str) -> String {
+    template
+        .replace("%NAME%", name)
+        .replace("%RESUMA_VERSION%", env!("CARGO_PKG_VERSION"))
+}
+
 pub fn create_project(name: &str, template: &str) -> Result<()> {
     let dir = Path::new(name);
     if dir.exists() {
@@ -146,13 +152,13 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
 
     match template {
         "basic" => {
-            fs::write(dir.join("Cargo.toml"), CARGO_BASIC.replace("%NAME%", name))
+            fs::write(dir.join("Cargo.toml"), render_cargo(CARGO_BASIC, name))
                 .context("write Cargo.toml")?;
             fs::write(dir.join("src/main.rs"), BASIC_MAIN.replace("%NAME%", name))
                 .context("write src/main.rs")?;
         }
         "todo" => {
-            fs::write(dir.join("Cargo.toml"), CARGO_TODO.replace("%NAME%", name))
+            fs::write(dir.join("Cargo.toml"), render_cargo(CARGO_TODO, name))
                 .context("write Cargo.toml")?;
             let main_rs = TODO_MAIN
                 .replace("Resuma · Todo", name)
@@ -164,7 +170,7 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
                 .context("write src/todo_store.rs")?;
         }
         "flow" => {
-            fs::write(dir.join("Cargo.toml"), CARGO_FLOW.replace("%NAME%", name))
+            fs::write(dir.join("Cargo.toml"), render_cargo(CARGO_FLOW, name))
                 .context("write Cargo.toml")?;
             fs::write(dir.join("src/main.rs"), FLOW_MAIN.replace("%NAME%", name))
                 .context("write src/main.rs")?;
@@ -177,11 +183,8 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
             fs::write(pages.join("about.rs"), FLOW_ABOUT).context("write pages/about.rs")?;
         }
         "flow-fullstack" => {
-            fs::write(
-                dir.join("Cargo.toml"),
-                CARGO_FULLSTACK.replace("%NAME%", name),
-            )
-            .context("write Cargo.toml")?;
+            fs::write(dir.join("Cargo.toml"), render_cargo(CARGO_FULLSTACK, name))
+                .context("write Cargo.toml")?;
             fs::write(
                 dir.join("src/main.rs"),
                 FULLSTACK_MAIN.replace("%NAME%", name),
@@ -213,4 +216,25 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
     println!("  resuma dev      # hot reload at http://127.0.0.1:3000");
     println!("  cargo run       # or plain cargo\n");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn basic_template_page_returns_view() {
+        assert!(BASIC_MAIN.contains("fn home() -> View"));
+        assert!(!BASIC_MAIN.contains("fn home() {"));
+    }
+
+    #[test]
+    fn cargo_templates_pin_the_cli_crate_version() {
+        for cargo_template in [CARGO_BASIC, CARGO_TODO, CARGO_FLOW, CARGO_FULLSTACK] {
+            let rendered = render_cargo(cargo_template, "smoke-app");
+            assert!(rendered.contains("name = \"smoke-app\""));
+            assert!(rendered.contains(&format!("\"{}\"", env!("CARGO_PKG_VERSION"))));
+            assert!(!rendered.contains("%RESUMA_VERSION%"));
+        }
+    }
 }

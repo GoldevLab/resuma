@@ -50,7 +50,7 @@ const OG_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="1200" he
 <rect width="1200" height="630" fill="url(#bg)"/>
 <text x="96" y="250" fill="#ffffff" font-family="Segoe UI, system-ui, sans-serif" font-size="96" font-weight="700">Resuma</text>
 <text x="96" y="340" fill="#e9d5ff" font-family="Segoe UI, system-ui, sans-serif" font-size="42">Instantly-interactive Rust — without hydration</text>
-<text x="96" y="430" fill="#ddd6fe" font-family="Segoe UI, system-ui, sans-serif" font-size="28">901 B initial · 4.2 KiB first click · 0 B static pages</text>
+<text x="96" y="430" fill="#ddd6fe" font-family="Segoe UI, system-ui, sans-serif" font-size="28">907 B initial · 5.08 KiB first click · 0 B static pages</text>
 </svg>"##;
 
 pub async fn handle_submit(

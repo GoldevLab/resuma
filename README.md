@@ -33,7 +33,7 @@ Same UX everywhere — SSR counter (heading + increment button). Production buil
 
 | Framework | Initial load | First click | Static page |
 |-----------|-------------:|------------:|------------:|
-| **Resuma** | **901 B** | **4.20 KiB** | **0 B** |
+| **Resuma** | **907 B** | **5.08 KiB** | **0 B** |
 | Leptos | 79.02 KiB | 79.02 KiB | — |
 | Next.js (App Router) | 142.43 KiB | 142.43 KiB | — |
 | React (Vite SPA) | 57.99 KiB | 57.99 KiB | — |
@@ -54,7 +54,7 @@ Regenerate locally: `node benchmark/run.mjs` · Independent sources in [benchmar
 | Classic SSR + hydration | **Resuma** |
 | --- | --- |
 | Re-run components to attach listeners | **Resume** serialized state and handlers |
-| JS grows with the whole app upfront | **901 B** loader + lazy handler chunks |
+| JS grows with the whole app upfront | **907 B** loader + lazy handler chunks |
 | Manual interactive boundaries | Every `#[component]` is resumable by default |
 | Custom server RPC wiring | `#[server]` + built-in Axum routes |
 | Static docs/marketing pages still ship JS | **0 B** on non-interactive pages |
@@ -180,7 +180,7 @@ Details: [docs/NAMING.md](./docs/NAMING.md)
                             │ HTTP
                             ▼
 ┌──────────────────────────────────────────────────────────┐
-│              Browser (901 B loader, lazy core)           │
+│              Browser (907 B loader, lazy core)           │
 │   parse resuma/state · delegate events · lazy handlers   │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -211,7 +211,7 @@ resuma/
 ├── crates/
 │   ├── resuma/           # runtime, SSR, server, flow, CLI
 │   └── resuma-macros/    # view!, #[component], rs2js
-├── runtime/              # TypeScript client (~901 B loader)
+├── runtime/              # TypeScript client (~907 B loader)
 ├── benchmark/            # measured comparisons vs Qwik, Next, etc.
 ├── examples/             # runnable demos
 └── docs/                 # markdown reference

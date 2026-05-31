@@ -486,8 +486,8 @@ fn emit_form(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
                 AttrVal::StaticStr(s) => quote!(#s),
                 AttrVal::Expr(ts) => {
                     if let Ok(path) = syn::parse2::<syn::Path>(ts.clone()) {
-                        if path.segments.len() == 1 {
-                            let ident = path.segments[0].ident.clone();
+                        if let Some(segment) = path.segments.last() {
+                            let ident = segment.ident.clone();
                             quote!(stringify!(#ident))
                         } else {
                             quote!({ #ts }.to_string())

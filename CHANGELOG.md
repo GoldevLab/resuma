@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.2] - 2026-05-31
+
+CLI onboarding patch release.
+
+### Fixed
+
+- `resuma new --template basic` now generates a page function returning `View`, so a fresh app compiles on the first `cargo check`.
+- `resuma new --template flow-fullstack` now compiles without a live SQLx database at build time by using runtime SQLx queries instead of `query!` / `query_as!`.
+- The fullstack users page imports the generated loader/submit handlers correctly and avoids the `Result` alias collision with `SubmitError`.
+
+### Changed
+
+- Generated projects now pin `resuma` to the same version as the CLI that created them.
+- README and package metadata now reflect the current `907 B` loader and `5.08 KiB` first-interaction benchmark.
+
 ## [0.4.0] - 2026-05-28
 
 Production hardening release: ops endpoints, graceful shutdown, request tracing,
@@ -171,6 +186,8 @@ Major release since v0.2.2: resumability-first model, client effect replay, dev 
 - Examples: counter, todo (backend security reference), flow-demo, flow-pages, website
 - Documentation site and markdown guides under `docs/`
 
+[0.4.2]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.2
+[0.4.1]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.1
 [0.4.0]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.0
 [0.3.3]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.3.3
 [0.3.2]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.3.2

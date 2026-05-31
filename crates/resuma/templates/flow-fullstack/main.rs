@@ -5,9 +5,9 @@ mod pages;
 
 use pages::PagesRegistry;
 use resuma::prelude::*;
-use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(sqlx::FromRow)]
+#[data]
 struct UserRow {
     id: i64,
     name: String,
@@ -16,31 +16,32 @@ struct UserRow {
 
 #[load]
 async fn users(_req: &FlowRequest) -> Vec<UserRow> {
-    sqlx::query_as!(UserRow, "SELECT id, name, email FROM users ORDER BY id")
+    sqlx::query_as::<_, UserRow>("SELECT id, name, email FROM users ORDER BY id")
         .fetch_all(db::pool())
         .await
         .unwrap_or_default()
 }
 
-#[derive(Deserialize)]
+#[data]
 struct CreateUser {
     name: String,
     email: String,
 }
 
 #[submit]
-async fn create_user(form: CreateUser, _req: &FlowRequest) -> Result<(), SubmitError> {
+async fn create_user(
+    form: CreateUser,
+    _req: &FlowRequest,
+) -> std::result::Result<(), SubmitError> {
     if form.name.trim().is_empty() {
         return Err(SubmitError::new("Fix errors").field("name", "Required"));
     }
-    sqlx::query!(
-        "INSERT INTO users (name, email) VALUES (?, ?)",
-        form.name,
-        form.email
-    )
-    .execute(db::pool())
-    .await
-    .map_err(|_| SubmitError::new("Could not save user"))?;
+    sqlx::query("INSERT INTO users (name, email) VALUES (?, ?)")
+        .bind(form.name)
+        .bind(form.email)
+        .execute(db::pool())
+        .await
+        .map_err(|_| SubmitError::new("Could not save user"))?;
     Ok(())
 }
 

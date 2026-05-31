@@ -1,6 +1,6 @@
 # Publishing to crates.io
 
-**Next release:** resuma 0.4.1 · resuma-macros 0.4.1 · [docs.rs/resuma](https://docs.rs/resuma)
+**Next release:** resuma 0.4.2 · resuma-macros 0.4.2 · [docs.rs/resuma](https://docs.rs/resuma)
 
 Resuma ships as **two crates** (Rust requires proc-macros in a separate crate):
 

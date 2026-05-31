@@ -225,6 +225,21 @@ async fn submit_field_errors_return_422_json() {
     assert_eq!(json["field_errors"]["title"], "Title is required");
 }
 
+#[test]
+fn form_submit_accepts_qualified_handler_paths() {
+    use resuma::core::context::{with_context, RenderContext, RenderMode};
+
+    let ctx = RenderContext::new(RenderMode::Ssr);
+    let view = view! {
+        <Form submit={crate::ops_flow_invalid_submit}>
+            <button type="submit">"Save"</button>
+        </Form>
+    };
+    let html = with_context(ctx, || resuma::ssr::render_view(&view));
+    assert!(html.contains(r#"data-r-submit="ops_flow_invalid_submit""#));
+    assert!(html.contains(r#"action="/_resuma/submit/ops_flow_invalid_submit""#));
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn unknown_submit_returns_404_json() {
     let app = FlowApp::new()
