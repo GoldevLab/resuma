@@ -108,6 +108,18 @@ async fn flow_nav_only_pages_ship_client_loader() {
     let html = String::from_utf8_lossy(&body);
     assert!(html.contains("data-r-nav"));
     assert!(html.contains(r#"src="/_resuma/loader.js""#));
+    let nonce = html
+        .split(r#"type="resuma/state""#)
+        .nth(1)
+        .and_then(|s| s.strip_prefix(' '))
+        .and_then(|s| s.strip_prefix(r#"nonce=""#))
+        .and_then(|s| s.split('"').next())
+        .unwrap_or("");
+    assert!(!nonce.is_empty(), "expected CSP nonce on state script");
+    assert!(
+        html.contains(&format!(r#"src="/_resuma/loader.js" nonce="{nonce}""#)),
+        "loader script must carry the same CSP nonce as strict-dynamic requires"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

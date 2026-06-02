@@ -3,10 +3,16 @@
 use super::escape::escape_attr;
 use super::PwaOptions;
 
-pub fn pwa_head_tags(pwa: &PwaOptions) -> String {
+pub fn pwa_head_tags(pwa: &PwaOptions, csp_nonce: &str) -> String {
     if !pwa.enabled {
         return String::new();
     }
+
+    let nonce_attr = if csp_nonce.is_empty() {
+        String::new()
+    } else {
+        format!(r#" nonce="{}""#, escape_attr(csp_nonce))
+    };
 
     format!(
         r#"
@@ -20,8 +26,9 @@ pub fn pwa_head_tags(pwa: &PwaOptions) -> String {
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.svg" sizes="180x180" />
 <link rel="apple-touch-icon" href="/icons/icon-192.svg" sizes="192x192" />
 <link rel="apple-touch-icon" href="/icons/icon-512.svg" sizes="512x512" />
-<script src="/pwa-register.js" defer></script>"#,
+<script src="/pwa-register.js" defer{nonce_attr}></script>"#,
         theme = escape_attr(&pwa.theme_color),
         short_name = escape_attr(&pwa.short_name),
+        nonce_attr = nonce_attr,
     )
 }

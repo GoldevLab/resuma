@@ -148,7 +148,7 @@ pub(crate) fn client_scripts(
     };
     format!(
         r#"<script type="resuma/state" id="resuma-state"{nonce_attr}>{payload}</script>
-<script type="module" src="{loader}"></script>"#,
+<script type="module" src="{loader}"{nonce_attr}></script>"#,
         payload = payload_json,
         loader = loader_src(opts),
         nonce_attr = nonce_attr,

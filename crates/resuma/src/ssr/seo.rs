@@ -132,7 +132,7 @@ pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
     out.push_str(r#"<meta name="robots" content="index, follow" />"#);
 
     if let Some(pwa) = &opts.pwa {
-        out.push_str(&super::pwa::pwa_head_tags(pwa));
+        out.push_str(&super::pwa::pwa_head_tags(pwa, &opts.csp_nonce));
     }
 
     out
