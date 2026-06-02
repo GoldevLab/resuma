@@ -375,11 +375,7 @@ pub struct SecurityHeaderOptions {
 }
 
 /// Build a CSP header value (Qwik-style nonces + Resuma runtime requirements).
-pub fn build_content_security_policy(
-    nonce: Option<&str>,
-    https: bool,
-    csp: &CspConfig,
-) -> String {
+pub fn build_content_security_policy(nonce: Option<&str>, https: bool, csp: &CspConfig) -> String {
     let mut directives: Vec<String> = vec![
         "default-src 'self'".into(),
         "base-uri 'self'".into(),
@@ -477,11 +473,7 @@ pub fn apply_security_headers(mut response: Response, opts: &SecurityHeaderOptio
 
     let sec = config();
     if sec.csp.enabled {
-        let policy = build_content_security_policy(
-            opts.csp_nonce.as_deref(),
-            opts.https,
-            &sec.csp,
-        );
+        let policy = build_content_security_policy(opts.csp_nonce.as_deref(), opts.https, &sec.csp);
         let header_name = if sec.csp.report_only {
             header::HeaderName::from_static("content-security-policy-report-only")
         } else {

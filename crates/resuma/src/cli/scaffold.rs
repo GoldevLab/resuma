@@ -205,8 +205,11 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
             fs::write(pages.join("about.rs"), FLOW_ABOUT).context("write pages/about.rs")?;
         }
         "flow-booking" => {
-            fs::write(dir.join("Cargo.toml"), render_cargo(CARGO_FLOW_BOOKING, name))
-                .context("write Cargo.toml")?;
+            fs::write(
+                dir.join("Cargo.toml"),
+                render_cargo(CARGO_FLOW_BOOKING, name),
+            )
+            .context("write Cargo.toml")?;
             fs::write(
                 dir.join("src/main.rs"),
                 FLOW_BOOKING_MAIN.replace("%NAME%", name),
@@ -219,8 +222,11 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
             fs::write(pages.join("mod.rs"), FLOW_BOOKING_MOD).context("write pages/mod.rs")?;
             fs::write(pages.join("_registry.rs"), FLOW_BOOKING_REGISTRY)
                 .context("write pages/_registry.rs")?;
-            fs::write(pages.join("index.rs"), FLOW_BOOKING_INDEX.replace("%NAME%", name))
-                .context("write pages/index.rs")?;
+            fs::write(
+                pages.join("index.rs"),
+                FLOW_BOOKING_INDEX.replace("%NAME%", name),
+            )
+            .context("write pages/index.rs")?;
             fs::write(pages.join("book.rs"), FLOW_BOOKING_BOOK).context("write pages/book.rs")?;
             fs::write(pages.join("gracias.rs"), FLOW_BOOKING_GRACIAS)
                 .context("write pages/gracias.rs")?;

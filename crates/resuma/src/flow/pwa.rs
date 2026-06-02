@@ -88,7 +88,10 @@ impl Default for FlowPwaConfig {
 pub fn manifest_icons_from_public(assets: &[super::public::PublicAsset]) -> Vec<ManifestIconEntry> {
     let mut icons = Vec::new();
     for (rel, url, sizes) in super::public::PWA_ICON_CANDIDATES {
-        let Some(asset) = assets.iter().find(|a| a.url_path == *url || a.url_path == format!("/{rel}")) else {
+        let Some(asset) = assets
+            .iter()
+            .find(|a| a.url_path == *url || a.url_path == format!("/{rel}"))
+        else {
             continue;
         };
         let purpose = if url.contains("maskable") {
@@ -136,7 +139,11 @@ impl FlowPwaConfig {
         }
     }
 
-    pub fn theme(mut self, theme_color: impl Into<String>, background_color: impl Into<String>) -> Self {
+    pub fn theme(
+        mut self,
+        theme_color: impl Into<String>,
+        background_color: impl Into<String>,
+    ) -> Self {
         self.theme_color = theme_color.into();
         self.background_color = background_color.into();
         self
@@ -512,12 +519,7 @@ pub fn attach_pwa_routes(router: Router, cfg: FlowPwaConfig) -> Router {
             "/offline.html",
             axum::routing::get(move || {
                 let body = offline_html(&offline_cfg);
-                async move {
-                    (
-                        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-                        body,
-                    )
-                }
+                async move { ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], body) }
             }),
         )
         .route(

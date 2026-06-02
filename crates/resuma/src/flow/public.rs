@@ -17,8 +17,16 @@ pub struct PublicAsset {
 pub const PWA_ICON_CANDIDATES: &[(&str, &str, &str)] = &[
     ("icons/icon-192.png", "/icons/icon-192.png", "192x192"),
     ("icons/icon-512.png", "/icons/icon-512.png", "512x512"),
-    ("icons/icon-maskable.png", "/icons/icon-maskable.png", "512x512"),
-    ("icons/apple-touch-icon.png", "/icons/apple-touch-icon.png", "180x180"),
+    (
+        "icons/icon-maskable.png",
+        "/icons/icon-maskable.png",
+        "512x512",
+    ),
+    (
+        "icons/apple-touch-icon.png",
+        "/icons/apple-touch-icon.png",
+        "180x180",
+    ),
     ("icon-192.png", "/icons/icon-192.png", "192x192"),
     ("icon-512.png", "/icons/icon-512.png", "512x512"),
     ("icon.png", "/icons/icon-192.png", "192x192"),
@@ -31,7 +39,11 @@ pub fn collect_public_dir(dir: &Path) -> Vec<PublicAsset> {
     }
     let root = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
     let mut out = Vec::new();
-    for entry in WalkDir::new(&root).min_depth(1).into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new(&root)
+        .min_depth(1)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
         if !entry.file_type().is_file() {
             continue;
         }

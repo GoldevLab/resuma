@@ -84,10 +84,7 @@ mod tests {
 
     #[test]
     fn query_href_requires_exact_match() {
-        assert!(paths_match(
-            "/book?fecha=1",
-            "/book?fecha=1"
-        ));
+        assert!(paths_match("/book?fecha=1", "/book?fecha=1"));
         assert!(!paths_match("/book?fecha=1", "/book?fecha=2"));
         assert!(!paths_match("/book?fecha=1", "/book"));
     }

@@ -50,8 +50,8 @@ pub use page_cache::{
 };
 pub use request_path::{stage_response_path, take_response_path};
 pub use security::{
-    client_ip, client_ip_from_parts, configure as configure_security, csrf_token, guard_mutation,
-    build_content_security_policy, http_status, random_token, request_is_https, CspConfig,
-    CspNonce, SecurityConfig, SecurityHeaderOptions,
-    CSRF_COOKIE, CSRF_FIELD, CSRF_HEADER,
+    build_content_security_policy, client_ip, client_ip_from_parts,
+    configure as configure_security, csrf_token, guard_mutation, http_status, random_token,
+    request_is_https, CspConfig, CspNonce, SecurityConfig, SecurityHeaderOptions, CSRF_COOKIE,
+    CSRF_FIELD, CSRF_HEADER,
 };

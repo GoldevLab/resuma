@@ -1,7 +1,7 @@
 //! SPA navigation helpers — query links and loader refresh controls.
 
-use crate::core::view::{Attr, AttrValue, Child, Element, View};
 use crate::core::handler::HandlerRef;
+use crate::core::view::{Attr, AttrValue, Child, Element, View};
 use crate::core::FlowRequest;
 
 use super::runtime::current_request;
@@ -154,7 +154,10 @@ pub fn loader_refresh_input(
         },
     ];
     for (name, value) in extra_attrs {
-        attrs.push(Attr { name: name.into(), value });
+        attrs.push(Attr {
+            name: name.into(),
+            value,
+        });
     }
 
     View::Element(Element {
@@ -166,11 +169,7 @@ pub fn loader_refresh_input(
 }
 
 /// GET form that navigates via SPA instead of full reload (`data-r-loader-refresh`).
-pub fn loader_refresh_form(
-    path: &str,
-    preserve_from_url: &[&str],
-    children: Vec<Child>,
-) -> View {
+pub fn loader_refresh_form(path: &str, preserve_from_url: &[&str], children: Vec<Child>) -> View {
     let preserve_json = serde_json::to_string(preserve_from_url).unwrap_or_else(|_| "[]".into());
     let path_js = serde_json::to_string(path).unwrap_or_else(|_| "\"/\"".into());
     let handler_body = format!(
@@ -248,12 +247,18 @@ pub fn theme_into_pwa(theme: &crate::core::Theme, cfg: &mut super::pwa::FlowPwaC
 
 /// Build query pairs from a request for link helpers.
 pub fn query_pairs_from(req: &FlowRequest) -> Vec<(String, String)> {
-    req.query.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    req.query
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect()
 }
 
 /// Convert owned pairs to `&str` slices for [`build_query_href`].
 pub fn pairs_as_refs(pairs: &[(String, String)]) -> Vec<(&str, &str)> {
-    pairs.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect()
+    pairs
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect()
 }
 
 #[cfg(test)]
