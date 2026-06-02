@@ -584,28 +584,16 @@ mod tests {
 
     #[test]
     fn csp_allows_runtime_compiled_handlers() {
-        configure(SecurityConfig {
-            csp: CspConfig {
+        let csp = build_content_security_policy(
+            Some("abc123"),
+            false,
+            &CspConfig {
                 enabled: true,
                 strict_dynamic: true,
                 unsafe_eval: true,
                 ..CspConfig::from_env()
             },
-            ..SecurityConfig::from_env()
-        });
-        let res = Response::new(axum::body::Body::empty());
-        let res = apply_security_headers(
-            res,
-            &SecurityHeaderOptions {
-                csp_nonce: Some("abc123".into()),
-                https: false,
-            },
         );
-        let csp = res
-            .headers()
-            .get(header::CONTENT_SECURITY_POLICY)
-            .and_then(|v| v.to_str().ok())
-            .unwrap();
 
         assert!(csp.contains("'nonce-abc123'"));
         assert!(csp.contains("'strict-dynamic'"));
