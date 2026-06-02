@@ -21,6 +21,7 @@ Flow DX release: query navigation, `public/`, and booking scaffold.
 
 ### Fixed
 
+- **CSP `strict-dynamic`** — `loader.js` and `pwa-register.js` now receive the same per-request nonce as the resumability state script (handlers and PWA registration work in production).
 - **NavLink `active` after SPA navigation with query** — `/reservar` stays active on `/reservar?fecha=…` (Rust + `core.js`).
 - **PWA manifest icons from `public/`** — use the file’s real `Content-Type` (PNG/SVG).
 - **Clippy** — simplified CSP `from_env` toggle (CI `-D warnings`).
