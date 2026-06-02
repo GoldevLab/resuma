@@ -16,6 +16,41 @@ fn core_runtime_reads_current_csrf_payload_without_cache() {
     assert!(!source.contains("cachedCsrf"));
     assert!(core_js.contains("csrf_token"));
     assert!(core_js.contains("x-resuma-csrf"));
+    assert!(
+        source.contains("navigate") && source.contains("buildUrl"),
+        "core.ts must expose SPA helpers on __resuma"
+    );
+}
+
+#[tokio::test]
+async fn flow_serves_public_directory_files() {
+    let dir = std::env::temp_dir().join(format!("resuma-public-http-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("img")).unwrap();
+    std::fs::write(dir.join("img/logo.png"), b"\x89PNG").unwrap();
+
+    let app = FlowApp::new()
+        .with_public_dir(&dir)
+        .into_router(FlowServeOptions {
+            addr: "127.0.0.1:0".parse().unwrap(),
+            security: SecurityConfig {
+                production: false,
+                ..SecurityConfig::default()
+            },
+        });
+
+    let res = app
+        .oneshot(Request::get("/img/logo.png").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(
+        res.headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
+        Some("image/png")
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[tokio::test]

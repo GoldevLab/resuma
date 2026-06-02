@@ -25,6 +25,10 @@ interface ResumaGlobal {
   loaded: Map<string, Record<string, Function>>;
   refreshIsland: (id: string) => Promise<void>;
   context: (key: string) => unknown;
+  /** SPA navigation — refetches SSR HTML and remounts signals (use for query-driven `#[load]`). */
+  navigate: (href: string, pushState?: boolean) => Promise<void>;
+  /** Build same-origin path + query (`{ fecha: "2026-01-01" }`). */
+  buildUrl: (path: string, query?: Record<string, string | null | undefined>) => string;
 }
 
 const ROOT_ID = "resuma-root";
@@ -48,9 +52,16 @@ function readPayloadFromScript(node: HTMLElement | null): ResumePayload {
 
 function pathsMatch(href: string, current: string): boolean {
   if (href === current) return true;
-  if (href !== "/" && current.startsWith(href)) {
-    const next = current.charCodeAt(href.length);
-    return next === undefined || next === 47; // '/'
+  const base = "http://resuma.local";
+  const a = new URL(href, base);
+  const b = new URL(current, base);
+  if (a.search) {
+    return a.pathname + a.search === b.pathname + b.search;
+  }
+  if (a.pathname === b.pathname) return true;
+  if (a.pathname !== "/" && b.pathname.startsWith(a.pathname)) {
+    const next = b.pathname.charCodeAt(a.pathname.length);
+    return next === undefined || next === 47;
   }
   return false;
 }
@@ -94,6 +105,8 @@ export function remountPage(): void {
     safeAction: prev.safeAction,
     refreshIsland: prev.refreshIsland,
     context: (key: string) => __resuma.contexts[key],
+    navigate,
+    buildUrl,
   };
   window.__resuma = __resuma;
 
@@ -117,6 +130,20 @@ function focusMain(): void {
   } catch {
     target.focus();
   }
+}
+
+/** Build `/path?key=value` for SPA navigation. Null/empty values are skipped. */
+export function buildUrl(
+  path: string,
+  query?: Record<string, string | null | undefined>,
+): string {
+  const url = new URL(path, location.origin);
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value != null && value !== "") url.searchParams.set(key, value);
+    }
+  }
+  return url.pathname + url.search;
 }
 
 export async function navigate(href: string, pushState = true): Promise<void> {

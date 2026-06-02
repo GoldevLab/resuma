@@ -35,6 +35,7 @@ const TEMPLATE_CHOICES: &[(&str, &str)] = &[
     ("basic", "static SSR page, zero client JS"),
     ("todo", "full showcase (signals, server, islands)"),
     ("flow", "multi-page app with src/pages/"),
+    ("flow-booking", "appointments + query-driven #[load]"),
     ("flow-fullstack", "Flow + SQLx SQLite sample"),
 ];
 
@@ -49,10 +50,11 @@ pub fn prompt_template() -> Result<String> {
             "" | "1" => "basic",
             "2" => "todo",
             "3" => "flow",
-            "4" => "flow-fullstack",
+            "4" => "flow-booking",
+            "5" => "flow-fullstack",
             other if TEMPLATE_CHOICES.iter().any(|(id, _)| *id == other) => other,
             _ => {
-                eprintln!("  (pick 1–4 or type basic/todo/flow/flow-fullstack)");
+                eprintln!("  (pick 1–5 or type basic/todo/flow/flow-booking/flow-fullstack)");
                 continue;
             }
         };

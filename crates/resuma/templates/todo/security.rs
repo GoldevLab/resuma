@@ -166,6 +166,7 @@ pub fn serve_options() -> ServeOptions {
                 std::env::var("RESUMA_ENV").as_deref(),
                 Ok("production") | Ok("prod")
             ),
+            csp: CspConfig::default(),
         },
     }
 }

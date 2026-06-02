@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.6] - 2026-06-02
+
+Flow DX release: query navigation, `public/`, and booking scaffold.
+
+### Added
+
+- **`__resuma.navigate` / `__resuma.buildUrl`** on the default `core.js` runtime for SPA reloads when query params change (server `#[load]` re-runs).
+- **`loader_refresh_input`**, **`loader_refresh_form`**, **`query_nav_link`**, **`build_query_href`** — Rust helpers for query-driven pages.
+- **`public/` auto-serve** on `FlowApp` (defaults to `{CARGO_MANIFEST_DIR}/public`), with paths merged into PWA precache.
+- **`with_theme_pwa(Theme)`** — maps theme primary/background into auto PWA colors.
+- **PWA icons from `public/`** — `icons/icon-192.png` etc. override generated SVG manifest entries when present.
+- **`resuma new --template flow-booking`** — minimal appointments sample.
+- **`resuma dev --kill-stale`** (Linux) and `cargo watch` on `public/`.
+- Docs: [docs/FLOW_COOKBOOK.md](./docs/FLOW_COOKBOOK.md).
+
+### Fixed
+
+- **NavLink `active` after SPA navigation with query** — `/reservar` stays active on `/reservar?fecha=…` (Rust + `core.js`).
+- **PWA manifest icons from `public/`** — use the file’s real `Content-Type` (PNG/SVG).
+- **Clippy** — simplified CSP `from_env` toggle (CI `-D warnings`).
+
 ## [0.4.2] - 2026-05-31
 
 CLI onboarding patch release.

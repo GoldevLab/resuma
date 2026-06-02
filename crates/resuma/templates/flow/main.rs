@@ -29,6 +29,7 @@ nav a.active { color: #818cf8; font-weight: 600; }
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
+    // PWA on by default; `public/` is served automatically. Opt out: .without_pwa()
     FlowApp::new()
         .with_title("%NAME%")
         .with_head(CSS)

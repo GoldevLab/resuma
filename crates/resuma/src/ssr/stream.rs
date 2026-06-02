@@ -56,7 +56,7 @@ pub fn stream_head(opts: &PageOptions, path: &str) -> String {
 /// Closing tags + optional resumability payload + loader bootstrap.
 pub fn stream_tail(opts: &PageOptions, body_html: &str, payload: &ResumePayload) -> String {
     let scripts = super::client_scripts(opts, body_html, payload);
-    let dev_script = crate::server::dev::dev_reload_script();
+    let dev_script = crate::server::dev::dev_reload_script(&opts.csp_nonce);
     format!(
         r#"</div>
 {scripts}

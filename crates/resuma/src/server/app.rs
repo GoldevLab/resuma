@@ -128,6 +128,14 @@ impl ResumaApp {
         self
     }
 
+    pub(crate) fn page_options(&self) -> &PageOptions {
+        &self.page_options
+    }
+
+    pub(crate) fn page_options_mut(&mut self) -> &mut PageOptions {
+        &mut self.page_options
+    }
+
     pub fn with_stylesheet(mut self, href: impl Into<String>) -> Self {
         self.page_options.stylesheet = Some(href.into());
         self
@@ -222,9 +230,9 @@ impl ResumaApp {
             .layer(DefaultBodyLimit::max(opts.security.body_limit_bytes))
             .layer(middleware::from_fn(security_headers_middleware))
             .layer(middleware::from_fn(super::ops::request_id_middleware));
-        let listener = tokio::net::TcpListener::bind(opts.addr).await?;
-        info!(addr = %opts.addr, "resuma server listening");
-        println!("resuma listening on http://{}", opts.addr);
+        let (listener, bound) = super::listen::bind_listener(opts.addr).await?;
+        info!(addr = %bound, "resuma server listening");
+        println!("resuma listening on http://{}", bound);
         axum::serve(
             listener,
             router.into_make_service_with_connect_info::<SocketAddr>(),

@@ -75,7 +75,7 @@ cd my-app
 resuma dev --open
 ```
 
-**Templates:** `basic` · `todo` · `flow` · `flow-fullstack`
+**Templates:** `basic` · `todo` · `flow` · `flow-booking` · `flow-fullstack`
 
 ```rust
 use resuma::prelude::*;

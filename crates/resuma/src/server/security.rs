@@ -31,6 +31,71 @@ static CONFIG: Lazy<RwLock<SecurityConfig>> = Lazy::new(|| RwLock::new(SecurityC
 static RATE_BUCKETS: Lazy<RwLock<HashMap<String, Vec<Instant>>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 
+/// Content-Security-Policy tuning (Qwik-style per-request nonces + configurable directives).
+///
+/// In dev (`RESUMA_DEV=1`), CSP is **off** by default so tooling matches Qwik's `isDev` skip.
+/// Set `RESUMA_CSP_DEV=1` to enforce CSP while developing.
+#[derive(Debug, Clone)]
+pub struct CspConfig {
+    /// Emit a `Content-Security-Policy` (or Report-Only) header on HTML responses.
+    pub enabled: bool,
+    /// Use `Content-Security-Policy-Report-Only` instead of enforcing.
+    pub report_only: bool,
+    /// Add `'strict-dynamic'` to `script-src` when a nonce is present (modern browsers).
+    pub strict_dynamic: bool,
+    /// Allow `eval` / `new Function` for the resumability runtime. Keep `true` unless you replace the client.
+    pub unsafe_eval: bool,
+    /// Extra `img-src` origins (e.g. `https://images.pexels.com`).
+    pub img_src: Vec<String>,
+    /// Extra `script-src` origins.
+    pub script_src: Vec<String>,
+    /// Extra `style-src` / `style-src-elem` origins (in addition to Google Fonts).
+    pub style_src: Vec<String>,
+    /// Extra `connect-src` origins (APIs, analytics).
+    pub connect_src: Vec<String>,
+    /// Extra `font-src` origins.
+    pub font_src: Vec<String>,
+}
+
+impl Default for CspConfig {
+    fn default() -> Self {
+        Self::from_env()
+    }
+}
+
+impl CspConfig {
+    pub fn from_env() -> Self {
+        let enabled = !env_flag_off("RESUMA_CSP")
+            && (env_flag_on("RESUMA_CSP_DEV") || !crate::server::dev::dev_mode_enabled());
+        Self {
+            enabled,
+            report_only: env_flag_on("RESUMA_CSP_REPORT_ONLY"),
+            strict_dynamic: !env_flag_off("RESUMA_CSP_STRICT_DYNAMIC"),
+            unsafe_eval: !env_flag_off("RESUMA_CSP_UNSAFE_EVAL"),
+            img_src: parse_csp_list_env("RESUMA_CSP_IMG_SRC"),
+            script_src: parse_csp_list_env("RESUMA_CSP_SCRIPT_SRC"),
+            style_src: parse_csp_list_env("RESUMA_CSP_STYLE_SRC"),
+            connect_src: parse_csp_list_env("RESUMA_CSP_CONNECT_SRC"),
+            font_src: parse_csp_list_env("RESUMA_CSP_FONT_SRC"),
+        }
+    }
+
+    /// Permissive dev profile: CSP disabled (same idea as Qwik `plugin@csp` when `isDev`).
+    pub fn disabled() -> Self {
+        let mut c = Self::from_env();
+        c.enabled = false;
+        c
+    }
+
+    /// Strict production profile with optional extra image hosts.
+    pub fn production(extra_img_src: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        let mut c = Self::from_env();
+        c.enabled = true;
+        c.img_src = extra_img_src.into_iter().map(Into::into).collect();
+        c
+    }
+}
+
 /// Global security configuration (shared by ResumaApp and FlowApp).
 #[derive(Debug, Clone)]
 pub struct SecurityConfig {
@@ -50,6 +115,8 @@ pub struct SecurityConfig {
     pub hide_benchmark: bool,
     /// Sanitize error messages returned to clients.
     pub production: bool,
+    /// CSP headers and directive allowlists.
+    pub csp: CspConfig,
 }
 
 impl Default for SecurityConfig {
@@ -86,8 +153,28 @@ impl SecurityConfig {
                 .unwrap_or(60),
             hide_benchmark: production,
             production,
+            csp: CspConfig::from_env(),
         }
     }
+}
+
+fn env_flag_on(name: &str) -> bool {
+    matches!(
+        std::env::var(name).as_deref(),
+        Ok("1") | Ok("true") | Ok("TRUE") | Ok("on")
+    )
+}
+
+fn parse_csp_list_env(name: &str) -> Vec<String> {
+    std::env::var(name)
+        .ok()
+        .map(|raw| {
+            raw.split(|c: char| c.is_whitespace() || c == ',')
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn env_flag_off(name: &str) -> bool {
@@ -287,6 +374,64 @@ pub struct SecurityHeaderOptions {
     pub https: bool,
 }
 
+/// Build a CSP header value (Qwik-style nonces + Resuma runtime requirements).
+pub fn build_content_security_policy(
+    nonce: Option<&str>,
+    https: bool,
+    csp: &CspConfig,
+) -> String {
+    let mut directives: Vec<String> = vec![
+        "default-src 'self'".into(),
+        "base-uri 'self'".into(),
+        "object-src 'none'".into(),
+        "frame-ancestors 'none'".into(),
+        "form-action 'self'".into(),
+    ];
+
+    let mut script_src = vec!["'self'".to_string()];
+    if let Some(nonce) = nonce {
+        script_src.push(format!("'nonce-{nonce}'"));
+        if csp.strict_dynamic {
+            script_src.push("'strict-dynamic'".into());
+        }
+    }
+    if csp.unsafe_eval {
+        script_src.push("'unsafe-eval'".into());
+    }
+    script_src.extend(csp.script_src.iter().cloned());
+    directives.push(format!("script-src {}", script_src.join(" ")));
+
+    let mut style_src = vec!["'self'".to_string()];
+    if let Some(nonce) = nonce {
+        style_src.push(format!("'nonce-{nonce}'"));
+    }
+    style_src.push("'unsafe-inline'".into());
+    style_src.push("https://fonts.googleapis.com".into());
+    style_src.extend(csp.style_src.iter().cloned());
+    let style_joined = style_src.join(" ");
+    directives.push(format!("style-src {style_joined}"));
+    directives.push(format!("style-src-elem {style_joined}"));
+    directives.push("style-src-attr 'unsafe-inline'".into());
+
+    let mut img_src = vec!["'self'", "data:", "blob:"];
+    img_src.extend(csp.img_src.iter().map(String::as_str));
+    directives.push(format!("img-src {}", img_src.join(" ")));
+
+    let mut font_src = vec!["'self'", "https://fonts.gstatic.com", "data:"];
+    font_src.extend(csp.font_src.iter().map(String::as_str));
+    directives.push(format!("font-src {}", font_src.join(" ")));
+
+    let mut connect_src = vec!["'self'"];
+    connect_src.extend(csp.connect_src.iter().map(String::as_str));
+    directives.push(format!("connect-src {}", connect_src.join(" ")));
+
+    if https {
+        directives.push("upgrade-insecure-requests".into());
+    }
+
+    directives.join("; ")
+}
+
 /// Apply standard security headers (Helmet-style baseline).
 pub fn apply_security_headers(mut response: Response, opts: &SecurityHeaderOptions) -> Response {
     let headers = response.headers_mut();
@@ -330,25 +475,20 @@ pub fn apply_security_headers(mut response: Response, opts: &SecurityHeaderOptio
         "off",
     );
 
-    let csp = if let Some(nonce) = &opts.csp_nonce {
-        // The current resumability runtime compiles small inline handlers,
-        // effects, and visible tasks with `new Function`. Keep CSP honest so
-        // enabled Resuma features work under the default security headers.
-        let mut policy = format!(
-            "default-src 'self'; script-src 'self' 'nonce-{nonce}' 'unsafe-eval'; style-src 'self' 'nonce-{nonce}' 'unsafe-inline'; style-src-elem 'self' 'nonce-{nonce}' 'unsafe-inline'; style-src-attr 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    let sec = config();
+    if sec.csp.enabled {
+        let policy = build_content_security_policy(
+            opts.csp_nonce.as_deref(),
+            opts.https,
+            &sec.csp,
         );
-        if opts.https {
-            policy.push_str("; upgrade-insecure-requests");
-        }
-        policy
-    } else {
-        let mut policy = "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'".to_string();
-        if opts.https {
-            policy.push_str("; upgrade-insecure-requests");
-        }
-        policy
-    };
-    insert_header(headers, header::CONTENT_SECURITY_POLICY, &csp);
+        let header_name = if sec.csp.report_only {
+            header::HeaderName::from_static("content-security-policy-report-only")
+        } else {
+            header::CONTENT_SECURITY_POLICY
+        };
+        insert_header(headers, header_name, &policy);
+    }
     response
 }
 
@@ -452,6 +592,15 @@ mod tests {
 
     #[test]
     fn csp_allows_runtime_compiled_handlers() {
+        configure(SecurityConfig {
+            csp: CspConfig {
+                enabled: true,
+                strict_dynamic: true,
+                unsafe_eval: true,
+                ..CspConfig::from_env()
+            },
+            ..SecurityConfig::from_env()
+        });
         let res = Response::new(axum::body::Body::empty());
         let res = apply_security_headers(
             res,
@@ -467,9 +616,42 @@ mod tests {
             .unwrap();
 
         assert!(csp.contains("'nonce-abc123'"));
+        assert!(csp.contains("'strict-dynamic'"));
         assert!(csp.contains("'unsafe-eval'"));
         assert!(csp.contains("style-src 'self' 'nonce-abc123' 'unsafe-inline'"));
         assert!(csp.contains("style-src-elem 'self' 'nonce-abc123' 'unsafe-inline'"));
         assert!(csp.contains("style-src-attr 'unsafe-inline'"));
+        assert!(csp.contains("img-src 'self' data: blob:"));
+    }
+
+    #[test]
+    fn csp_extra_img_src() {
+        let policy = build_content_security_policy(
+            Some("n1"),
+            false,
+            &CspConfig {
+                enabled: true,
+                img_src: vec!["https://images.pexels.com".into()],
+                ..CspConfig::from_env()
+            },
+        );
+        assert!(policy.contains("img-src 'self' data: blob: https://images.pexels.com"));
+    }
+
+    #[test]
+    fn csp_omitted_when_disabled() {
+        configure(SecurityConfig {
+            csp: CspConfig::disabled(),
+            ..SecurityConfig::from_env()
+        });
+        let res = Response::new(axum::body::Body::empty());
+        let res = apply_security_headers(
+            res,
+            &SecurityHeaderOptions {
+                csp_nonce: Some("abc".into()),
+                https: false,
+            },
+        );
+        assert!(res.headers().get(header::CONTENT_SECURITY_POLICY).is_none());
     }
 }

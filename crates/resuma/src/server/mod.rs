@@ -40,7 +40,7 @@ pub mod static_assets;
 pub use actions::{register_server_action, set_action_middleware, ActionFn};
 pub use app::{apply_security_headers, security_headers_middleware, ResumaApp, ServeOptions};
 pub use deferred_stream::{set_deferred_stream_hook, try_deferred_stream};
-pub use listen::listen_addr_from_env;
+pub use listen::{bind_listener, listen_addr_from_env, resolve_listen_addr};
 pub use ops::{
     health, ready, request_id_middleware, shutdown_signal, RequestId, HEALTH_PATH, READY_PATH,
     REQUEST_ID_HEADER,
@@ -51,6 +51,7 @@ pub use page_cache::{
 pub use request_path::{stage_response_path, take_response_path};
 pub use security::{
     client_ip, client_ip_from_parts, configure as configure_security, csrf_token, guard_mutation,
-    http_status, random_token, request_is_https, CspNonce, SecurityConfig, SecurityHeaderOptions,
+    build_content_security_policy, http_status, random_token, request_is_https, CspConfig,
+    CspNonce, SecurityConfig, SecurityHeaderOptions,
     CSRF_COOKIE, CSRF_FIELD, CSRF_HEADER,
 };

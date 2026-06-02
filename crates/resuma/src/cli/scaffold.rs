@@ -80,6 +80,27 @@ const FLOW_ABOUT: &str = include_str!("../../templates/flow/pages/about.rs");
 const FLOW_MOD: &str = include_str!("../../templates/flow/pages/mod.rs");
 const FLOW_REGISTRY: &str = include_str!("../../templates/flow/pages/_registry.rs");
 
+const CARGO_FLOW_BOOKING: &str = r#"[package]
+name = "%NAME%"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+resuma = "%RESUMA_VERSION%"
+tokio  = { version = "1", features = ["full"] }
+serde  = { version = "1", features = ["derive"] }
+once_cell   = "1"
+parking_lot = "0.12"
+"#;
+
+const FLOW_BOOKING_MAIN: &str = include_str!("../../templates/flow-booking/main.rs");
+const FLOW_BOOKING_STORE: &str = include_str!("../../templates/flow-booking/booking_store.rs");
+const FLOW_BOOKING_MOD: &str = include_str!("../../templates/flow-booking/pages/mod.rs");
+const FLOW_BOOKING_REGISTRY: &str = include_str!("../../templates/flow-booking/pages/_registry.rs");
+const FLOW_BOOKING_INDEX: &str = include_str!("../../templates/flow-booking/pages/index.rs");
+const FLOW_BOOKING_BOOK: &str = include_str!("../../templates/flow-booking/pages/book.rs");
+const FLOW_BOOKING_GRACIAS: &str = include_str!("../../templates/flow-booking/pages/gracias.rs");
+
 const CARGO_FULLSTACK: &str = r#"[package]
 name = "%NAME%"
 version = "0.1.0"
@@ -115,6 +136,7 @@ Created with [Resuma](https://github.com/GolfredoPerezFernandez/resuma).
 - **todo** - full Resuma showcase (signals, server, island, security, js!)
 - **flow** - multi-page app with `src/pages/` and FlowApp
 - **flow-fullstack** - Flow + SQLx (SQLite) with users CRUD sample
+- **flow-booking** - appointments with query-driven `#[load]` + `loader_refresh_input`
 
 ## Develop
 
@@ -182,6 +204,30 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
             fs::write(pages.join("index.rs"), FLOW_INDEX).context("write pages/index.rs")?;
             fs::write(pages.join("about.rs"), FLOW_ABOUT).context("write pages/about.rs")?;
         }
+        "flow-booking" => {
+            fs::write(dir.join("Cargo.toml"), render_cargo(CARGO_FLOW_BOOKING, name))
+                .context("write Cargo.toml")?;
+            fs::write(
+                dir.join("src/main.rs"),
+                FLOW_BOOKING_MAIN.replace("%NAME%", name),
+            )
+            .context("write src/main.rs")?;
+            fs::write(dir.join("src/booking_store.rs"), FLOW_BOOKING_STORE)
+                .context("write src/booking_store.rs")?;
+            let pages = dir.join("src/pages");
+            fs::create_dir_all(&pages)?;
+            fs::write(pages.join("mod.rs"), FLOW_BOOKING_MOD).context("write pages/mod.rs")?;
+            fs::write(pages.join("_registry.rs"), FLOW_BOOKING_REGISTRY)
+                .context("write pages/_registry.rs")?;
+            fs::write(pages.join("index.rs"), FLOW_BOOKING_INDEX.replace("%NAME%", name))
+                .context("write pages/index.rs")?;
+            fs::write(pages.join("book.rs"), FLOW_BOOKING_BOOK).context("write pages/book.rs")?;
+            fs::write(pages.join("gracias.rs"), FLOW_BOOKING_GRACIAS)
+                .context("write pages/gracias.rs")?;
+            let public = dir.join("public");
+            fs::create_dir_all(&public)?;
+            fs::write(public.join(".gitkeep"), "").ok();
+        }
         "flow-fullstack" => {
             fs::write(dir.join("Cargo.toml"), render_cargo(CARGO_FULLSTACK, name))
                 .context("write Cargo.toml")?;
@@ -205,7 +251,7 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
         }
         other => {
             return Err(anyhow!(
-                "unknown template `{}` (try: basic, todo, flow, flow-fullstack)",
+                "unknown template `{}` (try: basic, todo, flow, flow-booking, flow-fullstack)",
                 other
             ));
         }
@@ -230,7 +276,13 @@ mod tests {
 
     #[test]
     fn cargo_templates_pin_the_cli_crate_version() {
-        for cargo_template in [CARGO_BASIC, CARGO_TODO, CARGO_FLOW, CARGO_FULLSTACK] {
+        for cargo_template in [
+            CARGO_BASIC,
+            CARGO_TODO,
+            CARGO_FLOW,
+            CARGO_FLOW_BOOKING,
+            CARGO_FULLSTACK,
+        ] {
             let rendered = render_cargo(cargo_template, "smoke-app");
             assert!(rendered.contains("name = \"smoke-app\""));
             assert!(rendered.contains(&format!("\"{}\"", env!("CARGO_PKG_VERSION"))));

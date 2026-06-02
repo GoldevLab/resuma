@@ -19,6 +19,7 @@ Two ways to read the docs:
 | [PACKAGE.md](./PACKAGE.md) | Product map — Resuma, Resuma Flow, Macros, Client |
 | [NAMING.md](./NAMING.md) | Official brand names and naming rules |
 | [FLOW.md](./FLOW.md) | Resuma Flow — FlowApp, `#[load]`, `#[submit]`, pages |
+| [FLOW_COOKBOOK.md](./FLOW_COOKBOOK.md) | Query loaders, `public/`, PWA, booking template (v0.4.6+) |
 | [SECURITY.md](./SECURITY.md) | CSRF, headers, rate limits, production |
 | [BACKEND.md](./BACKEND.md) | NestJS + Next.js patterns → Rust (`examples/todo`) |
 | [PUBLISHING.md](./PUBLISHING.md) | Publish to crates.io (production release) |
@@ -42,5 +43,6 @@ Docs site source lives in the separate **`site-docs`** repository (sibling folde
 - **Security** — `/docs/security` (start with `/docs/security/todo`)
 - **Components** — signals, islands, `#[server]`, `js!`
 - **Resuma Flow** — routing, loaders, middleware, streaming
-- **Cookbook** — debouncer, theme, Docker deploy
+- **Cookbook** — debouncer, theme, Docker deploy, query-driven loaders
+- **Flow** — `/docs/flow/pwa` (PWA + `public/`), `/docs/flow/query_params` (SPA reload)
 - **Reference** — architecture, CLI, benchmark, **API** (`/docs/api`)

@@ -52,7 +52,7 @@ enum Commands {
     Doctor,
     /// Run the app with hot reload.
     Dev {
-        /// Bind address (default: 127.0.0.1:3000).
+        /// Bind address (default: 127.0.0.1:3000). If the port is taken, the next free port is used.
         #[arg(long, default_value = "127.0.0.1:3000")]
         addr: String,
         /// Open the default browser once the server starts.
@@ -61,6 +61,9 @@ enum Commands {
         /// Skip building the JS runtime (useful when prebuilt).
         #[arg(long)]
         skip_runtime: bool,
+        /// Kill any process listening on the dev port before starting (Linux).
+        #[arg(long)]
+        kill_stale: bool,
     },
     /// Build a production binary + JS bundles.
     Build {
@@ -108,7 +111,8 @@ pub fn run() -> Result<()> {
             addr,
             open,
             skip_runtime,
-        } => dev_command(&addr, open, skip_runtime),
+            kill_stale,
+        } => dev_command(&addr, open, skip_runtime, kill_stale),
         Commands::Build {
             static_export,
             out,
@@ -194,6 +198,20 @@ pub(crate) fn ensure_rust_toolchain() -> Result<()> {
     }
 }
 
+#[cfg(unix)]
+fn kill_stale_port(port: u16) {
+    let target = format!("{port}/tcp");
+    let status = Command::new("fuser").args(["-k", &target]).status();
+    if let Ok(s) = status {
+        if s.success() {
+            println!("[resuma] freed port {port}");
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn kill_stale_port(_port: u16) {}
+
 fn ensure_cargo_watch() -> Result<()> {
     let ok = Command::new("cargo")
         .args(["watch", "--version"])
@@ -217,13 +235,29 @@ fn ensure_cargo_watch() -> Result<()> {
     Ok(())
 }
 
-fn dev_command(addr: &str, open: bool, skip_runtime: bool) -> Result<()> {
+fn dev_command(addr: &str, open: bool, skip_runtime: bool, kill_stale: bool) -> Result<()> {
     ensure_rust_toolchain()?;
     ensure_cargo_watch()?;
     if !skip_runtime {
         ensure_runtime_built()?;
     }
 
+    let preferred: std::net::SocketAddr = addr
+        .parse()
+        .map_err(|_| anyhow!("invalid --addr {addr:?} (expected e.g. 127.0.0.1:3000)"))?;
+    if kill_stale {
+        kill_stale_port(preferred.port());
+    }
+    let bound = crate::server::resolve_listen_addr(preferred)
+        .map_err(|e| anyhow!("could not bind {preferred}: {e}"))?;
+    if bound != preferred {
+        println!(
+            "[resuma] port {} in use, using http://{}",
+            preferred.port(),
+            bound
+        );
+    }
+    let addr = bound.to_string();
     let url = format!("http://{}", addr);
     println!("[resuma] starting dev server at {}", url);
     if open {
@@ -233,10 +267,11 @@ fn dev_command(addr: &str, open: bool, skip_runtime: bool) -> Result<()> {
 
     let mut watch_args = vec![
         "watch".to_string(),
-        "-c".to_string(),
         "-q".to_string(),
         "-w".to_string(),
         "src".to_string(),
+        "-w".to_string(),
+        "public".to_string(),
         "-w".to_string(),
         "Cargo.toml".to_string(),
     ];

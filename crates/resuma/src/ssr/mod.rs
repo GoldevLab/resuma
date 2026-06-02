@@ -247,7 +247,7 @@ fn wrap_document(
         .map(|s| format!(r#"<link rel="stylesheet" href="{}" />"#, escape_attr(s)))
         .unwrap_or_default();
     let scripts = client_scripts(opts, body_html, payload);
-    let dev_script = crate::server::dev::dev_reload_script();
+    let dev_script = crate::server::dev::dev_reload_script(&opts.csp_nonce);
     let head = apply_head_csp_nonce(&opts.head, &opts.csp_nonce);
 
     format!(

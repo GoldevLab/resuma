@@ -8,7 +8,7 @@ import { initIslands } from "./islands.js";
 import { initEffects, type ClientEffectSpec } from "./effects.js";
 import { prefetchLazyChunks } from "./boundaries.js";
 import { resolveHandler, type Handler } from "./handler-loader.js";
-import { initNavLinks, followRedirect } from "./navigation.js";
+import { initNavLinks, followRedirect, navigate, buildUrl } from "./navigation.js";
 
 interface ResumePayload {
   signals: Array<{ id: RawSignalId; value: unknown }>;
@@ -35,6 +35,8 @@ export interface ResumaGlobal {
   loaded: Map<string, Record<string, Function>>;
   refreshIsland: (id: string) => Promise<void>;
   context: (key: string) => unknown;
+  navigate: (href: string, pushState?: boolean) => Promise<void>;
+  buildUrl: (path: string, query?: Record<string, string | null | undefined>) => string;
 }
 
 declare global {
@@ -103,6 +105,8 @@ export async function bootstrap(): Promise<void> {
     safeAction: callServerActionSafe,
     refreshIsland,
     context: (key: string) => __resuma.contexts[key],
+    navigate,
+    buildUrl,
   };
   window.__resuma = __resuma;
 
@@ -110,6 +114,7 @@ export async function bootstrap(): Promise<void> {
   bindReactiveAttrs(root(), signals);
   initIslands(root(), signals);
   attachFormEnhancement();
+  initLoaderRefreshForms();
   applyStreamSlots(root());
   initPortals(root());
   initViewTransitions(root());
@@ -202,6 +207,29 @@ function showFieldErrors(form: HTMLFormElement, errors: Record<string, string>):
 
 function clearFieldErrors(form: HTMLFormElement): void {
   form.querySelectorAll("[data-r-field-error]").forEach((n) => n.remove());
+}
+
+/** GET forms marked with `data-r-loader-refresh` (see `loader_refresh_form` in Rust). */
+function initLoaderRefreshForms(): void {
+  document.addEventListener(
+    "submit",
+    (ev) => {
+      if (!(ev.target instanceof HTMLFormElement)) return;
+      const form = ev.target;
+      if (!form.hasAttribute("data-r-loader-refresh")) return;
+      if (form.getAttribute("data-r-on:submit") || form.querySelector("[data-r-on\\:submit]")) return;
+      ev.preventDefault();
+      const fd = new FormData(form);
+      const params: Record<string, string> = {};
+      fd.forEach((val, key) => {
+        const s = String(val);
+        if (s) params[key] = s;
+      });
+      const action = form.getAttribute("action") || location.pathname;
+      void window.__resuma?.navigate(buildUrl(action, params));
+    },
+    true,
+  );
 }
 
 function applyStreamSlots(scope: HTMLElement): void {

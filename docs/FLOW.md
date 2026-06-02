@@ -109,3 +109,4 @@ Full API: `/docs/api` on the docs site.
 | Theme | `/docs/cookbook/theme` |
 | Streaming loaders | `/docs/cookbook/streaming_loaders` |
 | Docker / Fly deploy | `/docs/cookbook/docker` |
+| Query loaders + `public/` + booking | [FLOW_COOKBOOK.md](./FLOW_COOKBOOK.md) |

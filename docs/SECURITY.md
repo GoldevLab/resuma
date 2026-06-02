@@ -30,6 +30,43 @@ Resuma ships with **secure defaults** comparable to Express + Helmet + rate limi
 | `RESUMA_BODY_LIMIT` | `1048576` | Max POST body bytes |
 | `RESUMA_RATE_ACTIONS` | `120` | Action RPC calls per IP per minute |
 | `RESUMA_RATE_SUBMITS` | `60` | Form submits per IP per minute |
+| `RESUMA_CSP` | on | Set `0` to disable CSP entirely |
+| `RESUMA_CSP_DEV` | off | With `RESUMA_DEV=1`, CSP is off unless you set this to `1` (Qwik-style dev skip) |
+| `RESUMA_CSP_REPORT_ONLY` | off | Emit `Content-Security-Policy-Report-Only` |
+| `RESUMA_CSP_STRICT_DYNAMIC` | on | `'strict-dynamic'` on `script-src` when a nonce is present |
+| `RESUMA_CSP_IMG_SRC` | — | Space/comma-separated extra `img-src` hosts |
+| `RESUMA_CSP_SCRIPT_SRC` | — | Extra `script-src` hosts |
+| `RESUMA_CSP_STYLE_SRC` | — | Extra `style-src` hosts |
+| `RESUMA_CSP_CONNECT_SRC` | — | Extra `connect-src` hosts |
+| `RESUMA_CSP_FONT_SRC` | — | Extra `font-src` hosts |
+
+## Content Security Policy (Qwik-style)
+
+Each HTML response gets a **cryptographic nonce** (stronger than Qwik’s time-based example). Inline `<style>` / `<script>` in `with_head()` receive the nonce at SSR. Production policy uses:
+
+- `script-src 'self' 'nonce-…' 'strict-dynamic' 'unsafe-eval'` — resumability needs `'unsafe-eval'`; no blanket `'unsafe-inline'` on scripts
+- `style-src` with nonce + `'unsafe-inline'` for `style=""` attributes
+- `img-src 'self' data: blob:` plus `RESUMA_CSP_IMG_SRC`
+
+In **dev** (`RESUMA_DEV=1`), CSP is **not sent** by default (like Qwik’s `if (isDev) return`). Use `RESUMA_CSP_DEV=1` to test CSP locally.
+
+Rust configuration:
+
+```rust
+use resuma::prelude::*;
+
+FlowApp::new()
+    .serve(FlowServeOptions {
+        security: SecurityConfig {
+            csp: CspConfig::production(["https://cdn.example.com"]),
+            ..SecurityConfig::from_env()
+        },
+        ..FlowServeOptions::default()
+    })
+    .await?;
+```
+
+Validate policies: [Google CSP Evaluator](https://csp-evaluator.withgoogle.com/).
 
 ### Fly.io / Docker
 

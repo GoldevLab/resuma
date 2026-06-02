@@ -77,8 +77,9 @@ pub use crate::client::{
     client_component, client_script_url, ClientComponent, CLIENT_SCRIPT_PREFIX,
 };
 
-pub use crate::core::{
-    combine_js, error_boundary, nav_link, no_serialize, portal, provide_context, provide_theme,
+    pub use crate::core::view::AttrValue;
+    pub use crate::core::{
+        combine_js, error_boundary, nav_link, no_serialize, portal, provide_context, provide_theme,
     push_slots, resolve_slot, show, signal, stream_chunk, stream_slot, theme_css_vars,
     use_computed, use_computed_with_js, use_context, use_debounce, use_effect, use_signal,
     use_store, use_task, use_theme, use_visible_task, visible_task_js, with_default_slot,
@@ -88,7 +89,8 @@ pub use crate::core::{
 };
 
 pub use crate::server::{
-    configure_security, register_server_action, set_action_middleware, ResumaApp, SecurityConfig,
+    build_content_security_policy, configure_security, register_server_action,
+    set_action_middleware, CspConfig, ResumaApp, SecurityConfig,
     ServeOptions, CSRF_FIELD, CSRF_HEADER,
 };
 
@@ -101,6 +103,8 @@ pub use crate::flow::{
     register_middleware, register_stream_chunk, register_stream_loader, register_submit,
     try_use_load, try_use_load_value, use_load, with_request, DiscoveredPage, FlowApp, FlowError,
     FlowExtensions, FlowPageRegistry, FlowPwaConfig, FlowServeOptions, LoadValue, LoaderError,
+    PublicAsset, PwaShortcut, build_query_href, collect_public_dir, current_location_href,
+    loader_refresh_form, loader_refresh_input, query_nav_link, theme_into_pwa,
     Redirect, SubmitError, SubmitValue,
 };
 
@@ -144,7 +148,10 @@ pub mod prelude {
         with_view_transition, Child, ClientComponent, Component, Computed, Effect, FlowApp,
         FlowError, FlowPageRegistry, FlowRequest, FlowServeOptions, IntoView, LoadValue,
         LoaderError, PageOptions, ReadSignal, Redirect, Result, ResumaApp, ResumaError,
-        SecurityConfig, ServeOptions, Signal, SlottedChild, Store, SubmitError, Theme, View,
+        CspConfig, FlowPwaConfig, PublicAsset, PwaShortcut, SecurityConfig, ServeOptions, Signal,
+        SlottedChild, AttrValue, build_query_href, loader_refresh_form, loader_refresh_input,
+        query_nav_link,
+        Store, SubmitError, Theme, View,
         WriteSignal, CLIENT_SCRIPT_PREFIX, CSRF_FIELD, CSRF_HEADER,
     };
 }
