@@ -60,3 +60,20 @@ CLI templates: `crates/resuma/templates/` (embedded via `include_str!`).
 ## Legacy crates (v0.1.x)
 
 `resuma-core`, `resuma-ssr`, etc. were published in v0.1.0 but are **deprecated** — use `resuma` only from v0.2 onward.
+
+### `resuma-rs2js` (do not use)
+
+The standalone `resuma-rs2js` crate is **obsolete**. Since v0.2.0 the translator lives inside **`resuma-macros`** as `src/rs2js/` (used by `view!`, `effect!`, `computed!`, `debounce!`, and handler `onClick`).
+
+- **No workspace crate** — nothing to merge or publish again.
+- **`resuma` / `resuma-macros` never depend on it** — only `resuma` + `resuma-macros` are published.
+
+To stop new installs from crates.io, **yank every published version** (crates.io does not allow deleting a crate name):
+
+```bash
+cargo login   # crates.io token
+cargo yank --vers 0.0.0 -p resuma-rs2js   # if that version exists
+cargo yank --vers 0.1.0 -p resuma-rs2js   # if that version exists
+```
+
+Your [crates.io dashboard](https://crates.io/crates/resuma-rs2js) may still list the crate under “My Crates” after yanking; it will no longer be installable via `cargo add`.

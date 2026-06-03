@@ -3,7 +3,7 @@
 //! Parsing strategy: hand-rolled recursive descent over `proc_macro2`
 //! tokens. We chose this over `rstml` to keep the dependency footprint
 //! tiny and to retain full control of how event handlers are translated
-//! to JavaScript via `resuma-rs2js`.
+//! to JavaScript via the internal `rs2js` module in this crate.
 
 use proc_macro2::{Delimiter, Literal, Span, TokenStream, TokenTree};
 use quote::{quote, quote_spanned};
