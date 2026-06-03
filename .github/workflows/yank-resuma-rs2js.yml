@@ -1,0 +1,13 @@
+# One-off: retire legacy resuma-rs2js on crates.io (code is in resuma-macros/src/rs2js/).
+name: Yank resuma-rs2js
+
+on:
+  workflow_dispatch:
+
+jobs:
+  yank:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo login "${{ secrets.CRATES_IO_TOKEN }}"
+      - run: ./scripts/yank-resuma-rs2js.sh
