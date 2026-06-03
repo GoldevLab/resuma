@@ -6,6 +6,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-06-03
+
+Stability release: SPA navigation parity, working client-replay macros, and security hardening.
+
 ### Fixed
 
 - **SPA navigation now replays the full mount pipeline.** `<NavLink>` / `__resuma.navigate` previously re-bound only reactive text/attrs and islands, silently dropping `effect!` / `computed!` / `debounce!`, visible tasks, lazy handler chunks, portals, stream slots, and view transitions on the destination page. Both the default `core.js` and the legacy `runtime.js` now register a single per-page mounter reused on first load and every SPA navigation.
@@ -221,6 +225,8 @@ Major release since v0.2.2: resumability-first model, client effect replay, dev 
 - Examples: counter, todo (backend security reference), flow-demo, flow-pages, website
 - Documentation site and markdown guides under `docs/`
 
+[0.4.7]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.7
+[0.4.6]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.6
 [0.4.2]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.2
 [0.4.1]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.1
 [0.4.0]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.0

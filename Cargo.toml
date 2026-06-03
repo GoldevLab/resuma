@@ -11,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.4.6"
+version = "0.4.7"
 edition = "2021"
 rust-version = "1.91"
 authors = ["Resuma Contributors"]
@@ -25,7 +25,7 @@ categories = ["web-programming", "asynchronous"]
 readme = "README.md"
 
 [workspace.dependencies]
-resuma-macros = { path = "crates/resuma-macros", version = "0.4.6" }
+resuma-macros = { path = "crates/resuma-macros", version = "0.4.7" }
 
 # 3rd-party
 serde       = { version = "1", features = ["derive"] }
