@@ -156,8 +156,8 @@ pub mod prelude {
 #[doc(hidden)]
 pub mod __private {
     //! Re-exports used by the macro-generated code.
-    pub use crate::core::effect::{attach_client_effect, use_computed_with_js};
-    pub use crate::core::task::register_debounce_effect;
+    pub use crate::core::effect::{attach_client_effect, use_computed_with_js, use_effect};
+    pub use crate::core::task::{register_debounce_effect, use_debounce};
     pub use crate::core::{combine_js, nav_link, show};
     pub use crate::core::{
         context::{current_context, with_handler_chunk, RenderContext, RenderMode},

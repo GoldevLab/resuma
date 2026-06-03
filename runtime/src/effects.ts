@@ -37,14 +37,22 @@ export function initEffects(
   for (const eff of effects) {
     try {
       const state = buildEffectState(eff.captures, signals, global);
-      const run = new Function("state", "__resuma", eff.body) as (
+      // rs2js emits the body as an arrow expression `(state, __resuma) => { … }`.
+      // Build it once, then invoke on each dependency change.
+      const run = new Function(`return (${eff.body});`)() as (
         state: Record<string, SignalCell<unknown>>,
         resuma: ResumaGlobal,
-      ) => void;
+      ) => unknown;
+
+      const targetCell =
+        eff.target != null ? signals.get(signalId(eff.target)) ?? null : null;
 
       const schedule = () => {
         try {
-          run(state, global);
+          const result = run(state, global);
+          // `computed!` returns a derived value bound to a target signal;
+          // `effect!` mutates signals itself and returns undefined.
+          if (targetCell && result !== undefined) targetCell.set(result);
         } catch (err) {
           console.error("[resuma] effect", eff.id, err);
         }

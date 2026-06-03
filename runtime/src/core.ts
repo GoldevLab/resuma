@@ -8,7 +8,7 @@ import { initIslands } from "./islands.js";
 import { initEffects, type ClientEffectSpec } from "./effects.js";
 import { prefetchLazyChunks } from "./boundaries.js";
 import { resolveHandler, type Handler } from "./handler-loader.js";
-import { initNavLinks, followRedirect, navigate, buildUrl } from "./navigation.js";
+import { initNavLinks, followRedirect, navigate, buildUrl, setPageMounter } from "./navigation.js";
 
 interface ResumePayload {
   signals: Array<{ id: RawSignalId; value: unknown }>;
@@ -84,23 +84,29 @@ function readPayload(): ResumePayload {
 
 let bootstrapped = false;
 
-/** Initialize signals, DOM bindings, and progressive enhancements. */
-export async function bootstrap(): Promise<void> {
-  if (bootstrapped) return;
-  bootstrapped = true;
-
+/**
+ * Mount (or re-mount) the current page: rebuild the `__resuma` global from the
+ * `#resuma-state` payload, then run every per-page initializer.
+ *
+ * Called on first load by [`bootstrap`] and again on each SPA navigation (via
+ * the mounter registered with `setPageMounter`). Document-level listeners that
+ * must attach only once (forms, NavLink delegation, dev bridge) live in
+ * [`bootstrap`], not here.
+ */
+export function mountPage(): void {
   const payload = readPayload();
   const signals = initSignals(payload.signals);
 
   const state: Record<string, SignalCell<unknown>> = {};
   for (const [k, cell] of signals) state[k] = cell;
 
+  const prev = window.__resuma;
   const __resuma: ResumaGlobal = {
     state,
     signals,
     handlers: payload.handlers,
     contexts: payload.contexts ?? {},
-    loaded: new Map(),
+    loaded: prev?.loaded ?? new Map(),
     action: callServerAction,
     safeAction: callServerActionSafe,
     refreshIsland,
@@ -110,18 +116,31 @@ export async function bootstrap(): Promise<void> {
   };
   window.__resuma = __resuma;
 
-  bindReactiveText(root(), signals);
-  bindReactiveAttrs(root(), signals);
-  initIslands(root(), signals);
-  attachFormEnhancement();
-  initLoaderRefreshForms();
-  applyStreamSlots(root());
-  initPortals(root());
-  initViewTransitions(root());
-  initNavLinks();
+  const scope = root();
+  bindReactiveText(scope, signals);
+  bindReactiveAttrs(scope, signals);
+  initIslands(scope, signals);
+  applyStreamSlots(scope);
+  initPortals(scope);
+  initViewTransitions(scope);
   runVisibleTasks(payload.visible_tasks ?? {}, state);
   initEffects(payload.effects ?? [], signals, __resuma);
-  prefetchLazyChunks(payload.lazy_chunks ?? [], root());
+  prefetchLazyChunks(payload.lazy_chunks ?? [], scope);
+}
+
+/** Initialize signals, DOM bindings, and progressive enhancements. */
+export async function bootstrap(): Promise<void> {
+  if (bootstrapped) return;
+  bootstrapped = true;
+
+  // SPA navigation replays the same full mount pipeline as first load.
+  setPageMounter(mountPage);
+  mountPage();
+
+  // Document-level listeners — attach exactly once.
+  attachFormEnhancement();
+  initLoaderRefreshForms();
+  initNavLinks();
   connectDevBridge();
 }
 

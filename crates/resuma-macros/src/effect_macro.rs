@@ -43,21 +43,29 @@ pub fn expand(input: TokenStream) -> TokenStream {
     };
 
     let mut capture_pairs = Vec::new();
+    let mut clone_lets = Vec::new();
     for name in &parsed.signals {
         capture_pairs.push(quote! {
-            (#name.to_string(), #name.id())
+            (::std::string::ToString::to_string(stringify!(#name)), #name.id())
         });
+        // Clone listed signals into the closure so the originals stay usable
+        // (e.g. rendered) after the macro, and ids are read before the move.
+        clone_lets.push(quote! { let #name = ::std::clone::Clone::clone(&#name); });
     }
 
     let closure = &parsed.closure;
     quote! {
         {
-            let __eff = ::resuma::__private::use_effect(#closure);
+            let __captures = ::std::collections::BTreeMap::from([#(#capture_pairs),*]);
+            let __eff = {
+                #(#clone_lets)*
+                ::resuma::__private::use_effect(#closure)
+            };
             ::resuma::__private::attach_client_effect(
                 &__eff,
                 "effect",
                 #js,
-                ::std::collections::BTreeMap::from([#(#capture_pairs),*]),
+                __captures,
                 None,
                 None,
             );

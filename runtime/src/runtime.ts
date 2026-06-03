@@ -22,7 +22,7 @@
 import { initSignals, type SignalCell, applyDom, bindReactiveText, bindReactiveAttrs, type RawSignalId } from "./signals.js";
 import { initIslands } from "./islands.js";
 import { resolveHandler } from "./handler-loader.js";
-import { followRedirect, initNavLinks, remountPage } from "./navigation.js";
+import { followRedirect, initNavLinks, remountPage, setPageMounter } from "./navigation.js";
 
 interface ResumePayload {
   signals: Array<{ id: RawSignalId; value: unknown }>;
@@ -81,6 +81,8 @@ function mutationHeaders(extra: Record<string, string> = {}): Record<string, str
 }
 
 function bootstrap(): void {
+  // SPA navigation replays the same per-page mount used on first load.
+  setPageMounter(mountCurrentPage);
   mountCurrentPage();
   attachEventDelegation();
   attachFormEnhancement();

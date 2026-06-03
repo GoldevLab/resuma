@@ -58,20 +58,26 @@ pub fn expand(input: TokenStream) -> TokenStream {
         .unwrap_or_else(|| syn::Ident::new("_", proc_macro2::Span::call_site()));
 
     let mut capture_pairs = Vec::new();
+    let mut clone_lets = Vec::new();
     for name in &parsed.signals {
         capture_pairs.push(quote! {
-            (#name.to_string(), #name.id())
+            (::std::string::ToString::to_string(stringify!(#name)), #name.id())
         });
+        clone_lets.push(quote! { let #name = ::std::clone::Clone::clone(&#name); });
     }
 
     quote! {
         {
-            let __sig = #primary.clone();
-            ::resuma::__private::use_debounce(&__sig, #ms, #closure);
+            let __sig = ::std::clone::Clone::clone(&#primary);
+            let __captures = ::std::collections::BTreeMap::from([#(#capture_pairs),*]);
+            {
+                #(#clone_lets)*
+                ::resuma::__private::use_debounce(&__sig, #ms, #closure);
+            }
             ::resuma::__private::register_debounce_effect(
                 &__sig,
                 #ms,
-                ::std::collections::BTreeMap::from([#(#capture_pairs),*]),
+                __captures,
                 &#js,
             );
         }

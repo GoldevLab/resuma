@@ -34,6 +34,19 @@ interface ResumaGlobal {
 const ROOT_ID = "resuma-root";
 const STATE_SCRIPT_ID = "resuma-state";
 
+/**
+ * Per-page mount routine registered by whichever runtime bootstrapped
+ * (`core.ts` or the legacy `runtime.ts`). Decoupling it here avoids a circular
+ * static import while ensuring SPA navigation re-runs the *full* mount pipeline
+ * (effects, visible tasks, lazy chunks, portals, stream slots, view transitions)
+ * — not just the reactive-text/attr/island subset.
+ */
+let pageMounter: (() => void) | null = null;
+
+export function setPageMounter(fn: () => void): void {
+  pageMounter = fn;
+}
+
 function root(): HTMLElement {
   return document.getElementById(ROOT_ID) ?? document.body;
 }
@@ -83,6 +96,21 @@ function updateNavActiveClasses(path: string): void {
 
 /** Re-mount signals and bindings after swapping page HTML. */
 export function remountPage(): void {
+  if (!window.__resuma) {
+    // Core not yet bootstrapped — let the loader/core take over via full load.
+    window.location.reload();
+    return;
+  }
+
+  // Preferred path: replay the exact same mount the active runtime uses on
+  // first load, so effects/tasks/lazy-chunks/portals survive SPA navigation.
+  if (pageMounter) {
+    pageMounter();
+    updateNavActiveClasses(location.pathname + location.search);
+    return;
+  }
+
+  // Fallback (no runtime registered a mounter): reactive bindings + islands.
   const payload = readPayloadFromScript(document.getElementById(STATE_SCRIPT_ID));
   const signals = initSignals(payload.signals);
 
@@ -90,11 +118,6 @@ export function remountPage(): void {
   for (const [k, cell] of signals) state[k] = cell;
 
   const prev = window.__resuma;
-  if (!prev) {
-    // Core not yet bootstrapped — let the loader/core take over via full load.
-    window.location.reload();
-    return;
-  }
   const __resuma: ResumaGlobal = {
     state,
     signals,

@@ -107,11 +107,30 @@ fn HomePage() {
 
 #[component]
 fn AboutPage() {
+    let n = signal(0_i32);
+    let doubled = signal(0_i32);
+    // Client-replayable effect (rs2js). It only re-runs if the full mount
+    // pipeline (initEffects) runs after SPA navigation — guards the regression
+    // where SPA nav re-bound text/attrs but skipped effects/tasks/lazy chunks.
+    effect!([n, doubled], move || {
+        doubled.set(n.get() * 2);
+    });
+
     view! {
         <main>
             {nav()}
             <h1>"About Resuma E2E"</h1>
             <p data-testid="about-copy">"SPA navigation rendered this page."</p>
+            <section data-testid="about-effect">
+                <button
+                    type="button"
+                    data-testid="about-bump"
+                    onClick={n.update(|c| *c += 1)}
+                >
+                    "Bump"
+                </button>
+                <p data-testid="about-doubled">"Doubled: " {doubled}</p>
+            </section>
         </main>
     }
 }

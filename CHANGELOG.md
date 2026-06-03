@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- **SPA navigation now replays the full mount pipeline.** `<NavLink>` / `__resuma.navigate` previously re-bound only reactive text/attrs and islands, silently dropping `effect!` / `computed!` / `debounce!`, visible tasks, lazy handler chunks, portals, stream slots, and view transitions on the destination page. Both the default `core.js` and the legacy `runtime.js` now register a single per-page mounter reused on first load and every SPA navigation.
+- **Client-replay macros were non-functional.** `effect!` referenced an unexported `use_effect` and, with `debounce!` / `computed!`, built capture keys via `signal.to_string()` (requires `Display`, which `Signal` does not implement) — none compiled. They now capture the variable name (`stringify!`), auto-clone listed signals into the closure so originals stay renderable, and read signal ids before the move.
+- **Effect/computed bodies never executed on the client.** `initEffects` did `new Function("state", "__resuma", body)` where `body` is an arrow expression, so the arrow was created but never invoked. It is now invoked, and `computed!`'s `target` signal is assigned from the returned value.
+
+### Security
+
+- **Rate-limit buckets are swept.** `RATE_BUCKETS` only pruned the key being hit, so one entry per distinct client IP accumulated forever. A throttled global sweep (≤ once per window) evicts fully-expired buckets.
+- **Constant-time CSRF comparison.** Token vs. cookie now uses a length-independent constant-time compare instead of `!=`, removing a token-position timing side channel.
+
 ## [0.4.6] - 2026-06-02
 
 Flow DX release: query navigation, `public/`, and booking scaffold.

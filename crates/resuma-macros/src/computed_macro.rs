@@ -43,18 +43,26 @@ pub fn expand(input: TokenStream) -> TokenStream {
     };
 
     let mut capture_pairs = Vec::new();
+    let mut clone_lets = Vec::new();
     for name in &parsed.signals {
         capture_pairs.push(quote! {
-            (#name.to_string(), #name.id())
+            (::std::string::ToString::to_string(stringify!(#name)), #name.id())
         });
+        clone_lets.push(quote! { let #name = ::std::clone::Clone::clone(&#name); });
     }
 
     let closure = &parsed.closure;
     quote! {
-        ::resuma::__private::use_computed_with_js(
-            ::std::collections::BTreeMap::from([#(#capture_pairs),*]),
-            #closure,
-            #js,
-        )
+        {
+            let __captures = ::std::collections::BTreeMap::from([#(#capture_pairs),*]);
+            ::resuma::__private::use_computed_with_js(
+                __captures,
+                {
+                    #(#clone_lets)*
+                    #closure
+                },
+                #js,
+            )
+        }
     }
 }

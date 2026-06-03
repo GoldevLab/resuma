@@ -263,6 +263,11 @@ pub fn check_rate_limit(ip: &str, bucket: &str, limit_per_minute: u32) -> Result
     let now = Instant::now();
     let window = Duration::from_secs(60);
     let mut map = RATE_BUCKETS.write();
+
+    // Periodically evict fully-expired buckets so memory does not grow
+    // unbounded with one entry per distinct client IP that never returns.
+    sweep_rate_buckets(&mut map, now, window);
+
     let entries = map.entry(key).or_default();
     entries.retain(|t| now.duration_since(*t) < window);
     if entries.len() as u32 >= limit_per_minute {
@@ -270,6 +275,29 @@ pub fn check_rate_limit(ip: &str, bucket: &str, limit_per_minute: u32) -> Result
     }
     entries.push(now);
     Ok(())
+}
+
+/// Drop buckets whose every timestamp has aged out. Runs at most once per
+/// `window` (guarded by a global timestamp) so it stays O(n) amortized.
+fn sweep_rate_buckets(map: &mut HashMap<String, Vec<Instant>>, now: Instant, window: Duration) {
+    static LAST_SWEEP: Lazy<RwLock<Option<Instant>>> = Lazy::new(|| RwLock::new(None));
+    {
+        let last = *LAST_SWEEP.read();
+        let due = last.is_none_or(|t| now.duration_since(t) >= window);
+        if !due {
+            return;
+        }
+    }
+    *LAST_SWEEP.write() = Some(now);
+    prune_rate_buckets(map, now, window);
+}
+
+/// Remove aged-out timestamps and any bucket left empty. Always runs (no time gate).
+fn prune_rate_buckets(map: &mut HashMap<String, Vec<Instant>>, now: Instant, window: Duration) {
+    map.retain(|_, entries| {
+        entries.retain(|t| now.duration_since(*t) < window);
+        !entries.is_empty()
+    });
 }
 
 fn header_str(headers: &HeaderMap, name: &str) -> Option<String> {
@@ -304,10 +332,23 @@ pub fn validate_csrf(headers: &HeaderMap, form_csrf: Option<&str>) -> Result<()>
         .as_deref()
         .or(form_csrf)
         .ok_or(ResumaError::InvalidCsrf)?;
-    if token != cookie || token.len() < 16 {
+    if token.len() < 16 || !constant_time_eq(token.as_bytes(), cookie.as_bytes()) {
         return Err(ResumaError::InvalidCsrf);
     }
     Ok(())
+}
+
+/// Length-independent, constant-time byte comparison for secrets/tokens.
+/// Avoids leaking match position via early-return timing.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff: u8 = 0;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
 }
 
 /// Reject cross-origin POST when `Origin`/`Referer` do not match the host.
@@ -580,6 +621,33 @@ mod tests {
         headers.insert(header::ORIGIN, "http://localhost:3000".parse().unwrap());
         // host carries the port as it would from the HTTP `Host` header.
         assert!(validate_origin(&headers, "localhost:3000").is_ok());
+    }
+
+    #[test]
+    fn constant_time_eq_matches_only_identical_bytes() {
+        assert!(super::constant_time_eq(
+            b"abc123def456ghij",
+            b"abc123def456ghij"
+        ));
+        assert!(!super::constant_time_eq(
+            b"abc123def456ghij",
+            b"abc123def456ghiJ"
+        ));
+        assert!(!super::constant_time_eq(b"short", b"longer-value"));
+        assert!(super::constant_time_eq(b"", b""));
+    }
+
+    #[test]
+    fn rate_bucket_sweep_drops_expired_entries() {
+        let mut map: HashMap<String, Vec<Instant>> = HashMap::new();
+        let now = Instant::now();
+        let window = Duration::from_secs(60);
+        let old = now - Duration::from_secs(120);
+        map.insert("a:1".into(), vec![old]);
+        map.insert("a:2".into(), vec![now]);
+        super::prune_rate_buckets(&mut map, now, window);
+        assert!(!map.contains_key("a:1"), "expired bucket should be evicted");
+        assert!(map.contains_key("a:2"), "fresh bucket should remain");
     }
 
     #[test]

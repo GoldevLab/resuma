@@ -168,6 +168,11 @@ async function runBrowserChecks() {
     const marker = await page.evaluate(() => window.__resumaE2EMarker ?? null);
     assert(marker === "kept", "SPA navigation reloaded the document instead of swapping in place");
 
+    log("testing client effects replay after SPA navigation");
+    await expectText(page.getByTestId("about-doubled"), "Doubled: 0", "computed initial after nav");
+    await clickUnique(page.getByTestId("about-bump"), "about bump button");
+    await expectText(page.getByTestId("about-doubled"), "Doubled: 2", "computed replays after SPA nav");
+
     assert(consoleErrors.length === 0, `browser console errors:\n${consoleErrors.join("\n")}`);
   } finally {
     await browser.close();
