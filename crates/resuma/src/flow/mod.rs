@@ -49,7 +49,9 @@ pub use redirect::{
 };
 pub use registry::{dispatch_load, dispatch_submit, register_loader, register_submit};
 pub use request::FlowRequest;
-pub use routes::{attach_flow_routes, FlowSeoConfig, SubmitResponse};
+pub use routes::{
+    attach_flow_routes, attach_seo_kit_routes, FlowSeoConfig, SeoKitRouteOpts, SubmitResponse,
+};
 pub use runtime::{
     current_request, set_load_cache, try_use_load, try_use_load_value, use_load, with_request,
 };

@@ -79,6 +79,19 @@ resuma dev --open
 
 **Templates:** `basic` · `todo` · `flow` · `flow-booking` · `flow-fullstack`
 
+### AI assistants (Cursor, Codex, Gemini)
+
+Teach your editor Resuma patterns — signals, `view!`, Flow, `#[server]` — with one command:
+
+```bash
+resuma install skill              # ~/.cursor/skills/resuma/ (global)
+resuma install skill --project    # .cursor/skills/resuma/ (this repo)
+resuma install skill --target agents  # ~/.agents/skills/ (Codex-style)
+```
+
+**Skill vs MCP:** start with the **skill** (guidance for writing code). An official MCP for docs search / CLI tools may come later.  
+Guide: [resuma-docs.fly.dev/docs/integrations/ai_assistant](https://resuma-docs.fly.dev/docs/integrations/ai_assistant)
+
 ```rust
 use resuma::prelude::*;
 
@@ -197,7 +210,7 @@ Deep dive: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Security: [`docs/SE
 |---|---|
 | **Documentation** | [resuma-docs.fly.dev/docs](https://resuma-docs.fly.dev/docs) |
 | **API reference** | [docs.rs/resuma](https://docs.rs/resuma) |
-| **Examples** | [`examples/`](examples/) — counter, todo, flow-demo, flow-pages |
+| **Examples** | [`examples/`](examples/) — counter, todo, flow-demo, flow-pages, **resuma-audit** (full docs QA) |
 | **Benchmark** | [`benchmark/`](benchmark/) — multi-framework comparison + `run.mjs` |
 | **Markdown docs** | [`docs/`](docs/) — offline / GitHub reference |
 | **Security** | [`SECURITY.md`](SECURITY.md) · [security guide](https://resuma-docs.fly.dev/docs/security) |

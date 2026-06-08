@@ -195,3 +195,41 @@ async fn island_refresh_returns_cached_html() {
     assert!(html.contains("resuma-island"));
     assert!(html.contains("inner"));
 }
+
+#[tokio::test]
+async fn seo_kit_serves_robots_and_llms_txt() {
+    use resuma::SeoKit;
+    let kit = SeoKit::new("Demo", "https://example.com")
+        .with_llms_summary("Demo site for resumable Rust SSR.");
+    let app = ResumaApp::new()
+        .with_seo_kit(kit)
+        .page("/", || view! { <main>"ok"</main> })
+        .into_router();
+
+    let robots = app
+        .clone()
+        .oneshot(Request::get("/robots.txt").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(robots.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(robots.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let txt = String::from_utf8_lossy(&body);
+    assert!(txt.contains("GPTBot"));
+    assert!(txt.contains("https://example.com/sitemap.xml"));
+    assert!(txt.contains("llms.txt"));
+
+    let llms = app
+        .oneshot(Request::get("/llms.txt").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(llms.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(llms.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let txt = String::from_utf8_lossy(&body);
+    assert!(txt.contains("# Demo"));
+    assert!(txt.contains("resumable Rust SSR"));
+    assert!(txt.contains("https://example.com"));
+}

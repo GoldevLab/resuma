@@ -340,6 +340,7 @@ pub fn page_needs_client(payload: &ResumePayload, body_html: &str) -> bool {
         "resuma-island",
         "resuma-boundary",
         "resuma-dyn",
+        "resuma-show",
         "data-r-bind:",
         "data-r-nav",
         "data-r-portal",

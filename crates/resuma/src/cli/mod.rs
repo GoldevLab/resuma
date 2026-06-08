@@ -8,6 +8,7 @@ use clap::{Parser, Subcommand};
 
 mod add;
 mod doctor;
+mod install;
 mod prompt;
 mod scaffold;
 mod update;
@@ -35,6 +36,11 @@ enum Commands {
     Add {
         /// Integration name: `sqlx` or `turso` (prompted when omitted).
         name: Option<String>,
+    },
+    /// Install editor/agent helpers (skill for Cursor, Codex, etc.).
+    Install {
+        #[command(subcommand)]
+        item: InstallCommands,
     },
     /// Update `resuma` / `resuma-macros` in the current project, or reinstall the CLI.
     Update {
@@ -93,6 +99,25 @@ enum Commands {
     },
 }
 
+#[derive(Subcommand, Debug)]
+enum InstallCommands {
+    /// Copy the Resuma agent skill (SKILL.md) for Cursor / Codex / compatible editors.
+    Skill {
+        /// Install to `.cursor/skills/resuma/` in the current project.
+        #[arg(long)]
+        project: bool,
+        /// Target: `cursor` (default), `project`, `agents`, or `all`.
+        #[arg(long, value_name = "TARGET")]
+        target: Vec<String>,
+        /// Overwrite an existing SKILL.md.
+        #[arg(long)]
+        force: bool,
+        /// List install paths without writing files.
+        #[arg(long)]
+        list: bool,
+    },
+}
+
 /// Entry point for the `resuma` binary (`cargo install resuma`).
 pub fn run() -> Result<()> {
     tracing_subscriber::fmt::init();
@@ -101,6 +126,7 @@ pub fn run() -> Result<()> {
     match args.command {
         Commands::New { name, template } => new_command(name, template),
         Commands::Add { name } => add_command(name),
+        Commands::Install { item } => install_command(item),
         Commands::Update {
             cli,
             check,
@@ -146,6 +172,20 @@ fn add_command(name: Option<String>) -> Result<()> {
         None => return prompt::missing_arg("integration required — resuma add sqlx"),
     };
     add::add_integration(&name)
+}
+
+fn install_command(item: InstallCommands) -> Result<()> {
+    match item {
+        InstallCommands::Skill {
+            project,
+            target,
+            force,
+            list,
+        } => {
+            let targets = install::parse_targets(&target, project)?;
+            install::install_skill(&targets, force, list)
+        }
+    }
 }
 
 /// Ensure `cargo` works — auto-select `stable` when rustup has no default toolchain.

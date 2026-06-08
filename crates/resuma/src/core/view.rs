@@ -31,6 +31,8 @@ pub enum View {
     /// A rendered chunk of raw HTML — used for trusted output and for nested
     /// pre-rendered components that have already been flattened.
     Raw(String),
+    /// Reactive conditional — toggles branches on the client via `<resuma-show>`.
+    Show(ShowView),
     Empty,
 }
 
@@ -89,6 +91,19 @@ pub struct Island {
 pub struct Boundary {
     pub chunk_id: String,
     pub view: Box<View>,
+}
+
+/// Reactive `<Show when={signal}>` — both branches are SSR'd; the runtime
+/// toggles visibility based on the bound bool signal.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShowView {
+    pub signal: SignalId,
+    /// When true, the `when` branch is shown when the signal is *false*.
+    pub inverted: bool,
+    /// SSR snapshot of whether the "if" branch is visible.
+    pub initial: bool,
+    pub children: Vec<Child>,
+    pub fallback: Option<Box<View>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

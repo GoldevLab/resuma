@@ -1,0 +1,17 @@
+[package]
+name = "example-resuma-audit"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[[bin]]
+name = "resuma-audit"
+path = "src/main.rs"
+
+[dependencies]
+resuma = { path = "../../crates/resuma" }
+tokio  = { workspace = true }
+serde  = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+anyhow = { workspace = true }

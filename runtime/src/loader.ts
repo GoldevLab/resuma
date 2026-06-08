@@ -70,7 +70,7 @@ function needsCoreNow(payload: ResumePayload, scope: HTMLElement): boolean {
   if (payload.visible_tasks && Object.keys(payload.visible_tasks).length) return true;
   if (payload.lazy_chunks?.length) return true;
   return !!scope.querySelector(
-    "resuma-island, resuma-boundary, resuma-dyn, [data-r-bind], [data-r-submit], template[data-r-portal], template[data-r-stream-chunk], [data-r-vt], a[data-r-nav]",
+    "resuma-island, resuma-boundary, resuma-dyn, resuma-show, [data-r-bind], [data-r-submit], template[data-r-portal], template[data-r-stream-chunk], [data-r-vt], a[data-r-nav]",
   );
 }
 
@@ -79,6 +79,14 @@ async function ensureCore(): Promise<void> {
     window.__resumaCoreReady = import(CORE_URL).then((mod) => mod.bootstrap());
   }
   await window.__resumaCoreReady;
+}
+
+/** Eagerly warm core when the page has signals, islands, or handlers. */
+function preloadCoreIfNeeded(): void {
+  const payload = readPayload();
+  if (needsCoreNow(payload, pageRoot())) {
+    void ensureCore();
+  }
 }
 
 function eventTargetElement(ev: Event): Element | null {
@@ -130,11 +138,12 @@ function attachDelegation(): void {
 
 function boot(): void {
   attachDelegation();
-  const payload = readPayload();
-  if (needsCoreNow(payload, pageRoot())) {
-    void ensureCore();
-  }
+  preloadCoreIfNeeded();
 }
+
+// Start warming core as soon as the loader script executes — do not wait for
+// DOMContentLoaded, otherwise the first user click can race bootstrap.
+preloadCoreIfNeeded();
 
 declare global {
   interface Window {

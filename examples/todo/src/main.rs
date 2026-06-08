@@ -208,6 +208,42 @@ fn todo_workspace() -> View {
             } catch (e) {
                 state.ui.update(s => { s.status = "Could not load tasks"; });
             }
+            let dragEl = null;
+            const list = () => document.querySelector('.todo-list');
+            document.addEventListener('dragstart', (e) => {
+                const li = e.target.closest('.todo-item');
+                if (!li || !list()?.contains(li)) return;
+                dragEl = li;
+                li.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            document.addEventListener('dragend', (e) => {
+                const li = e.target.closest('.todo-item');
+                li?.classList.remove('dragging');
+                dragEl = null;
+            });
+            document.addEventListener('dragover', (e) => {
+                const ul = list();
+                if (!ul || !dragEl) return;
+                const li = e.target.closest('.todo-item');
+                if (!li || li === dragEl || !ul.contains(li)) return;
+                e.preventDefault();
+                const rect = li.getBoundingClientRect();
+                const after = e.clientY > rect.top + rect.height / 2;
+                ul.insertBefore(dragEl, after ? li.nextSibling : li);
+            });
+            document.addEventListener('drop', (e) => {
+                const ul = list();
+                if (!ul) return;
+                e.preventDefault();
+                const ids = [...ul.querySelectorAll('.todo-item')].map(el => Number(el.dataset.id));
+                const map = new Map(state.todos.value.map(t => [t.id, t]));
+                const reordered = ids.map(id => map.get(id)).filter(Boolean);
+                if (reordered.length === state.todos.value.length) {
+                    state.todos.set(reordered);
+                    state.ui.update(s => { s.status = 'Order updated (client)'; });
+                }
+            });
         })()
     "#,
     );
@@ -462,7 +498,7 @@ fn todo_workspace() -> View {
                     let done = t.done;
                     let editing = ui.get().editing_id == t.id;
                     view! {
-                        <li class={format!("todo-item{}", if done { " done" } else { "" })} data-id={id.clone()}>
+                        <li class={format!("todo-item{}", if done { " done" } else { "" })} data-id={id.clone()} draggable="true">
                             <label class="todo-check">
                                 <input
                                     type="checkbox"
@@ -823,7 +859,9 @@ body {
   background: var(--resuma-bg);
   border: 1px solid color-mix(in srgb, var(--resuma-fg) 10%, transparent);
   animation: fade-in 240ms ease both;
+  cursor: grab;
 }
+.todo-item.dragging { opacity: 0.55; cursor: grabbing; }
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }

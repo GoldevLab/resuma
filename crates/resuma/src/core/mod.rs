@@ -52,7 +52,7 @@ pub use handler::{HandlerCapture, HandlerRef, IslandRef, ServerActionRef};
 pub use handler_combine::combine_js;
 pub use nav::nav_link;
 pub use portal::portal;
-pub use show::show;
+pub use show::{show, show_signal};
 pub use signal::{signal, use_signal, ReadSignal, Signal, SignalId, WriteSignal};
 pub use slot::{push_slots, resolve_slot, with_default_slot, SlotGuard, SlottedChild};
 pub use store::{no_serialize, use_store, NoSerialize, Store};

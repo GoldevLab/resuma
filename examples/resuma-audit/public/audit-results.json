@@ -1,0 +1,15 @@
+{
+  "signals": "pass",
+  "clipboard": "pass",
+  "picker": "pass",
+  "animations": "pass",
+  "drag_drop": "pass",
+  "image_list": "pass",
+  "network": "pass",
+  "storage": "pass",
+  "gestures": "pass",
+  "user_presence": "pass",
+  "todo": "pass",
+  "matrix": "pass",
+  "virtual_list": "pass"
+}

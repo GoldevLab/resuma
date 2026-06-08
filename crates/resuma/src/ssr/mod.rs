@@ -20,13 +20,14 @@ use crate::core::{
     context::{page_needs_client, RenderContext, RenderMode, ResumePayload},
     handler::HandlerRef,
     serialize::encode_payload,
-    view::{Attr, AttrValue, Child, Element, Fragment, Island, View},
+    view::{Attr, AttrValue, Child, Element, Fragment, Island, ShowView, View},
     with_context,
 };
 
 mod escape;
 pub mod pwa;
 pub mod seo;
+pub mod seo_kit;
 pub mod stream;
 use escape::{escape_attr, escape_text};
 
@@ -75,6 +76,8 @@ pub struct PageOptions {
     /// Per-request CSRF token embedded in the state payload.
     #[doc(hidden)]
     pub csrf_token: String,
+    /// Optional SEO / analytics / GEO kit merged at render time.
+    pub seo_kit: Option<seo_kit::SeoKit>,
 }
 
 /// Render a complete HTML document for an already-built view (merges payload handlers server-side).
@@ -313,6 +316,7 @@ fn write_view(buf: &mut String, view: &View) {
         View::Component(c) => write_view(buf, &c.view),
         View::Island(island) => write_island(buf, island),
         View::Boundary(boundary) => write_boundary(buf, boundary),
+        View::Show(show) => write_show(buf, show),
         View::Slot(slot) => {
             let resolved = crate::core::resolve_slot(slot.name.as_deref());
             write_view(buf, &resolved);
@@ -443,6 +447,33 @@ fn write_island(buf: &mut String, island: &Island) {
     );
     buf.push_str(&inner);
     let _ = write!(buf, "</resuma-island>");
+}
+
+fn write_show(buf: &mut String, show: &ShowView) {
+    let _ = write!(
+        buf,
+        r#"<resuma-show data-r-show="{}" data-r-inverted="{}">"#,
+        show.signal, show.inverted
+    );
+    let _ = write!(buf, r#"<div data-r-show-if"#);
+    if !show.initial {
+        buf.push_str(" hidden");
+    }
+    buf.push('>');
+    for c in &show.children {
+        write_child(buf, c);
+    }
+    buf.push_str("</div>");
+    if let Some(fb) = &show.fallback {
+        let _ = write!(buf, r#"<div data-r-show-else"#);
+        if show.initial {
+            buf.push_str(" hidden");
+        }
+        buf.push('>');
+        write_view(buf, fb);
+        buf.push_str("</div>");
+    }
+    buf.push_str("</resuma-show>");
 }
 
 fn write_boundary(buf: &mut String, boundary: &crate::core::view::Boundary) {

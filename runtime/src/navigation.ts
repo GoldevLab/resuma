@@ -198,6 +198,7 @@ export async function navigate(href: string, pushState = true): Promise<void> {
     // New navigations land at the top; back/forward keep the browser's scroll.
     if (pushState) window.scrollTo(0, 0);
     focusMain();
+    document.dispatchEvent(new CustomEvent("resuma:navigate", { detail: { href } }));
   } catch (err) {
     console.error("[resuma] navigation failed", err);
     window.location.href = href;

@@ -168,6 +168,12 @@ impl FlowApp {
         self
     }
 
+    /// SEO / GEO / analytics (Meta Pixel, JSON-LD, robots/llms helpers).
+    pub fn with_seo_kit(mut self, kit: crate::ssr::seo_kit::SeoKit) -> Self {
+        self.inner = self.inner.with_seo_kit(kit);
+        self
+    }
+
     /// Configure installable PWA (manifest, service worker, icons). Overrides auto defaults.
     pub fn with_pwa(mut self, config: super::pwa::FlowPwaConfig) -> Self {
         self.inner = self.inner.with_pwa(config.to_pwa_options());
@@ -337,7 +343,11 @@ impl FlowApp {
             });
         }
 
-        let site_url = std::env::var("SITE_URL").unwrap_or_default();
+        let site_url = std::env::var("SITE_URL")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| app.page_options().site_url.clone());
+        let seo_kit = app.page_options().seo_kit.clone();
 
         let dynamic_pages: HashMap<String, PageEntry> = self
             .pages
@@ -358,7 +368,11 @@ impl FlowApp {
 
         let mut router = attach_flow_routes(
             app.into_router(),
-            super::routes::FlowSeoConfig { site_url, paths },
+            super::routes::FlowSeoConfig {
+                site_url,
+                paths,
+                seo_kit,
+            },
         );
 
         if let Some(pwa) = pwa {

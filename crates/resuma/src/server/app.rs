@@ -123,6 +123,13 @@ impl ResumaApp {
         self
     }
 
+    /// SEO / GEO / analytics kit (Meta Pixel, JSON-LD, llms.txt helpers).
+    pub fn with_seo_kit(mut self, kit: crate::ssr::seo_kit::SeoKit) -> Self {
+        kit.apply(&mut self.page_options);
+        self.page_options.seo_kit = Some(kit);
+        self
+    }
+
     pub fn with_pwa(mut self, pwa: crate::ssr::PwaOptions) -> Self {
         self.page_options.pwa = Some(pwa);
         self
@@ -242,6 +249,9 @@ impl ResumaApp {
     }
 
     pub fn into_router(self) -> Router {
+        let seo_kit = self.page_options.seo_kit.clone();
+        let skip_robots = self.page_factories.contains_key("/robots.txt");
+        let skip_llms = self.page_factories.contains_key("/llms.txt");
         let security_cfg = security::config();
         let state = Arc::new(AppState {
             pages: self.page_factories,
@@ -284,6 +294,17 @@ impl ResumaApp {
 
         if super::dev::dev_mode_enabled() {
             router = router.route("/_resuma/dev/ws", get(super::dev::dev_ws_handler));
+        }
+
+        if let Some(kit) = seo_kit {
+            router = crate::flow::routes::attach_seo_kit_routes(
+                router,
+                kit,
+                crate::flow::routes::SeoKitRouteOpts {
+                    robots: !skip_robots,
+                    llms: !skip_llms,
+                },
+            );
         }
 
         router.with_state(state)

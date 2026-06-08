@@ -6,6 +6,27 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-06-08
+
+### Added
+
+- **Reactive `<Show>`** — client toggles branches via `<resuma-show>` (fixes P0 conditional UI bug).
+- **`SeoKit` auto routes** — `with_seo_kit()` serves `/robots.txt` and `/llms.txt` on `ResumaApp` and `FlowApp`.
+- **`resuma install skill`** — installs the Resuma agent skill for Cursor (`~/.cursor/skills/`), project (`.cursor/skills/`), or agents (`~/.agents/skills/`).
+- **`example-resuma-audit`** — interactive audit app (~88 routes) with test registry, matrix, SQLx todo demo, Playwright + smoke scripts.
+- Docs: [AI assistant guide](https://resuma-docs.fly.dev/docs/integrations/ai_assistant), SEO/GEO page updates.
+
+### Fixed
+
+- **`view!` Show macro** — correct quote expansion for `signal.get()` receivers (was generating invalid field access).
+- **Portals / Show runtime** — portal target cache, `replaceChildren` on close, safer mount via `cloneNode`.
+- **`use_visible_task` + ASI** — handler bodies wrapped so arrow functions execute reliably on the client.
+- **Flow `public/`** — `with_public_dir` for static assets without duplicate route panics.
+
+### Changed
+
+- **`example-todo`** — drag-and-drop reorder (client-side) in the full showcase app.
+
 ## [0.4.7] - 2026-06-03
 
 Stability release: SPA navigation parity, working client-replay macros, and security hardening.
@@ -225,6 +246,7 @@ Major release since v0.2.2: resumability-first model, client effect replay, dev 
 - Examples: counter, todo (backend security reference), flow-demo, flow-pages, website
 - Documentation site and markdown guides under `docs/`
 
+[0.4.8]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.8
 [0.4.7]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.7
 [0.4.6]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.6
 [0.4.2]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.2

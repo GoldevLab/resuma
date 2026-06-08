@@ -277,16 +277,15 @@ function applyStreamSlots(scope: HTMLElement): void {
 
 function initPortals(scope: HTMLElement): void {
   scope.querySelectorAll("template[data-r-portal]").forEach((tpl) => {
+    const showBranch = tpl.closest<HTMLElement>("[data-r-show-if]");
+    if (showBranch?.hidden) return;
     const targetId = tpl.getAttribute("data-r-portal");
     if (!targetId) return;
     const target =
       document.getElementById(targetId) ??
       document.querySelector(`[data-r-portal-target="${targetId}"]`);
     if (!target) return;
-    const frag = document.createDocumentFragment();
-    while (tpl.content.firstChild) frag.appendChild(tpl.content.firstChild);
-    target.appendChild(frag);
-    tpl.remove();
+    target.appendChild(tpl.content.cloneNode(true));
   });
 }
 
@@ -320,13 +319,26 @@ function runVisibleTasks(tasks: Record<string, string>, state: Record<string, Si
 
   const run = (id: string, source: string) => {
     try {
-      const fn = new Function("state", "__resuma", `return ${source}`) as
-        (state: unknown, resuma: ResumaGlobal) => Promise<void> | void;
+      const trimmed = source.trim();
+      const fn = new Function(
+        "state",
+        "__resuma",
+        `return (${trimmed})(state, __resuma);`,
+      ) as (state: unknown, resuma: ResumaGlobal) => Promise<void> | void;
       void Promise.resolve(fn(state, window.__resuma!));
     } catch (err) {
       console.error("[resuma] visible task", id, err);
     }
   };
+
+  const pending = new Set(entries.map(([id]) => id));
+  const runOnce = (id: string, source: string) => {
+    if (!pending.has(id)) return;
+    pending.delete(id);
+    run(id, source);
+  };
+
+  for (const [id, source] of entries) runOnce(id, source);
 
   if ("IntersectionObserver" in window) {
     const io = new IntersectionObserver((entries, obs) => {
@@ -334,14 +346,15 @@ function runVisibleTasks(tasks: Record<string, string>, state: Record<string, Si
         if (!entry.isIntersecting) continue;
         const id = (entry.target as HTMLElement).dataset.rVisibleTask;
         const source = id ? tasks[id] : undefined;
-        if (source) run(id, source);
+        if (id && source) runOnce(id, source);
         obs.unobserve(entry.target);
       }
     }, { rootMargin: "50px" });
     for (const [id] of entries) {
       const marker = document.createElement("span");
-      marker.hidden = true;
       marker.dataset.rVisibleTask = id;
+      marker.style.cssText =
+        "position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden";
       root().appendChild(marker);
       io.observe(marker);
     }

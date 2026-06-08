@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::core::view::View;
 use crate::core::ResumaError;
+use crate::ssr::seo_kit::SeoKit;
 use crate::ssr::{render_to_string, PageOptions};
 use axum::extract::{ConnectInfo, Form, Path};
 use axum::http::{header, HeaderMap, StatusCode, Uri};
@@ -32,6 +33,24 @@ pub struct SubmitResponse {
 pub struct FlowSeoConfig {
     pub site_url: String,
     pub paths: Vec<String>,
+    /// When set, `/robots.txt` and `/llms.txt` use [`SeoKit`] generators (GEO + AI crawlers).
+    pub seo_kit: Option<SeoKit>,
+}
+
+/// Which auto-generated SEO text routes to mount (skip paths already registered as pages).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SeoKitRouteOpts {
+    pub robots: bool,
+    pub llms: bool,
+}
+
+impl SeoKitRouteOpts {
+    pub fn all() -> Self {
+        Self {
+            robots: true,
+            llms: true,
+        }
+    }
 }
 
 const FAVICON_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Resuma">
@@ -183,6 +202,9 @@ fn client_ip_from_connect(headers: &HeaderMap, connect: &ConnectInfo<SocketAddr>
 }
 
 fn robots_body(seo: &FlowSeoConfig) -> String {
+    if let Some(kit) = &seo.seo_kit {
+        return kit.robots_txt();
+    }
     let mut body = String::from("User-agent: *\nAllow: /\n");
     let base = seo.site_url.trim_end_matches('/');
     if !base.is_empty() {
@@ -191,6 +213,37 @@ fn robots_body(seo: &FlowSeoConfig) -> String {
         body.push_str("/sitemap.xml\n");
     }
     body
+}
+
+/// Mount `/robots.txt` and `/llms.txt` from a [`SeoKit`].
+pub fn attach_seo_kit_routes<S>(
+    mut router: Router<S>,
+    kit: SeoKit,
+    opts: SeoKitRouteOpts,
+) -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    if opts.robots {
+        let robots_kit = kit.clone();
+        router = router.route(
+            "/robots.txt",
+            axum::routing::get(move || {
+                let body = robots_kit.robots_txt();
+                async move { ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], body) }
+            }),
+        );
+    }
+    if opts.llms {
+        router = router.route(
+            "/llms.txt",
+            axum::routing::get(move || {
+                let body = kit.llms_txt();
+                async move { ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], body) }
+            }),
+        );
+    }
+    router
 }
 
 fn sitemap_xml(seo: &FlowSeoConfig) -> String {
@@ -239,17 +292,21 @@ async fn serve_favicon() -> impl IntoResponse {
 }
 
 pub fn attach_flow_routes(router: Router, seo: FlowSeoConfig) -> Router {
-    let robots_seo = seo.clone();
-    let sitemap_seo = seo;
-
-    router
-        .route(
+    let router = if seo.seo_kit.is_some() {
+        attach_seo_kit_routes(router, seo.seo_kit.clone().unwrap(), SeoKitRouteOpts::all())
+    } else {
+        let robots_seo = seo.clone();
+        router.route(
             "/robots.txt",
             axum::routing::get(move || {
                 let body = robots_body(&robots_seo);
                 async move { ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], body) }
             }),
         )
+    };
+    let sitemap_seo = seo;
+
+    router
         .route(
             "/sitemap.xml",
             axum::routing::get(move || {

@@ -1,0 +1,4 @@
+audit.db
+*.db-journal
+.env
+scripts/.venv/

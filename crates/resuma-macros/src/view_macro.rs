@@ -440,17 +440,17 @@ fn emit_nav_link(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
 }
 
 fn emit_show(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
-    let mut when = quote! { true };
+    let mut when_expr: Option<TokenStream> = None;
     let mut fallback = quote! { None::<::resuma::__private::View> };
 
     for a in attrs {
         match a.name.as_str() {
             "when" => {
-                when = match a.value {
+                when_expr = Some(match a.value {
                     AttrVal::StaticStr(s) => quote!(#s == "true"),
-                    AttrVal::Expr(ts) => quote!({ #ts }),
+                    AttrVal::Expr(ts) => ts,
                     AttrVal::Bool => quote!(true),
-                };
+                });
             }
             "fallback" => {
                 fallback = match a.value {
@@ -466,13 +466,49 @@ fn emit_show(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
     }
 
     let child_pushes = children.into_iter().map(emit_child);
+    let children_vec = quote! { vec![ #(#child_pushes),* ] };
+    let when = when_expr.unwrap_or_else(|| quote! { true });
+
+    if let Some((signal, inverted)) = parse_signal_when(when.clone()) {
+        return quote! {
+            ::resuma::__private::show_signal(
+                &#signal,
+                #inverted,
+                #children_vec,
+                #fallback,
+            )
+        };
+    }
 
     quote! {
         ::resuma::__private::show(
             #when,
-            vec![ #(#child_pushes),* ],
+            #children_vec,
             #fallback,
         )
+    }
+}
+
+/// When `when={signal}` or `when={signal.get()}` (or `!signal.get()`), return
+/// the signal expression and whether the condition is inverted.
+fn parse_signal_when(ts: TokenStream) -> Option<(TokenStream, bool)> {
+    let expr = syn::parse2::<syn::Expr>(ts).ok()?;
+    match expr {
+        syn::Expr::MethodCall(m) if m.method == "get" => {
+            let recv = &m.receiver;
+            Some((quote! { #recv }, false))
+        }
+        syn::Expr::Unary(u) if matches!(u.op, syn::UnOp::Not(_)) => {
+            if let syn::Expr::MethodCall(m) = *u.expr {
+                if m.method == "get" {
+                    let recv = &m.receiver;
+                    return Some((quote! { #recv }, true));
+                }
+            }
+            None
+        }
+        syn::Expr::Path(_) => Some((quote! { #expr }, false)),
+        _ => None,
     }
 }
 

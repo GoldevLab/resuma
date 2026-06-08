@@ -8,10 +8,11 @@ members = [
     "examples/flow-demo",
     "examples/flow-pages",
     "examples/e2e",
+    "examples/resuma-audit",
 ]
 
 [workspace.package]
-version = "0.4.7"
+version = "0.4.8"
 edition = "2021"
 rust-version = "1.91"
 authors = ["Resuma Contributors"]
@@ -25,7 +26,7 @@ categories = ["web-programming", "asynchronous"]
 readme = "README.md"
 
 [workspace.dependencies]
-resuma-macros = { path = "crates/resuma-macros", version = "0.4.7" }
+resuma-macros = { path = "crates/resuma-macros", version = "0.4.8" }
 
 # 3rd-party
 serde       = { version = "1", features = ["derive"] }
@@ -51,6 +52,7 @@ async-trait   = "0.1"
 ctor          = "0.2"
 tokio-tungstenite = "0.24"
 futures-util  = { version = "0.3", default-features = false, features = ["std"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
 
 [profile.release]
 opt-level = 3

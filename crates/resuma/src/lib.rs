@@ -94,6 +94,7 @@ pub use crate::server::{
     CSRF_HEADER,
 };
 
+pub use crate::ssr::seo_kit::{AiCrawlerPolicy, MetaTag, SeoKit};
 pub use crate::ssr::{render_to_stream, render_to_string, render_view, PageOptions};
 
 pub use crate::flow::{
@@ -158,7 +159,7 @@ pub mod __private {
     //! Re-exports used by the macro-generated code.
     pub use crate::core::effect::{attach_client_effect, use_computed_with_js, use_effect};
     pub use crate::core::task::{register_debounce_effect, use_debounce};
-    pub use crate::core::{combine_js, nav_link, show};
+    pub use crate::core::{combine_js, nav_link, show, show_signal};
     pub use crate::core::{
         context::{current_context, with_handler_chunk, RenderContext, RenderMode},
         handler::{HandlerCapture, HandlerRef},

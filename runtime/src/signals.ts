@@ -108,6 +108,58 @@ function formatValue(v: unknown): string {
   try { return JSON.stringify(v); } catch { return String(v); }
 }
 
+/** Toggle `<Show>` branches bound to bool signals. */
+export function bindShows(root: HTMLElement, signals: Map<string, SignalCell<unknown>>): void {
+  root.querySelectorAll<HTMLElement>("resuma-show").forEach((el) => {
+    const sigId = el.getAttribute("data-r-show");
+    if (!sigId) return;
+    const inverted = el.getAttribute("data-r-inverted") === "true";
+    const ifBranch = el.querySelector<HTMLElement>("[data-r-show-if]");
+    const elseBranch = el.querySelector<HTMLElement>("[data-r-show-else]");
+    const cell = signals.get(sigId);
+    if (!cell || !ifBranch) return;
+    const apply = (v: unknown) => {
+      const on = inverted ? !Boolean(v) : Boolean(v);
+      ifBranch.hidden = !on;
+      if (elseBranch) elseBranch.hidden = on;
+      let portalTargetId = el.dataset.rPortalTarget;
+      const portalTpl = ifBranch.querySelector<HTMLTemplateElement>("template[data-r-portal]");
+      if (!portalTargetId && portalTpl) {
+        portalTargetId = portalTpl.getAttribute("data-r-portal") ?? undefined;
+        if (portalTargetId) el.dataset.rPortalTarget = portalTargetId;
+      }
+      if (portalTargetId) {
+        const target =
+          document.getElementById(portalTargetId) ??
+          document.querySelector<HTMLElement>(`[data-r-portal-target="${portalTargetId}"]`);
+        if (target) {
+          if (!on) {
+            target.replaceChildren();
+          } else if (portalTpl) {
+            mountPortals(ifBranch);
+          }
+        }
+      }
+    };
+    apply(cell.value);
+    cell.subscribe(apply);
+  });
+}
+
+function mountPortals(scope: HTMLElement): void {
+  scope.querySelectorAll("template[data-r-portal]").forEach((tpl) => {
+    const showBranch = tpl.closest<HTMLElement>("[data-r-show-if]");
+    if (showBranch?.hidden) return;
+    const targetId = tpl.getAttribute("data-r-portal");
+    if (!targetId) return;
+    const target =
+      document.getElementById(targetId) ??
+      document.querySelector(`[data-r-portal-target="${targetId}"]`);
+    if (!target) return;
+    target.replaceChildren(tpl.content.cloneNode(true));
+  });
+}
+
 /** Re-run all bindings after a partial DOM swap (HMR / island refresh). */
 export function applyDom(): void {
   const r = (window as unknown as { __resuma?: { signals: Map<string, SignalCell<unknown>> } }).__resuma;
@@ -115,4 +167,5 @@ export function applyDom(): void {
   const root = document.getElementById("resuma-root") ?? document.body;
   bindReactiveText(root, r.signals);
   bindReactiveAttrs(root, r.signals);
+  bindShows(root, r.signals);
 }
