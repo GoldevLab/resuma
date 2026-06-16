@@ -49,7 +49,7 @@ clap        = { version = "4", features = ["derive"] }
 walkdir     = "2"
 getrandom     = { version = "0.2", features = ["std"] }
 async-trait   = "0.1"
-ctor          = "0.2"
+ctor          = "1.0"
 tokio-tungstenite = "0.24"
 futures-util  = { version = "0.3", default-features = false, features = ["std"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
