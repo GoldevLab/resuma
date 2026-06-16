@@ -47,7 +47,8 @@ pub use ops::{
     REQUEST_ID_HEADER,
 };
 pub use page_cache::{
-    page_csrf, stage_page_csrf, stage_response_cache_control, take_response_cache_control,
+    page_csrf, page_csp_nonce, stage_page_csrf, stage_page_csp_nonce, stage_response_cache_control,
+    take_response_cache_control,
 };
 pub use request_path::{stage_response_path, take_response_path};
 pub use rate_limit::{configure_rate_limit_backend, RateLimitBackend};

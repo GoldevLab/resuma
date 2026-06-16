@@ -173,7 +173,7 @@ async fn island_refresh_returns_cached_html() {
     island_cache::clear_island_cache();
 
     let ctx = RenderContext::new(RenderMode::Ssr);
-    let view = resuma::__private::wrap_in_island("demo", 1, View::Text("inner".into()), "eager");
+    let view = resuma::__private::wrap_in_island("demo", 1, || View::Text("inner".into()), "eager");
     with_context(ctx, || {
         let _html = resuma::ssr::render_view(&view);
     });

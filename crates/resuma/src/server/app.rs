@@ -442,6 +442,7 @@ async fn serve_page(uri: Uri, State(state): State<Arc<AppState>>, req: Request<B
     let flow_req = crate::flow::request::from_http_request(&req, &path, Default::default());
     let opts = page_security_opts(&state.page_options);
     super::page_cache::stage_page_csrf(opts.csrf_token.clone());
+    super::page_cache::stage_page_csp_nonce(opts.csp_nonce.clone());
     let ctx = RenderContext::new(RenderMode::Ssr);
     let view = with_context(ctx.clone(), || factory(flow_req));
     render_page_response(&state, view, ctx, opts, &path, request_is_https(&req))
@@ -457,6 +458,7 @@ async fn serve_fallback(
     if let Some(fb) = &state.fallback {
         let opts = page_security_opts(&state.page_options);
         super::page_cache::stage_page_csrf(opts.csrf_token.clone());
+    super::page_cache::stage_page_csp_nonce(opts.csp_nonce.clone());
         let ctx = RenderContext::new(RenderMode::Ssr);
         if let Some(view) = with_context(ctx.clone(), || fb(path, flow_req)) {
             return render_page_response(&state, view, ctx, opts, path, request_is_https(&req));

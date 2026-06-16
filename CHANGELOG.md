@@ -6,6 +6,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-06-16
+
+### Fixed
+
+- **Client component CSP** — module scripts from [`ClientComponent`](crates/resuma/src/client/mod.rs) now receive the per-request CSP nonce so they load under production `strict-dynamic` policies.
+
 ## [1.0.1] - 2026-06-16
 
 ### Fixed

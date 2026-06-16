@@ -5,6 +5,7 @@ use std::cell::RefCell;
 thread_local! {
     static STAGED: RefCell<Option<String>> = const { RefCell::new(None) };
     static PAGE_CSRF: RefCell<String> = const { RefCell::new(String::new()) };
+    static PAGE_CSP_NONCE: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
 /// Stage a `Cache-Control` header for the page about to be returned.
@@ -25,4 +26,14 @@ pub fn stage_page_csrf(token: impl Into<String>) {
 /// CSRF token for the current page render (forms).
 pub fn page_csrf() -> String {
     PAGE_CSRF.with(|cell| cell.borrow().clone())
+}
+
+/// Stage the CSP nonce for inline/module scripts rendered during this page pass.
+pub fn stage_page_csp_nonce(nonce: impl Into<String>) {
+    PAGE_CSP_NONCE.with(|cell| *cell.borrow_mut() = nonce.into());
+}
+
+/// CSP nonce for the current page render (client components, inline scripts).
+pub fn page_csp_nonce() -> String {
+    PAGE_CSP_NONCE.with(|cell| cell.borrow().clone())
 }

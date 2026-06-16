@@ -101,9 +101,15 @@ pub fn client_component(comp: ClientComponent) -> View {
     }
 
     let script = escape_attr(&comp.script_url());
+    let nonce = crate::server::page_csp_nonce();
+    let nonce_attr = if nonce.is_empty() {
+        String::new()
+    } else {
+        format!(r#" nonce="{}""#, escape_attr(&nonce))
+    };
     View::raw(format!(
         r#"<div {attrs}></div>
-<script type="module" src="{script}" defer></script>"#
+<script type="module" src="{script}" defer{nonce_attr}></script>"#
     ))
 }
 
