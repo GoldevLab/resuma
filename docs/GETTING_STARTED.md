@@ -9,7 +9,7 @@
 ## Try examples
 
 ```sh
-git clone https://github.com/GolfredoPerezFernandez/resuma
+git clone https://github.com/GoldevLab/resuma
 cd resuma
 
 cargo run -p example-todo        # full showcase + backend security reference

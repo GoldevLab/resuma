@@ -12,7 +12,7 @@
   <text x="220" y="150" fill="#ffffff" font-family="Segoe UI, system-ui, sans-serif" font-size="88" font-weight="700">Resuma</text>
   <text x="80" y="260" fill="#f3ecff" font-family="Segoe UI, system-ui, sans-serif" font-size="36" font-weight="600">Rust web framework - resumable SSR - not a CV app</text>
   <text x="80" y="340" fill="#e9d5ff" font-family="Segoe UI, system-ui, sans-serif" font-size="28">907 B loader - zero hydration - Axum - server actions</text>
-  <text x="80" y="400" fill="#ddd6fe" font-family="Segoe UI, system-ui, sans-serif" font-size="24">github.com/GolfredoPerezFernandez/resuma</text>
+  <text x="80" y="400" fill="#ddd6fe" font-family="Segoe UI, system-ui, sans-serif" font-size="24">github.com/GoldevLab/resuma</text>
   <rect x="80" y="480" width="280" height="56" rx="12" fill="rgba(255,255,255,0.12)"/>
   <text x="220" y="516" text-anchor="middle" fill="#fff" font-family="Segoe UI, system-ui, sans-serif" font-size="22" font-weight="600">resuma-docs.fly.dev</text>
 </svg>

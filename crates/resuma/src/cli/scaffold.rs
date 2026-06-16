@@ -149,7 +149,7 @@ channel = "stable"
 
 const README: &str = r##"# %NAME%
 
-Created with [Resuma](https://github.com/GolfredoPerezFernandez/resuma).
+Created with [Resuma](https://github.com/GoldevLab/resuma).
 
 ## Templates
 

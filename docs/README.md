@@ -35,7 +35,7 @@ cargo run -p example-flow-pages  # File-based routing
 cargo run -p example-counter     # Minimal counter
 ```
 
-Docs site source lives in the separate **`site-docs`** repository (sibling folder `../site-docs` next to this monorepo). GitHub: [resuma-docs](https://github.com/GolfredoPerezFernandez/resuma-docs).
+Docs site source lives in the separate **`site-docs`** repository (sibling folder `../site-docs` next to this monorepo). GitHub: [resuma-docs](https://github.com/GoldevLab/resuma-docs).
 
 ## Docs site map
 

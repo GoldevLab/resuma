@@ -13,7 +13,7 @@
 
 Instead:
 
-1. Open a [GitHub Security Advisory](https://github.com/GolfredoPerezFernandez/resuma/security/advisories/new) (preferred), **or**
+1. Open a [GitHub Security Advisory](https://github.com/GoldevLab/resuma/security/advisories/new) (preferred), **or**
 2. Email the maintainers privately (see GitHub profile contact).
 
 Include:

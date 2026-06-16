@@ -1,6 +1,6 @@
 # Contributing to Resuma
 
-Thanks for helping improve Resuma. This repo is the **framework** (crates, runtime, examples, benchmark). The **docs site** lives in **`../site-docs`** (GitHub: [resuma-docs](https://github.com/GolfredoPerezFernandez/resuma-docs)), deployed at [resuma-docs.fly.dev](https://resuma-docs.fly.dev).
+Thanks for helping improve Resuma. This repo is the **framework** (crates, runtime, examples, benchmark). The **docs site** lives in **`../site-docs`** (GitHub: [resuma-docs](https://github.com/GoldevLab/resuma-docs)), deployed at [resuma-docs.fly.dev](https://resuma-docs.fly.dev).
 
 ## Before you start
 
@@ -11,7 +11,7 @@ Thanks for helping improve Resuma. This repo is the **framework** (crates, runti
 ## Development setup
 
 ```bash
-git clone https://github.com/GolfredoPerezFernandez/resuma
+git clone https://github.com/GoldevLab/resuma
 cd resuma
 cargo build --workspace
 cd runtime && npm ci && npm run build
@@ -59,4 +59,4 @@ Be respectful in issues and PRs. Report unacceptable behavior to maintainers pri
 
 ## Questions
 
-Open a [GitHub Issue](https://github.com/GolfredoPerezFernandez/resuma/issues) for bugs and feature requests. For security issues, see [SECURITY.md](SECURITY.md).
+Open a [GitHub Issue](https://github.com/GoldevLab/resuma/issues) for bugs and feature requests. For security issues, see [SECURITY.md](SECURITY.md).

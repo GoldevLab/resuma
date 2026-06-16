@@ -274,7 +274,7 @@ Major release since v0.2.2: resumability-first model, client effect replay, dev 
 
 ### Fixed
 
-- `repository` and `homepage` metadata now point to `https://github.com/GolfredoPerezFernandez/resuma`
+- `repository` and `homepage` metadata now point to `https://github.com/GoldevLab/resuma`
 - All published crates include a crate-specific `README.md` on crates.io
 
 ## [0.1.0] - 2025-05-23
@@ -288,19 +288,19 @@ Major release since v0.2.2: resumability-first model, client effect replay, dev 
 - Examples: counter, todo (backend security reference), flow-demo, flow-pages, website
 - Documentation site and markdown guides under `docs/`
 
-[0.4.8]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.8
-[0.4.7]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.7
-[0.4.6]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.6
-[0.4.2]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.2
-[0.4.1]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.1
-[0.4.0]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.4.0
-[0.3.3]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.3.3
-[0.3.2]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.3.2
-[0.3.1]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.3.1
-[0.3.0]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.3.0
-[0.2.3]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.2.3
-[0.2.2]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.2.2
-[0.2.1]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.2.1
-[0.2.0]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.2.0
-[0.1.1]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.1.1
-[0.1.0]: https://github.com/GolfredoPerezFernandez/resuma/releases/tag/v0.1.0
+[0.4.8]: https://github.com/GoldevLab/resuma/releases/tag/v0.4.8
+[0.4.7]: https://github.com/GoldevLab/resuma/releases/tag/v0.4.7
+[0.4.6]: https://github.com/GoldevLab/resuma/releases/tag/v0.4.6
+[0.4.2]: https://github.com/GoldevLab/resuma/releases/tag/v0.4.2
+[0.4.1]: https://github.com/GoldevLab/resuma/releases/tag/v0.4.1
+[0.4.0]: https://github.com/GoldevLab/resuma/releases/tag/v0.4.0
+[0.3.3]: https://github.com/GoldevLab/resuma/releases/tag/v0.3.3
+[0.3.2]: https://github.com/GoldevLab/resuma/releases/tag/v0.3.2
+[0.3.1]: https://github.com/GoldevLab/resuma/releases/tag/v0.3.1
+[0.3.0]: https://github.com/GoldevLab/resuma/releases/tag/v0.3.0
+[0.2.3]: https://github.com/GoldevLab/resuma/releases/tag/v0.2.3
+[0.2.2]: https://github.com/GoldevLab/resuma/releases/tag/v0.2.2
+[0.2.1]: https://github.com/GoldevLab/resuma/releases/tag/v0.2.1
+[0.2.0]: https://github.com/GoldevLab/resuma/releases/tag/v0.2.0
+[0.1.1]: https://github.com/GoldevLab/resuma/releases/tag/v0.1.1
+[0.1.0]: https://github.com/GoldevLab/resuma/releases/tag/v0.1.0

@@ -8,12 +8,12 @@
 
 Ship HTML from the server. The browser **resumes** serialized state and lazy handler chunks — it never re-runs your components. Static pages ship **zero client JS**.
 
-**Official repo:** [github.com/GolfredoPerezFernandez/resuma](https://github.com/GolfredoPerezFernandez/resuma) · **Docs:** [resuma-docs.fly.dev](https://resuma-docs.fly.dev/docs) · **Crate:** [crates.io/crates/resuma](https://crates.io/crates/resuma)
+**Official repo:** [github.com/GoldevLab/resuma](https://github.com/GoldevLab/resuma) · **Docs:** [resuma-docs.fly.dev](https://resuma-docs.fly.dev/docs) · **Crate:** [crates.io/crates/resuma](https://crates.io/crates/resuma)
 
 [![Crates.io](https://img.shields.io/crates/v/resuma.svg)](https://crates.io/crates/resuma)
 [![docs.rs](https://img.shields.io/docsrs/resuma)](https://docs.rs/resuma)
-[![CI](https://github.com/GolfredoPerezFernandez/resuma/actions/workflows/ci.yml/badge.svg)](https://github.com/GolfredoPerezFernandez/resuma/actions/workflows/ci.yml)
-[![License](https://img.shields.io/crates/l/resuma.svg)](https://github.com/GolfredoPerezFernandez/resuma)
+[![CI](https://github.com/GoldevLab/resuma/actions/workflows/ci.yml/badge.svg)](https://github.com/GoldevLab/resuma/actions/workflows/ci.yml)
+[![License](https://img.shields.io/crates/l/resuma.svg)](https://github.com/GoldevLab/resuma)
 [![Rust](https://img.shields.io/badge/rust-1.91%2B-orange.svg)](https://rustup.rs)
 [![Initial JS](https://img.shields.io/badge/initial%20JS-901%20B-712cf9.svg)](benchmark/README.md)
 
@@ -237,7 +237,7 @@ Docs site (separate repo): [resuma-docs.fly.dev](https://resuma-docs.fly.dev)
 **From source:**
 
 ```bash
-git clone https://github.com/GolfredoPerezFernandez/resuma
+git clone https://github.com/GoldevLab/resuma
 cd resuma
 cargo install --path crates/resuma --features cli --force
 cargo run -p example-counter
@@ -271,7 +271,7 @@ ResumaApp::new()
 
 ## Community
 
-- **Issues & ideas:** [GitHub Issues](https://github.com/GolfredoPerezFernandez/resuma/issues)
+- **Issues & ideas:** [GitHub Issues](https://github.com/GoldevLab/resuma/issues)
 - **Security:** see [SECURITY.md](SECURITY.md) — please do not file public issues for exploitable bugs
 
 Contributions welcome — read [CONTRIBUTING.md](CONTRIBUTING.md) first.
@@ -288,7 +288,7 @@ Spanish for both *resumes* (continues) and *summary* — the framework **resumes
 
 | If you searched for… | You want |
 |----------------------|--------|
-| `resuma github` + Rust / SSR / framework | **This repo** — [GolfredoPerezFernandez/resuma](https://github.com/GolfredoPerezFernandez/resuma) |
+| `resuma github` + Rust / SSR / framework | **This repo** — [GoldevLab/resuma](https://github.com/GoldevLab/resuma) |
 | `resuma rust framework` | [Getting started](https://resuma-docs.fly.dev/docs/getting_started) · `cargo install resuma` |
 | `rust web framework no hydration` | [Architecture](https://resuma-docs.fly.dev/docs/architecture) · [Benchmark](https://resuma-docs.fly.dev/docs/benchmark) |
 | `qwik rust` / resumability | [Flow guide](https://resuma-docs.fly.dev/docs/flow) · Qwik-style lazy handlers in Rust |

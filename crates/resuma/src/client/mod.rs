@@ -16,8 +16,8 @@
 //!
 //! ## TypeScript
 //!
-//! Copy [`client-sdk/resuma-client.ts`](https://github.com/GolfredoPerezFernandez/resuma/blob/main/client-sdk/resuma-client.ts)
-//! into your app and call [`bootClientComponent`](https://github.com/GolfredoPerezFernandez/resuma/blob/main/client-sdk/resuma-client.ts)
+//! Copy [`client-sdk/resuma-client.ts`](https://github.com/GoldevLab/resuma/blob/main/client-sdk/resuma-client.ts)
+//! into your app and call [`bootClientComponent`](https://github.com/GoldevLab/resuma/blob/main/client-sdk/resuma-client.ts)
 //! from each bundled entry.
 
 use crate::View;

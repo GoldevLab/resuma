@@ -79,7 +79,7 @@ cd my-app && resuma dev
 - **Docs:** https://resuma-docs.fly.dev
 - **Crate:** https://crates.io/crates/resuma
 - **API:** https://docs.rs/resuma
-- **Repo:** https://github.com/GolfredoPerezFernandez/resuma
+- **Repo:** https://github.com/GoldevLab/resuma
 
 ## What to show in a GIF (10 seconds)
 
