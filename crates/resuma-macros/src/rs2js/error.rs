@@ -16,3 +16,15 @@ impl Rs2JsError {
         }
     }
 }
+
+/// User-facing compile error with remediation hints (handlers, effects, computed, debounce).
+pub fn translation_help(context: &str, err: &Rs2JsError) -> String {
+    format!(
+        "Resuma could not compile this {context} to browser JavaScript: {}.\n\n\
+         Supported client code is intentionally small and resumable. Try one of these:\n\
+         - update signals directly: count.update(|c| *c += 1)\n\
+         - use js! {{ ... }} for DOM/browser APIs\n\
+         - move complex Rust or database work into a #[server] action",
+        err.message
+    )
+}

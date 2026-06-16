@@ -3,12 +3,12 @@
  * Signals, islands, forms, streaming slots, portals, and server actions.
  */
 
-import { initSignals, type SignalCell, applyDom, bindReactiveText, bindReactiveAttrs, bindShows, type RawSignalId } from "./signals.js";
+import { initSignals, type SignalCell, applyDom, bindReactiveText, bindReactiveAttrs, bindShows, bindFor, bindMatch, type RawSignalId } from "./signals.js";
 import { initIslands } from "./islands.js";
 import { initEffects, type ClientEffectSpec } from "./effects.js";
 import { prefetchLazyChunks } from "./boundaries.js";
 import { resolveHandler, type Handler } from "./handler-loader.js";
-import { initNavLinks, followRedirect, navigate, buildUrl, setPageMounter } from "./navigation.js";
+import { initNavLinks, followRedirect, navigate, buildUrl, invalidate, setPageMounter } from "./navigation.js";
 
 interface ResumePayload {
   signals: Array<{ id: RawSignalId; value: unknown }>;
@@ -37,6 +37,7 @@ export interface ResumaGlobal {
   context: (key: string) => unknown;
   navigate: (href: string, pushState?: boolean) => Promise<void>;
   buildUrl: (path: string, query?: Record<string, string | null | undefined>) => string;
+  invalidate: (path?: string, query?: Record<string, string | null | undefined>) => Promise<void>;
 }
 
 declare global {
@@ -113,6 +114,7 @@ export function mountPage(): void {
     context: (key: string) => __resuma.contexts[key],
     navigate,
     buildUrl,
+    invalidate,
   };
   window.__resuma = __resuma;
 
@@ -120,6 +122,8 @@ export function mountPage(): void {
   bindReactiveText(scope, signals);
   bindReactiveAttrs(scope, signals);
   bindShows(scope, signals);
+  bindFor(scope, signals);
+  bindMatch(scope, signals);
   initIslands(scope, signals);
   applyStreamSlots(scope);
   initPortals(scope);
@@ -307,7 +311,9 @@ function runVisibleTasks(
 
   const run = (id: string, source: string) => {
     try {
-      const trimmed = source.trim();
+      let trimmed = source.trim();
+      // Legacy `(async () => { ... })()` — strip trailing invocation.
+      if (trimmed.endsWith(")()")) trimmed = trimmed.slice(0, -2);
       const fn = new Function(
         "state",
         "__resuma",

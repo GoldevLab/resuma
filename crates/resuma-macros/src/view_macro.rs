@@ -290,7 +290,12 @@ fn emit_node(node: Node) -> TokenStream {
     match node {
         Node::Text(t) => quote! { ::resuma::__private::View::Text(#t.to_string()) },
         // Take a reference so signals captured elsewhere are not moved.
-        Node::Expr(ts) => quote! { ::resuma::__private::IntoView::into_view(&(#ts)) },
+        Node::Expr(ts) => {
+            if let Some(span) = signal_get_span(&ts) {
+                return view_compile_err(span, SIGNAL_GET_LINT);
+            }
+            quote! { ::resuma::__private::IntoView::into_view(&(#ts)) }
+        }
         Node::Fragment(children) => {
             let cs = children.into_iter().map(emit_child);
             quote! { ::resuma::__private::View::fragment(vec![ #(#cs),* ]) }
@@ -310,6 +315,10 @@ fn emit_node(node: Node) -> TokenStream {
                 emit_nav_link(attrs, children)
             } else if tag == "Show" {
                 emit_show(attrs, children)
+            } else if tag == "For" {
+                emit_for(attrs, children)
+            } else if tag == "Match" {
+                emit_match(attrs, children)
             } else if is_component {
                 emit_component(tag, attrs, children)
             } else {
@@ -489,6 +498,153 @@ fn emit_show(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
     }
 }
 
+fn emit_for(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
+    let mut each_expr: Option<TokenStream> = None;
+    let mut let_name = syn::Ident::new("item", Span::call_site());
+    let mut key_field: Option<String> = None;
+
+    for a in attrs {
+        match a.name.as_str() {
+            "each" => {
+                each_expr = Some(match a.value {
+                    AttrVal::StaticStr(s) => quote!(#s),
+                    AttrVal::Expr(ts) => ts,
+                    AttrVal::Bool => quote!([]),
+                });
+            }
+            "key" => {
+                key_field = Some(match a.value {
+                    AttrVal::StaticStr(s) => s,
+                    AttrVal::Expr(ts) => {
+                        if let Ok(lit) = syn::parse2::<syn::LitStr>(ts) {
+                            lit.value()
+                        } else {
+                            return compile_err("For key={...} must be a string literal field name");
+                        }
+                    }
+                    AttrVal::Bool => "id".to_string(),
+                });
+            }
+            s if s.starts_with("let:") => {
+                let binding = s.strip_prefix("let:").unwrap_or("item");
+                let_name = syn::Ident::new(binding, Span::call_site());
+            }
+            _ => {}
+        }
+    }
+
+    let each = each_expr.unwrap_or_else(|| {
+        quote! { compile_error!("For requires each={collection}"); ::std::vec::Vec::<()>::new() }
+    });
+    let child_pushes = children.into_iter().map(emit_child);
+
+    if let Some(signal) = parse_signal_each(each.clone()) {
+        let key_lit = key_field
+            .as_deref()
+            .map(|k| quote!(Some(#k)))
+            .unwrap_or_else(|| quote!(None));
+        return quote! {
+            ::resuma::__private::for_signal(
+                &#signal,
+                #key_lit,
+                |#let_name| vec![ #(#child_pushes),* ],
+            )
+        };
+    }
+
+    quote! {
+        {
+            let __each = { #each };
+            let __views: ::std::vec::Vec<::resuma::__private::View> = __each.into_iter().map(|#let_name| {
+                ::resuma::__private::View::fragment(vec![ #(#child_pushes),* ])
+            }).collect();
+            ::resuma::__private::View::fragment(
+                __views.into_iter().map(::resuma::__private::Child::View).collect(),
+            )
+        }
+    }
+}
+
+fn parse_signal_each(ts: TokenStream) -> Option<TokenStream> {
+    let expr = syn::parse2::<syn::Expr>(ts).ok()?;
+    match expr {
+        syn::Expr::MethodCall(m) if m.method == "get" => Some(quote! { #m.receiver }),
+        syn::Expr::Path(_) => Some(quote! { #expr }),
+        _ => None,
+    }
+}
+
+fn emit_match(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
+    let mut value_expr: Option<TokenStream> = None;
+
+    for a in attrs {
+        if a.name == "value" {
+            value_expr = Some(match a.value {
+                AttrVal::StaticStr(s) => quote!(#s),
+                AttrVal::Expr(ts) => ts,
+                AttrVal::Bool => quote!(true),
+            });
+        }
+    }
+
+    let value = value_expr.unwrap_or_else(|| quote! { "" });
+    let mut cases = Vec::new();
+    let mut default_children = None;
+
+    for child in children {
+        let Node::Element {
+            tag,
+            attrs,
+            children: branch_children,
+            ..
+        } = child
+        else {
+            return compile_err("Match only accepts <When> and <Default> child elements");
+        };
+
+        if tag == "When" {
+            let mut when_val = None;
+            for a in attrs {
+                if a.name == "is" {
+                    when_val = Some(match a.value {
+                        AttrVal::StaticStr(s) => quote!(#s.to_string()),
+                        AttrVal::Expr(ts) => quote!(::resuma::match_value_string(&#ts)),
+                        AttrVal::Bool => quote!("true".to_string()),
+                    });
+                }
+            }
+            let when = when_val.unwrap_or_else(|| quote! { String::new() });
+            let child_pushes = branch_children.into_iter().map(emit_child);
+            cases.push(quote! { (#when, vec![ #(#child_pushes),* ]) });
+        } else if tag == "Default" {
+            let child_pushes = branch_children.into_iter().map(emit_child);
+            default_children = Some(quote! { Some(vec![ #(#child_pushes),* ]) });
+        } else {
+            return compile_err("Match only accepts <When> and <Default> child elements");
+        }
+    }
+
+    let default = default_children.unwrap_or_else(|| quote! { None });
+
+    if let Some(signal) = parse_signal_each(value.clone()) {
+        return quote! {
+            ::resuma::__private::match_signal(
+                &#signal,
+                vec![ #(#cases),* ],
+                #default,
+            )
+        };
+    }
+
+    quote! {
+        ::resuma::__private::match_static(
+            ::resuma::match_value_string(&#value),
+            vec![ #(#cases),* ],
+            #default,
+        )
+    }
+}
+
 /// When `when={signal}` or `when={signal.get()}` (or `!signal.get()`), return
 /// the signal expression and whether the condition is inverted.
 fn parse_signal_when(ts: TokenStream) -> Option<(TokenStream, bool)> {
@@ -575,6 +731,10 @@ fn emit_slotted_child(node: Node) -> TokenStream {
                 emit_nav_link(attrs, children)
             } else if tag == "Show" {
                 emit_show(attrs, children)
+            } else if tag == "For" {
+                emit_for(attrs, children)
+            } else if tag == "Match" {
+                emit_match(attrs, children)
             } else if is_component {
                 emit_component(tag, attrs, children)
             } else {
@@ -687,7 +847,7 @@ fn emit_event_handler(attr_name: String, value: AttrVal) -> TokenStream {
                             t.actions.into_iter().collect(),
                         ),
                         Err(e) => {
-                            return compile_err_at(e.span, &handler_translation_help(&e.message))
+                            return compile_err_at(e.span, &rs2js::translation_help("event handler", &e))
                         }
                     },
                     Ok(other) => match rs2js::translate_expr(&other) {
@@ -697,7 +857,7 @@ fn emit_event_handler(attr_name: String, value: AttrVal) -> TokenStream {
                             t.actions.into_iter().collect(),
                         ),
                         Err(e) => {
-                            return compile_err_at(e.span, &handler_translation_help(&e.message))
+                            return compile_err_at(e.span, &rs2js::translation_help("event handler", &e))
                         }
                     },
                     Err(e) => return compile_err(&format!("invalid handler expression: {}", e)),
@@ -833,12 +993,71 @@ fn compile_err_at(span: Span, msg: &str) -> TokenStream {
     }
 }
 
-fn handler_translation_help(message: &str) -> String {
-    format!(
-        "Resuma could not compile this event handler to browser JavaScript: {message}.\n\n\
-         Supported handlers are intentionally small and resumable. Try one of these:\n\
-         - update signals directly: onClick={{count.update(|c| *c += 1)}}\n\
-         - use js! {{ ... }} for DOM/browser APIs\n\
-         - move complex Rust or database work into a #[server] action"
-    )
+fn view_compile_err(span: Span, msg: &str) -> TokenStream {
+    let lit = Literal::string(msg);
+    quote_spanned! { span =>
+        {
+            compile_error!(#lit);
+            ::resuma::__private::View::empty()
+        }
+    }
+}
+
+const SIGNAL_GET_LINT: &str = "Do not use `.get()` in view! — use `{signal}` or pass the signal \
+    directly for client reactivity. `.get()` is an SSR-only snapshot and the UI will not update \
+    after interaction. For conditional UI use `<Show when={signal}>` (not `{if signal.get()}`).";
+
+/// Detect bare `{signal.get()}` / `{!signal.get()}` in text interpolations.
+fn signal_get_span(ts: &TokenStream) -> Option<Span> {
+    let expr = syn::parse2::<syn::Expr>(ts.clone()).ok()?;
+    match unwrap_expr(&expr) {
+        syn::Expr::MethodCall(m) if m.method == "get" && m.args.is_empty() => Some(m.method.span()),
+        syn::Expr::Unary(u) if matches!(u.op, syn::UnOp::Not(_)) => {
+            if let syn::Expr::MethodCall(m) = unwrap_expr(&u.expr) {
+                if m.method == "get" && m.args.is_empty() {
+                    return Some(m.method.span());
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+fn unwrap_expr(expr: &syn::Expr) -> &syn::Expr {
+    match expr {
+        syn::Expr::Group(g) => unwrap_expr(&g.expr),
+        syn::Expr::Paren(p) => unwrap_expr(&p.expr),
+        syn::Expr::Reference(r) => unwrap_expr(&r.expr),
+        other => other,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_signal_get_in_interpolation() {
+        let ts: TokenStream = quote::quote! { count.get() };
+        assert!(signal_get_span(&ts).is_some());
+    }
+
+    #[test]
+    fn allows_bare_signal_in_interpolation() {
+        let ts: TokenStream = quote::quote! { count };
+        assert!(signal_get_span(&ts).is_none());
+    }
+
+    #[test]
+    fn rejects_negated_signal_get() {
+        let ts: TokenStream = quote::quote! { !logged_in.get() };
+        assert!(signal_get_span(&ts).is_some());
+    }
+
+    #[test]
+    fn allows_chained_get_in_interpolation() {
+        let ts: TokenStream = quote::quote! { visible.get().into_iter().map(|t| t) };
+        assert!(signal_get_span(&ts).is_none());
+    }
 }

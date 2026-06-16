@@ -14,6 +14,7 @@
 //! | [`#[island]`](island) | Optional heavy lazy boundary (`load = "visible"`) |
 //! | [`js!`](js) | Raw JavaScript handler escape hatch |
 
+mod extract_codegen;
 mod component_macro;
 mod computed_macro;
 mod data_macro;
@@ -26,6 +27,7 @@ mod load_macro;
 mod middleware_macro;
 mod rs2js;
 mod server_macro;
+mod store_macro;
 mod submit_macro;
 mod view_macro;
 
@@ -110,6 +112,11 @@ pub fn computed(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn effect(input: TokenStream) -> TokenStream {
     effect_macro::expand(input.into()).into()
+}
+
+#[proc_macro_derive(Store)]
+pub fn derive_store(input: TokenStream) -> TokenStream {
+    store_macro::derive(input)
 }
 
 /// `debounce!([deps…], ms, move || …)` — debounced client reaction (rs2js-translated).

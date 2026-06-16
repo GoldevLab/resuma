@@ -6,6 +6,46 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Typed extractors** — `Path<T>`, `Query<T>`, `FromFlowRequest` for `#[load]` / `#[submit]`.
+- **`<Match>`** — reactive `<Match value={signal}>` with `<When is={…}>` / `<Default>`.
+- **Reactive `<For>`** — keyed client diffing when `each={signal}` (`<For key="id">`).
+- **Distributed rate limiting** — optional `redis-rate-limit` feature + `RESUMA_REDIS_URL`.
+- **E2E** — `examples/todo` (`npm run e2e:todo` / `e2e:all` in CI).
+- **SQLx CI** — ephemeral SQLite test in `example-resuma-audit`.
+- **Migration guides** — [MIGRATION_LEPTOS.md](docs/MIGRATION_LEPTOS.md), [MIGRATION_QWIK.md](docs/MIGRATION_QWIK.md).
+
+## [1.0.0] - 2026-06-16
+
+**Stable release** — see [docs/STABILITY.md](docs/STABILITY.md) for semver, MSRV, and runtime budgets.
+
+### Added
+
+- **`#[derive(Store)]`** — generates `{Struct}Store` trait with field getters and `set_*` helpers on `Store<T>`.
+- **`<For each={items} let:item>`** — JSX sugar over `.into_iter().map()` in `view!`.
+- **Loader invalidation API** — `invalidate_href`, `invalidate_href_now`, `invalidate_link`, and `__resuma.invalidate()` (SPA re-fetch with cache-bust).
+- **NavLink prefetch** — hover prefetch of route HTML before click.
+- **`production` template** — Flow + security stub + `Dockerfile` + `fly.toml` + `.env.example` (`resuma new --template production`).
+- **Security HTTP tests** — CSRF, origin, rate limit, action 403.
+- **Docs** — [DEPLOY.md](docs/DEPLOY.md), [STABILITY.md](docs/STABILITY.md).
+- **CI** — benchmark smoke (`node benchmark/run.mjs --skip-build`), Dependabot (cargo + npm).
+
+### Fixed (since 0.4.8)
+
+- **`debounce!` client replay** — `initEffects` honors `debounce_ms`.
+- **Benchmark honesty** — first-interaction includes Counter handler chunk; version from `Cargo.toml`.
+- **Compile-time lint** — bare `{signal.get()}` in `view!` interpolations fails with a reactivity hint.
+
+### Changed
+
+- **`resuma doctor`** — runtime bundle budgets, `_registry.rs` drift, `RESUMA_ENV` hint.
+- **Auto route generation** on `resuma dev` / `resuma build`.
+- **Runtime size gate** in `npm run size` (loader ≤ 1 KiB gzip, core ≤ 5 KiB gzip).
+- **Unified rs2js error messages** across handler/effect/computed/debounce macros.
+
+## [Unreleased]
+
 ## [0.4.8] - 2026-06-08
 
 ### Added

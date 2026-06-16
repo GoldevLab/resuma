@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "e2e": "node e2e/run.mjs"
+    "e2e": "node e2e/run.mjs",
+    "e2e:todo": "node e2e/todo.mjs",
+    "e2e:all": "node e2e/run.mjs && node e2e/todo.mjs"
   },
   "devDependencies": {
     "playwright": "1.60.0"

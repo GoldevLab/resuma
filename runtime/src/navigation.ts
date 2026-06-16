@@ -29,10 +29,33 @@ interface ResumaGlobal {
   navigate: (href: string, pushState?: boolean) => Promise<void>;
   /** Build same-origin path + query (`{ fecha: "2026-01-01" }`). */
   buildUrl: (path: string, query?: Record<string, string | null | undefined>) => string;
+  /** Re-run server loaders via SPA navigation. */
+  invalidate: (path?: string, query?: Record<string, string | null | undefined>) => Promise<void>;
 }
 
 const ROOT_ID = "resuma-root";
 const STATE_SCRIPT_ID = "resuma-state";
+
+/** Prefetched SSR HTML keyed by same-origin href (NavLink hover). */
+const prefetchCache = new Map<string, string>();
+const prefetchInFlight = new Set<string>();
+
+async function prefetchRoute(href: string): Promise<void> {
+  if (!href || prefetchCache.has(href) || prefetchInFlight.has(href)) return;
+  if (href.startsWith("http") && !href.startsWith(location.origin)) return;
+  prefetchInFlight.add(href);
+  try {
+    const res = await fetch(href, {
+      headers: { Accept: "text/html" },
+      credentials: "same-origin",
+    });
+    if (res.ok) prefetchCache.set(href, await res.text());
+  } catch {
+    /* ignore prefetch errors */
+  } finally {
+    prefetchInFlight.delete(href);
+  }
+}
 
 /**
  * Per-page mount routine registered by whichever runtime bootstrapped
@@ -130,6 +153,7 @@ export function remountPage(): void {
     context: (key: string) => __resuma.contexts[key],
     navigate,
     buildUrl,
+    invalidate,
   };
   window.__resuma = __resuma;
 
@@ -169,17 +193,32 @@ export function buildUrl(
   return url.pathname + url.search;
 }
 
+/** Re-run server loaders for a path via SPA navigation (cache-bust query). */
+export async function invalidate(
+  path?: string,
+  query?: Record<string, string | null | undefined>,
+): Promise<void> {
+  const targetPath = path?.split("?")[0] ?? location.pathname;
+  const bust = String(Date.now());
+  await navigate(buildUrl(targetPath, { ...query, _r: bust }));
+}
+
 export async function navigate(href: string, pushState = true): Promise<void> {
   try {
-    const res = await fetch(href, {
-      headers: { Accept: "text/html" },
-      credentials: "same-origin",
-    });
-    if (!res.ok) {
-      window.location.href = href;
-      return;
+    let html: string | undefined = prefetchCache.get(href);
+    if (!html) {
+      const res = await fetch(href, {
+        headers: { Accept: "text/html" },
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        window.location.href = href;
+        return;
+      }
+      html = await res.text();
+    } else {
+      prefetchCache.delete(href);
     }
-    const html = await res.text();
     const doc = new DOMParser().parseFromString(html, "text/html");
     const newRoot = doc.getElementById(ROOT_ID);
     const newState = doc.getElementById(STATE_SCRIPT_ID);
@@ -232,6 +271,18 @@ function shouldEnhanceLink(a: HTMLAnchorElement, ev: MouseEvent): boolean {
 }
 
 export function initNavLinks(): void {
+  document.addEventListener(
+    "mouseenter",
+    (ev) => {
+      const target = ev.target;
+      if (!(target instanceof Element)) return;
+      const a = target.closest("a[data-r-nav]") as HTMLAnchorElement | null;
+      const href = a?.getAttribute("href");
+      if (href) void prefetchRoute(href);
+    },
+    true,
+  );
+
   document.addEventListener("click", (ev) => {
     const target = ev.target;
     if (!(target instanceof Element)) return;

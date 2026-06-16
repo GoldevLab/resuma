@@ -36,7 +36,7 @@ pub fn expand(input: TokenStream) -> TokenStream {
         Err(e) => {
             return syn::Error::new(
                 parsed.closure.span(),
-                format!("computed! cannot translate closure: {e}"),
+                crate::rs2js::translation_help("computed expression", &e),
             )
             .to_compile_error();
         }

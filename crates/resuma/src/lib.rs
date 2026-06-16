@@ -70,7 +70,7 @@ pub mod cli;
 
 pub use resuma_macros::{
     component, computed, data, debounce, effect, island, js, layout, load, middleware, server,
-    submit, view,
+    submit, view, Store,
 };
 
 pub use crate::client::{
@@ -79,8 +79,8 @@ pub use crate::client::{
 
 pub use crate::core::view::AttrValue;
 pub use crate::core::{
-    combine_js, error_boundary, nav_link, no_serialize, portal, provide_context, provide_theme,
-    push_slots, resolve_slot, show, signal, stream_chunk, stream_slot, theme_css_vars,
+    combine_js, error_boundary, for_signal, match_signal, nav_link, no_serialize, portal,
+    provide_context, provide_theme, push_slots, resolve_slot, show, show_signal, signal, stream_chunk, stream_slot, theme_css_vars,
     use_computed, use_computed_with_js, use_context, use_debounce, use_effect, use_signal,
     use_store, use_task, use_theme, use_visible_task, visible_task_js, with_default_slot,
     with_view_transition, Child, Component, Computed, ContextId, Effect, FlowRequest, IntoView,
@@ -100,12 +100,13 @@ pub use crate::ssr::{render_to_stream, render_to_string, render_view, PageOption
 pub use crate::flow::{
     apply_layouts, build_query_href, collect_public_dir, current_location_href, current_request,
     discover_pages, encode_submit_result, error_page, extract_redirect, flash_message, form,
-    load_boundary, loader_refresh_form, loader_refresh_input, not_found_page, query_nav_link,
-    redirect, redirect_with_flash, register_layout, register_loader, register_loader_cache,
-    register_middleware, register_stream_chunk, register_stream_loader, register_submit,
-    theme_into_pwa, try_use_load, try_use_load_value, use_load, with_request, DiscoveredPage,
-    FlowApp, FlowError, FlowExtensions, FlowPageRegistry, FlowPwaConfig, FlowServeOptions,
-    LoadValue, LoaderError, PublicAsset, PwaShortcut, Redirect, SubmitError, SubmitValue,
+    invalidate_href, invalidate_href_now, invalidate_link, load_boundary, loader_refresh_form,
+    loader_refresh_input, not_found_page, query_nav_link, redirect, redirect_with_flash,
+    register_layout, register_loader, register_loader_cache, register_middleware,
+    register_stream_chunk, register_stream_loader, register_submit, theme_into_pwa, try_use_load,
+    try_use_load_value, use_load, with_request, DiscoveredPage, FlowApp, FlowError, FlowExtensions,
+    FlowPageRegistry, FlowPwaConfig, FlowServeOptions, FromFlowRequest, LoadValue, LoaderError,
+    Path, PublicAsset, PwaShortcut, Query, Redirect, SubmitError, SubmitValue,
 };
 
 /// CLI entry point (`cargo install resuma`).
@@ -139,16 +140,17 @@ pub mod prelude {
     pub use super::{
         build_query_href, client_component, client_script_url, combine_js, component, computed,
         configure_security, current_request, data, debounce, effect, error_boundary, error_page,
-        extract_redirect, flash_message, form, island, js, layout, load, load_boundary,
-        loader_refresh_form, loader_refresh_input, middleware, nav_link, not_found_page, portal,
+        extract_redirect, flash_message, form, for_signal, invalidate_href, invalidate_href_now,
+        invalidate_link, island, js, layout, load, load_boundary, loader_refresh_form,
+        loader_refresh_input, match_signal, middleware, nav_link, not_found_page, portal,
         provide_context, provide_theme, push_slots, query_nav_link, redirect, redirect_with_flash,
         render_to_string, render_view, resolve_slot, server, set_action_middleware, show, signal,
         stream_slot, submit, theme_css_vars, try_use_load, try_use_load_value, use_computed,
         use_computed_with_js, use_context, use_debounce, use_effect, use_load, use_signal,
         use_store, use_task, use_theme, use_visible_task, view, with_view_transition, AttrValue,
         Child, ClientComponent, Component, Computed, CspConfig, Effect, FlowApp, FlowError,
-        FlowPageRegistry, FlowPwaConfig, FlowRequest, FlowServeOptions, IntoView, LoadValue,
-        LoaderError, PageOptions, PublicAsset, PwaShortcut, ReadSignal, Redirect, Result,
+        FlowPageRegistry, FlowPwaConfig, FlowRequest, FlowServeOptions, FromFlowRequest, IntoView,
+        LoadValue, LoaderError, PageOptions, Path, PublicAsset, PwaShortcut, Query, ReadSignal, Redirect, Result,
         ResumaApp, ResumaError, SecurityConfig, ServeOptions, Signal, SlottedChild, Store,
         SubmitError, Theme, View, WriteSignal, CLIENT_SCRIPT_PREFIX, CSRF_FIELD, CSRF_HEADER,
     };
@@ -159,7 +161,7 @@ pub mod __private {
     //! Re-exports used by the macro-generated code.
     pub use crate::core::effect::{attach_client_effect, use_computed_with_js, use_effect};
     pub use crate::core::task::{register_debounce_effect, use_debounce};
-    pub use crate::core::{combine_js, nav_link, show, show_signal};
+    pub use crate::core::{combine_js, for_signal, match_signal, match_static, nav_link, show, show_signal};
     pub use crate::core::{
         context::{current_context, with_handler_chunk, RenderContext, RenderMode},
         handler::{HandlerCapture, HandlerRef},
@@ -320,7 +322,12 @@ pub mod __private {
         }
     }
 
-    pub fn wrap_in_island(name: &str, instance: u32, view: View, load: &str) -> View {
+    pub fn wrap_in_island(
+        name: &str,
+        instance: u32,
+        build: impl FnOnce() -> View,
+        load: &str,
+    ) -> View {
         if let Some(ctx) = current_context() {
             ctx.register_island(name);
         }
@@ -328,7 +335,7 @@ pub mod __private {
             "visible" | "Visible" => view_mod::IslandLoad::Visible,
             _ => view_mod::IslandLoad::Eager,
         };
-        let inner = crate::core::context::with_handler_chunk(name, || view);
+        let inner = crate::core::context::with_handler_chunk(name, build);
         View::Island(IslandView {
             chunk_id: name.to_string(),
             instance_id: format!("{}-{}", name, instance),

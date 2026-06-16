@@ -33,6 +33,10 @@ pub enum View {
     Raw(String),
     /// Reactive conditional — toggles branches on the client via `<resuma-show>`.
     Show(ShowView),
+    /// Reactive keyed list — client diffing via `<resuma-for>`.
+    For(ForView),
+    /// Reactive multi-branch match — client toggles via `<resuma-match>`.
+    Match(MatchView),
     Empty,
 }
 
@@ -104,6 +108,36 @@ pub struct ShowView {
     pub initial: bool,
     pub children: Vec<Child>,
     pub fallback: Option<Box<View>>,
+}
+
+/// Reactive keyed `<For each={signal}>`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForView {
+    pub signal: SignalId,
+    pub key_field: Option<String>,
+    pub items: Vec<ForItemView>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForItemView {
+    pub key: String,
+    pub children: Vec<Child>,
+}
+
+/// Reactive `<Match value={signal}>`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MatchView {
+    pub signal: SignalId,
+    /// SSR snapshot of the active branch key.
+    pub initial: String,
+    pub cases: Vec<MatchCase>,
+    pub default: Option<Vec<Child>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MatchCase {
+    pub when: String,
+    pub children: Vec<Child>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

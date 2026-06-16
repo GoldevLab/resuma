@@ -199,30 +199,32 @@ fn todo_workspace() -> View {
     let new_title = use_signal(String::new());
     let ui = use_store(UiState::default());
 
-    use_visible_task(
+    use_visible_task(format!(
         r#"
-        (async () => {
-            try {
+        (async (state, __resuma) => {{
+            try {{
                 const next = await __resuma.action("list_todos", []);
-                state.todos.set(next);
-            } catch (e) {
-                state.ui.update(s => { s.status = "Could not load tasks"; });
-            }
+                if (state.{todos}.value.length === 0) {{
+                    state.{todos}.set(next);
+                }}
+            }} catch (e) {{
+                state.{ui}.update(s => {{ s.status = "Could not load tasks"; }});
+            }}
             let dragEl = null;
             const list = () => document.querySelector('.todo-list');
-            document.addEventListener('dragstart', (e) => {
+            document.addEventListener('dragstart', (e) => {{
                 const li = e.target.closest('.todo-item');
                 if (!li || !list()?.contains(li)) return;
                 dragEl = li;
                 li.classList.add('dragging');
                 e.dataTransfer.effectAllowed = 'move';
-            });
-            document.addEventListener('dragend', (e) => {
+            }});
+            document.addEventListener('dragend', (e) => {{
                 const li = e.target.closest('.todo-item');
                 li?.classList.remove('dragging');
                 dragEl = null;
-            });
-            document.addEventListener('dragover', (e) => {
+            }});
+            document.addEventListener('dragover', (e) => {{
                 const ul = list();
                 if (!ul || !dragEl) return;
                 const li = e.target.closest('.todo-item');
@@ -231,22 +233,24 @@ fn todo_workspace() -> View {
                 const rect = li.getBoundingClientRect();
                 const after = e.clientY > rect.top + rect.height / 2;
                 ul.insertBefore(dragEl, after ? li.nextSibling : li);
-            });
-            document.addEventListener('drop', (e) => {
+            }});
+            document.addEventListener('drop', (e) => {{
                 const ul = list();
                 if (!ul) return;
                 e.preventDefault();
                 const ids = [...ul.querySelectorAll('.todo-item')].map(el => Number(el.dataset.id));
-                const map = new Map(state.todos.value.map(t => [t.id, t]));
+                const map = new Map(state.{todos}.value.map(t => [t.id, t]));
                 const reordered = ids.map(id => map.get(id)).filter(Boolean);
-                if (reordered.length === state.todos.value.length) {
-                    state.todos.set(reordered);
-                    state.ui.update(s => { s.status = 'Order updated (client)'; });
-                }
-            });
-        })()
+                if (reordered.length === state.{todos}.value.length) {{
+                    state.{todos}.set(reordered);
+                    state.{ui}.update(s => {{ s.status = 'Order updated (client)'; }});
+                }}
+            }});
+        }})
     "#,
-    );
+        todos = todos.id(),
+        ui = ui.id(),
+    ));
 
     let todos_for_stats = todos.clone();
     let stats = use_computed(move || {
@@ -293,7 +297,6 @@ fn todo_workspace() -> View {
 
     let ui_snap = ui.get();
     let stats_snap = stats.get();
-    let can_add = !new_title.get().trim().is_empty() && !ui_snap.busy;
     let show_clear = stats_snap.done > 0 && !ui_snap.busy;
     let show_mark_all = stats_snap.pending > 0 && !ui_snap.busy;
     let empty_msg = if stats_snap.total == 0 {
@@ -338,22 +341,6 @@ fn todo_workspace() -> View {
             <form
                 class="add-form"
                 aria-label="Add a task"
-                onSubmit={
-                    js! {
-                        event.preventDefault();
-                        const title = state.new_title.value.trim();
-                        if (!title || state.ui.value.busy) return;
-                        state.ui.update(s => { s.busy = true; s.status = ""; });
-                        try {
-                            const next = await __resuma.action("add_todo", [title]);
-                            state.todos.set(next);
-                            state.new_title.set("");
-                            state.ui.update(s => { s.busy = false; s.status = "Task added"; });
-                        } catch (e) {
-                            state.ui.update(s => { s.busy = false; s.status = "Could not add task"; });
-                        }
-                    }
-                }
             >
                 <label class="sr-only" for="new-todo">"New task"</label>
                 <input
@@ -362,14 +349,39 @@ fn todo_workspace() -> View {
                     autocomplete="off"
                     maxlength={security::MAX_TITLE_LEN.to_string()}
                     placeholder="What needs doing?"
-                    value={new_title.get()}
+                    value={&new_title}
                     onInput={
                         js! {
                             state.new_title.set(event.target.value);
                         }
                     }
+                    onKeyDown={
+                        js! {
+                            if (event.key !== "Enter") return;
+                            event.preventDefault();
+                            event.currentTarget.closest("form")?.querySelector(".btn-primary")?.click();
+                        }
+                    }
                 />
-                <button type="submit" class="btn-primary" disabled={!can_add}>
+                <button
+                    type="button"
+                    class="btn-primary"
+                    onClick={
+                        js! {
+                            const title = state.new_title.value.trim();
+                            if (!title || state.ui.value.busy) return;
+                            state.ui.update(s => { s.busy = true; s.status = ""; });
+                            try {
+                                const next = await __resuma.action("add_todo", [title]);
+                                state.todos.set(next);
+                                state.new_title.set("");
+                                state.ui.update(s => { s.busy = false; s.status = "Task added"; });
+                            } catch (e) {
+                                state.ui.update(s => { s.busy = false; s.status = "Could not add task"; });
+                            }
+                        }
+                    }
+                >
                     {if ui_snap.busy { "Adding…" } else { "Add" }}
                 </button>
             </form>
@@ -492,137 +504,131 @@ fn todo_workspace() -> View {
             </div>
 
             <ul class="todo-list" aria-label="Tasks">
-                {visible.get().into_iter().map(|t| {
-                    let id = t.id.to_string();
-                    let title = t.title.clone();
-                    let done = t.done;
-                    let editing = ui.get().editing_id == t.id;
-                    view! {
-                        <li class={format!("todo-item{}", if done { " done" } else { "" })} data-id={id.clone()} draggable="true">
-                            <label class="todo-check">
-                                <input
-                                    type="checkbox"
-                                    checked={done}
-                                    aria-label={format!("Mark \"{title}\" as {}", if done { "not done" } else { "done" })}
-                                    onChange={
+                <For each={todos} key="id" let:t>
+                    <li class={format!("todo-item{}", if t.done { " done" } else { "" })} data-id={t.id.to_string()} draggable="true">
+                        <label class="todo-check">
+                            <input
+                                type="checkbox"
+                                checked={t.done}
+                                aria-label={format!("Mark \"{}\" as {}", t.title, if t.done { "not done" } else { "done" })}
+                                onChange={
+                                    js! {
+                                        if (state.ui.value.busy) return;
+                                        const row = event.target.closest("li");
+                                        const id = Number(row.dataset.id);
+                                        state.ui.update(s => { s.busy = true; });
+                                        try {
+                                            const next = await __resuma.action("toggle_todo", [id]);
+                                            state.todos.set(next);
+                                            state.ui.update(s => { s.busy = false; });
+                                        } catch (e) {
+                                            state.ui.update(s => { s.busy = false; s.status = "Could not update task"; });
+                                        }
+                                    }
+                                }
+                            />
+                            <span class="check-ui" aria-hidden="true" />
+                        </label>
+
+                        {if ui.get().editing_id == t.id {
+                            view! {
+                                <form
+                                    class="edit-form"
+                                    onSubmit={
                                         js! {
-                                            if (state.ui.value.busy) return;
-                                            const row = event.target.closest("li");
-                                            const id = Number(row.dataset.id);
-                                            state.ui.update(s => { s.busy = true; });
+                                            event.preventDefault();
+                                            const title = state.ui.value.edit_draft.trim();
+                                            const id = state.ui.value.editing_id;
+                                            if (!title || !id || state.ui.value.busy) return;
+                                            state.ui.update(s => { s.busy = true; s.status = ""; });
                                             try {
-                                                const next = await __resuma.action("toggle_todo", [id]);
+                                                const next = await __resuma.action("rename_todo", [id, title]);
                                                 state.todos.set(next);
-                                                state.ui.update(s => { s.busy = false; });
+                                                state.ui.update(s => {
+                                                    s.busy = false;
+                                                    s.editing_id = 0;
+                                                    s.edit_draft = "";
+                                                    s.status = "Task updated";
+                                                });
                                             } catch (e) {
-                                                state.ui.update(s => { s.busy = false; s.status = "Could not update task"; });
+                                                state.ui.update(s => { s.busy = false; s.status = "Could not save"; });
                                             }
                                         }
                                     }
-                                />
-                                <span class="check-ui" aria-hidden="true" />
-                            </label>
-
-                            {if editing {
-                                view! {
-                                    <form
-                                        class="edit-form"
-                                        onSubmit={
+                                >
+                                    <input
+                                        type="text"
+                                        class="edit-input"
+                                        maxlength={security::MAX_TITLE_LEN.to_string()}
+                                        value={ui.get().edit_draft.clone()}
+                                        onInput={
                                             js! {
-                                                event.preventDefault();
-                                                const title = state.ui.value.edit_draft.trim();
-                                                const id = state.ui.value.editing_id;
-                                                if (!title || !id || state.ui.value.busy) return;
-                                                state.ui.update(s => { s.busy = true; s.status = ""; });
+                                                state.ui.update(s => { s.edit_draft = event.target.value; });
+                                            }
+                                        }
+                                    />
+                                    <button type="submit" class="btn-icon" aria-label="Save">"✓"</button>
+                                    <button
+                                        type="button"
+                                        class="btn-icon"
+                                        aria-label="Cancel edit"
+                                        onClick={
+                                            js! {
+                                                state.ui.update(s => { s.editing_id = 0; s.edit_draft = ""; });
+                                            }
+                                        }
+                                    >"✕"</button>
+                                </form>
+                            }
+                        } else {
+                            view! {
+                                <span class="todo-title">{t.title.clone()}</span>
+                            }
+                        }}
+
+                        {if ui.get().editing_id != t.id {
+                            view! {
+                                <div class="todo-actions">
+                                    <button
+                                        type="button"
+                                        class="btn-icon"
+                                        aria-label={format!("Edit \"{}\"", t.title)}
+                                        onClick={
+                                            js! {
+                                                const row = event.target.closest("li");
+                                                const id = Number(row.dataset.id);
+                                                const title = row.querySelector(".todo-title").textContent;
+                                                state.ui.update(s => { s.editing_id = id; s.edit_draft = title; });
+                                            }
+                                        }
+                                    >"✎"</button>
+                                    <button
+                                        type="button"
+                                        class="btn-icon btn-icon--danger"
+                                        aria-label={format!("Delete \"{}\"", t.title)}
+                                        onClick={
+                                            js! {
+                                                if (state.ui.value.busy) return;
+                                                const row = event.target.closest("li");
+                                                const id = Number(row.dataset.id);
+                                                state.ui.update(s => { s.busy = true; });
                                                 try {
-                                                    const next = await __resuma.action("rename_todo", [id, title]);
+                                                    const next = await __resuma.action("remove_todo", [id]);
                                                     state.todos.set(next);
-                                                    state.ui.update(s => {
-                                                        s.busy = false;
-                                                        s.editing_id = 0;
-                                                        s.edit_draft = "";
-                                                        s.status = "Task updated";
-                                                    });
+                                                    state.ui.update(s => { s.busy = false; s.status = "Task removed"; });
                                                 } catch (e) {
-                                                    state.ui.update(s => { s.busy = false; s.status = "Could not save"; });
+                                                    state.ui.update(s => { s.busy = false; s.status = "Could not delete"; });
                                                 }
                                             }
                                         }
-                                    >
-                                        <input
-                                            type="text"
-                                            class="edit-input"
-                                            maxlength={security::MAX_TITLE_LEN.to_string()}
-                                            value={ui.get().edit_draft.clone()}
-                                            onInput={
-                                                js! {
-                                                    state.ui.update(s => { s.edit_draft = event.target.value; });
-                                                }
-                                            }
-                                        />
-                                        <button type="submit" class="btn-icon" aria-label="Save">"✓"</button>
-                                        <button
-                                            type="button"
-                                            class="btn-icon"
-                                            aria-label="Cancel edit"
-                                            onClick={
-                                                js! {
-                                                    state.ui.update(s => { s.editing_id = 0; s.edit_draft = ""; });
-                                                }
-                                            }
-                                        >"✕"</button>
-                                    </form>
-                                }
-                            } else {
-                                view! {
-                                    <span class="todo-title">{title}</span>
-                                }
-                            }}
-
-                            {if !editing {
-                                view! {
-                                    <div class="todo-actions">
-                                        <button
-                                            type="button"
-                                            class="btn-icon"
-                                            aria-label={format!("Edit \"{title}\"")}
-                                            onClick={
-                                                js! {
-                                                    const row = event.target.closest("li");
-                                                    const id = Number(row.dataset.id);
-                                                    const title = row.querySelector(".todo-title").textContent;
-                                                    state.ui.update(s => { s.editing_id = id; s.edit_draft = title; });
-                                                }
-                                            }
-                                        >"✎"</button>
-                                        <button
-                                            type="button"
-                                            class="btn-icon btn-icon--danger"
-                                            aria-label={format!("Delete \"{title}\"")}
-                                            onClick={
-                                                js! {
-                                                    if (state.ui.value.busy) return;
-                                                    const row = event.target.closest("li");
-                                                    const id = Number(row.dataset.id);
-                                                    state.ui.update(s => { s.busy = true; });
-                                                    try {
-                                                        const next = await __resuma.action("remove_todo", [id]);
-                                                        state.todos.set(next);
-                                                        state.ui.update(s => { s.busy = false; s.status = "Task removed"; });
-                                                    } catch (e) {
-                                                        state.ui.update(s => { s.busy = false; s.status = "Could not delete"; });
-                                                    }
-                                                }
-                                            }
-                                        >"🗑"</button>
-                                    </div>
-                                }
-                            } else {
-                                View::Empty
-                            }}
-                        </li>
-                    }
-                }).collect::<Vec<_>>()}
+                                    >"🗑"</button>
+                                </div>
+                            }
+                        } else {
+                            View::Empty
+                        }}
+                    </li>
+                </For>
             </ul>
 
             {if visible.get().is_empty() {

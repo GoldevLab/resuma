@@ -47,7 +47,7 @@ export function initEffects(
       const targetCell =
         eff.target != null ? signals.get(signalId(eff.target)) ?? null : null;
 
-      const schedule = () => {
+      const execute = () => {
         try {
           const result = run(state, global);
           // `computed!` returns a derived value bound to a target signal;
@@ -56,6 +56,17 @@ export function initEffects(
         } catch (err) {
           console.error("[resuma] effect", eff.id, err);
         }
+      };
+
+      let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+      const schedule = () => {
+        const ms = eff.debounce_ms;
+        if (ms != null && ms > 0) {
+          if (debounceTimer !== undefined) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(execute, ms);
+          return;
+        }
+        execute();
       };
 
       schedule();

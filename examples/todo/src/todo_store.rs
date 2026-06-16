@@ -93,6 +93,7 @@ pub fn add(title: String, req: &FlowRequest) -> Result<Vec<Todo>> {
         title,
         done: false,
     });
+    drop(todos);
     list_for(req)
 }
 
@@ -108,6 +109,7 @@ pub fn rename(id: u64, title: String, req: &FlowRequest) -> Result<Vec<Todo>> {
     if let Some(t) = todos.iter_mut().find(|t| t.id == id) {
         t.title = title;
     }
+    drop(todos);
     list_for(req)
 }
 
@@ -123,6 +125,7 @@ pub fn toggle(id: u64, req: &FlowRequest) -> Result<Vec<Todo>> {
     if let Some(t) = todos.iter_mut().find(|t| t.id == id) {
         t.done = !t.done;
     }
+    drop(todos);
     list_for(req)
 }
 
@@ -136,6 +139,7 @@ pub fn remove(id: u64, req: &FlowRequest) -> Result<Vec<Todo>> {
         .ok_or_else(|| ResumaError::Other("task not found".into()))?;
     security::assert_owner(&owner, req)?;
     todos.retain(|t| t.id != id);
+    drop(todos);
     list_for(req)
 }
 
@@ -149,6 +153,7 @@ pub fn clear_done(req: &FlowRequest) -> Result<Vec<Todo>> {
         }
         is_admin || t.owner_id == uid
     });
+    drop(todos);
     list_for(req)
 }
 
@@ -161,5 +166,6 @@ pub fn mark_all_done(req: &FlowRequest) -> Result<Vec<Todo>> {
             t.done = true;
         }
     }
+    drop(todos);
     list_for(req)
 }

@@ -174,19 +174,44 @@ function ensureResumaRuntime() {
   run("npm run build", join(root, "runtime"));
 }
 
+function readWorkspaceVersion() {
+  const cargo = join(root, "Cargo.toml");
+  if (!existsSync(cargo)) return "0.4.8";
+  const text = readFileSync(cargo, "utf8");
+  const m = text.match(/^version\s*=\s*"([^"]+)"/m);
+  return m?.[1] ?? "0.4.8";
+}
+
+function ensureResumaHandlerSample() {
+  const out = join(root, "benchmark", ".resuma-counter-handler.js");
+  if (skipBuild && existsSync(out)) return out;
+  console.log("[benchmark] writing representative Counter handler chunk…");
+  run(
+    "cargo test -p resuma --quiet write_benchmark_counter_handler -- --exact --nocapture",
+    root,
+    { RESUMA_WRITE_BENCHMARK_HANDLER: "1" },
+  );
+  if (!existsSync(out)) {
+    throw new Error("benchmark handler sample missing — cargo test write_benchmark_counter_handler failed");
+  }
+  return out;
+}
+
 function measureResuma() {
+  ensureResumaHandlerSample();
   const dist = join(root, "runtime", "dist");
   const loader = measureFile(join(dist, "loader.js"));
   const core = measureFile(join(dist, "core.js"));
-  const first = totals([loader, core]);
-  first.note = "loader.js + core.js";
+  const handler = measureFile(join(root, "benchmark", ".resuma-counter-handler.js"));
+  const first = totals([loader, core, handler]);
+  first.note = "loader.js + core.js + Counter handler chunk (first click)";
   return result(
     "Resuma",
-    "0.3.1",
+    readWorkspaceVersion(),
     loader,
     first,
     { raw: 0, gzip: 0, brotli: 0 },
-    { loader, core },
+    { loader, core, handler },
     "Rust SSR + resumability",
   );
 }

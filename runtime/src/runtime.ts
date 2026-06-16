@@ -319,7 +319,8 @@ function runVisibleTasks(tasks: Record<string, string>, state: Record<string, Si
 
   const run = (id: string, source: string) => {
     try {
-      const trimmed = source.trim();
+      let trimmed = source.trim();
+      if (trimmed.endsWith(")()")) trimmed = trimmed.slice(0, -2);
       const fn = new Function(
         "state",
         "__resuma",

@@ -37,6 +37,7 @@ const TEMPLATE_CHOICES: &[(&str, &str)] = &[
     ("flow", "multi-page app with src/pages/"),
     ("flow-booking", "appointments + query-driven #[load]"),
     ("flow-fullstack", "Flow + SQLx SQLite sample"),
+    ("production", "Flow + security stub + Docker + Fly"),
 ];
 
 pub fn prompt_template() -> Result<String> {

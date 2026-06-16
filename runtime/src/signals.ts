@@ -160,6 +160,124 @@ function mountPortals(scope: HTMLElement): void {
   });
 }
 
+function itemLabel(item: unknown): string {
+  if (item && typeof item === "object") {
+    for (const key of ["title", "name", "label", "text"]) {
+      const v = (item as Record<string, unknown>)[key];
+      if (typeof v === "string") return v;
+    }
+  }
+  return formatValue(item);
+}
+
+function createForItemNode(item: unknown, key: string, sample: HTMLElement | undefined): HTMLElement {
+  if (sample) {
+    const node = sample.cloneNode(true) as HTMLElement;
+    node.setAttribute("data-r-for-key", key);
+    node.removeAttribute("data-r-for-new");
+    const titleEl = node.querySelector(".todo-title");
+    if (titleEl) {
+      titleEl.textContent = itemLabel(item);
+    }
+    return node;
+  }
+  const wrap = document.createElement("div");
+  wrap.setAttribute("data-r-for-item", "");
+  wrap.setAttribute("data-r-for-key", key);
+  const li = document.createElement("li");
+  li.className = "todo-item";
+  const span = document.createElement("span");
+  span.className = "todo-title";
+  span.textContent = itemLabel(item);
+  li.appendChild(span);
+  wrap.appendChild(li);
+  return wrap;
+}
+
+function listKey(item: unknown, keyField: string | null, index: number): string {
+  if (keyField && item && typeof item === "object") {
+    const v = (item as Record<string, unknown>)[keyField];
+    if (v !== undefined && v !== null) return String(v);
+  }
+  return String(index);
+}
+
+/** Keyed list reconciliation for `<For each={signal}>`. */
+export function bindFor(root: HTMLElement, signals: Map<string, SignalCell<unknown>>): void {
+  root.querySelectorAll<HTMLElement>("resuma-for").forEach((el) => {
+    const sigId = el.getAttribute("data-r-for");
+    if (!sigId) return;
+    const keyField = el.getAttribute("data-r-key");
+    const listEl = el.querySelector<HTMLElement>("[data-r-for-list]");
+    const cell = signals.get(sigId);
+    if (!cell || !listEl) return;
+
+    const apply = (v: unknown) => {
+      const list = Array.isArray(v) ? v : [];
+      const existing = new Map<string, HTMLElement>();
+      listEl.querySelectorAll<HTMLElement>("[data-r-for-item]").forEach((node) => {
+        const key = node.getAttribute("data-r-for-key");
+        if (key) existing.set(key, node);
+      });
+
+      const nextKeys: string[] = [];
+      const frag = document.createDocumentFragment();
+
+      const sample = listEl.querySelector<HTMLElement>("[data-r-for-item]:not([data-r-for-new])") ?? undefined;
+
+      list.forEach((item, index) => {
+        const key = listKey(item, keyField, index);
+        nextKeys.push(key);
+        let node = existing.get(key);
+        if (node) {
+          existing.delete(key);
+        } else {
+          node = createForItemNode(item, key, sample);
+          node.setAttribute("data-r-for-new", "true");
+        }
+        frag.appendChild(node);
+      });
+
+      listEl.replaceChildren(frag);
+
+      existing.forEach((orphan) => orphan.remove());
+    };
+
+    apply(cell.value);
+    cell.subscribe(apply);
+  });
+}
+
+/** Multi-branch match for `<Match value={signal}>`. */
+export function bindMatch(root: HTMLElement, signals: Map<string, SignalCell<unknown>>): void {
+  root.querySelectorAll<HTMLElement>("resuma-match").forEach((el) => {
+    const sigId = el.getAttribute("data-r-match");
+    if (!sigId) return;
+    const cell = signals.get(sigId);
+    if (!cell) return;
+    const cases = el.querySelectorAll<HTMLElement>("[data-r-match-case]");
+    const defaultBranch = el.querySelector<HTMLElement>("[data-r-match-default]");
+
+    const apply = (v: unknown) => {
+      const current =
+        typeof v === "string" ? v : v === null || v === undefined ? "" : formatValue(v);
+      let matched = false;
+      cases.forEach((branch) => {
+        const when = branch.getAttribute("data-r-match-when") ?? "";
+        const on = when === current;
+        branch.hidden = !on;
+        if (on) matched = true;
+      });
+      if (defaultBranch) {
+        defaultBranch.hidden = matched;
+      }
+    };
+
+    apply(cell.value);
+    cell.subscribe(apply);
+  });
+}
+
 /** Re-run all bindings after a partial DOM swap (HMR / island refresh). */
 export function applyDom(): void {
   const r = (window as unknown as { __resuma?: { signals: Map<string, SignalCell<unknown>> } }).__resuma;
@@ -168,4 +286,6 @@ export function applyDom(): void {
   bindReactiveText(root, r.signals);
   bindReactiveAttrs(root, r.signals);
   bindShows(root, r.signals);
+  bindFor(root, r.signals);
+  bindMatch(root, r.signals);
 }

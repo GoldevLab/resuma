@@ -28,7 +28,7 @@ enum Commands {
     New {
         /// Project directory name (prompted when omitted in an interactive terminal).
         name: Option<String>,
-        /// Template: `basic`, `todo`, `flow`, or `flow-fullstack` (prompted when omitted).
+        /// Template: `basic`, `todo`, `flow`, `flow-fullstack`, or `production` (prompted when omitted).
         #[arg(long)]
         template: Option<String>,
     },
@@ -281,6 +281,7 @@ fn dev_command(addr: &str, open: bool, skip_runtime: bool, kill_stale: bool) -> 
     if !skip_runtime {
         ensure_runtime_built()?;
     }
+    maybe_regenerate_routes(Path::new("src/pages"))?;
 
     let preferred: std::net::SocketAddr = addr
         .parse()
@@ -352,6 +353,7 @@ fn build_command(
     base_url: Option<&str>,
 ) -> Result<()> {
     ensure_rust_toolchain()?;
+    maybe_regenerate_routes(pages)?;
     ensure_runtime_built()?;
 
     println!("[resuma] cargo build --release");
@@ -603,6 +605,11 @@ fn runtime_assets_dir() -> PathBuf {
 }
 
 fn routes_command(path: &Path, generate: bool) -> Result<()> {
+    if generate {
+        generate_routes(path)?;
+        return Ok(());
+    }
+
     let routes = crate::router::discover(path);
     if routes.is_empty() {
         println!("[resuma] no routes found under {}", path.display());
@@ -614,23 +621,6 @@ fn routes_command(path: &Path, generate: bool) -> Result<()> {
         .filter(|x| x.is_layout)
         .map(|x| (x.pattern.clone(), x.file.clone()))
         .collect();
-
-    if generate {
-        let mod_rs = path.join("mod.rs");
-        let registry = path.join("_registry.rs");
-        let mod_code = generate_pages_mod(&routes);
-        let registry_code = generate_pages_registry(&routes);
-
-        std::fs::write(&mod_rs, mod_code)
-            .with_context(|| format!("failed to write {}", mod_rs.display()))?;
-        std::fs::write(&registry, registry_code)
-            .with_context(|| format!("failed to write {}", registry.display()))?;
-        println!(
-            "[resuma] generated {} and {}",
-            mod_rs.display(),
-            registry.display()
-        );
-    }
 
     println!("[resuma] discovered routes:");
     for r in &routes {
@@ -652,6 +642,91 @@ fn routes_command(path: &Path, generate: bool) -> Result<()> {
             },
         );
     }
+    Ok(())
+}
+
+/// Regenerate Flow route scaffolds when pages changed or registry is missing.
+pub(crate) fn maybe_regenerate_routes(pages: &Path) -> Result<()> {
+    if !pages.is_dir() {
+        return Ok(());
+    }
+    let routes = crate::router::discover(pages);
+    if routes.iter().all(|r| r.is_layout) {
+        return Ok(());
+    }
+    if !routes_need_regeneration(pages, &routes)? {
+        return Ok(());
+    }
+    generate_routes(pages)
+}
+
+fn routes_need_regeneration(
+    pages: &Path,
+    routes: &[crate::router::DiscoveredRoute],
+) -> Result<bool> {
+    let registry = pages.join("_registry.rs");
+    let mod_rs = pages.join("mod.rs");
+    if !registry.exists() || !mod_rs.exists() {
+        return Ok(true);
+    }
+
+    let registry_mtime = newest_mtime(&[registry, mod_rs])?;
+    let page_mtime = newest_page_mtime(pages, routes)?;
+    Ok(page_mtime > registry_mtime)
+}
+
+fn newest_mtime(paths: &[PathBuf]) -> Result<std::time::SystemTime> {
+    let mut newest = std::time::SystemTime::UNIX_EPOCH;
+    for path in paths {
+        if path.exists() {
+            let m = std::fs::metadata(path)?.modified()?;
+            if m > newest {
+                newest = m;
+            }
+        }
+    }
+    Ok(newest)
+}
+
+fn newest_page_mtime(
+    pages: &Path,
+    routes: &[crate::router::DiscoveredRoute],
+) -> Result<std::time::SystemTime> {
+    let mut newest = std::time::SystemTime::UNIX_EPOCH;
+    for route in routes {
+        if route.is_layout {
+            continue;
+        }
+        let m = std::fs::metadata(&route.file)?.modified()?;
+        if m > newest {
+            newest = m;
+        }
+    }
+    let _ = pages;
+    Ok(newest)
+}
+
+fn generate_routes(pages: &Path) -> Result<()> {
+    let routes = crate::router::discover(pages);
+    if routes.is_empty() {
+        println!("[resuma] no routes found under {}", pages.display());
+        return Ok(());
+    }
+
+    let mod_rs = pages.join("mod.rs");
+    let registry = pages.join("_registry.rs");
+    let mod_code = generate_pages_mod(&routes);
+    let registry_code = generate_pages_registry(&routes);
+
+    std::fs::write(&mod_rs, mod_code)
+        .with_context(|| format!("failed to write {}", mod_rs.display()))?;
+    std::fs::write(&registry, registry_code)
+        .with_context(|| format!("failed to write {}", registry.display()))?;
+    println!(
+        "[resuma] generated {} and {}",
+        mod_rs.display(),
+        registry.display()
+    );
     Ok(())
 }
 

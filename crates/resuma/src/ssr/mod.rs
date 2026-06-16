@@ -317,6 +317,8 @@ fn write_view(buf: &mut String, view: &View) {
         View::Island(island) => write_island(buf, island),
         View::Boundary(boundary) => write_boundary(buf, boundary),
         View::Show(show) => write_show(buf, show),
+        View::For(for_view) => write_for(buf, for_view),
+        View::Match(m) => write_match(buf, m),
         View::Slot(slot) => {
             let resolved = crate::core::resolve_slot(slot.name.as_deref());
             write_view(buf, &resolved);
@@ -474,6 +476,69 @@ fn write_show(buf: &mut String, show: &ShowView) {
         buf.push_str("</div>");
     }
     buf.push_str("</resuma-show>");
+}
+
+fn write_for(buf: &mut String, for_view: &crate::core::view::ForView) {
+    let key_attr = for_view
+        .key_field
+        .as_deref()
+        .map(|k| format!(r#" data-r-key="{}""#, escape_attr(k)))
+        .unwrap_or_default();
+    let _ = write!(
+        buf,
+        r#"<resuma-for data-r-for="{}"{key_attr}>"#,
+        for_view.signal,
+        key_attr = key_attr,
+    );
+    buf.push_str(r#"<div data-r-for-list>"#);
+    for item in &for_view.items {
+        let _ = write!(
+            buf,
+            r#"<div data-r-for-item data-r-for-key="{}">"#,
+            escape_attr(&item.key),
+        );
+        for c in &item.children {
+            write_child(buf, c);
+        }
+        buf.push_str("</div>");
+    }
+    buf.push_str("</div></resuma-for>");
+}
+
+fn write_match(buf: &mut String, m: &crate::core::view::MatchView) {
+    let _ = write!(
+        buf,
+        r#"<resuma-match data-r-match="{}" data-r-match-initial="{}">"#,
+        m.signal,
+        escape_attr(&m.initial),
+    );
+    for case in &m.cases {
+        let hidden = if case.when == m.initial { "" } else { " hidden" };
+        let _ = write!(
+            buf,
+            r#"<div data-r-match-case="{}" data-r-match-when="{}"{hidden}>"#,
+            escape_attr(&case.when),
+            escape_attr(&case.when),
+            hidden = hidden,
+        );
+        for c in &case.children {
+            write_child(buf, c);
+        }
+        buf.push_str("</div>");
+    }
+    if let Some(default) = &m.default {
+        let hidden = if m.cases.iter().any(|c| c.when == m.initial) {
+            " hidden"
+        } else {
+            ""
+        };
+        let _ = write!(buf, r#"<div data-r-match-default{hidden}>"#, hidden = hidden);
+        for c in default {
+            write_child(buf, c);
+        }
+        buf.push_str("</div>");
+    }
+    buf.push_str("</resuma-match>");
 }
 
 fn write_boundary(buf: &mut String, boundary: &crate::core::view::Boundary) {

@@ -16,6 +16,15 @@ pub fn handler_chunk_module(symbols: &BTreeMap<String, String>) -> String {
     out
 }
 
+/// Island chunk module — handlers plus optional no-op `resume` entry.
+pub fn island_chunk_module(symbols: &BTreeMap<String, String>) -> String {
+    let mut out = handler_chunk_module(symbols);
+    out.push_str("export function resume(_props, _signals, _root) {}\n");
+    out
+}
+
+const ISLAND_STUB: &str = "export function resume(_props, _signals, _root) {}\n";
+
 fn handler_export(symbol: &str, source: &str) -> String {
     let body = source.trim();
     if is_function_expression(body) {
@@ -55,9 +64,11 @@ pub fn merge_payload_handlers(
         if islands.contains_key(island) {
             continue;
         }
-        if let Some(symbols) = payload.handlers.get(island) {
-            let module = handler_chunk_module(symbols);
-            islands.insert(island.clone(), module);
-        }
+        let module = payload
+            .handlers
+            .get(island)
+            .map(island_chunk_module)
+            .unwrap_or_else(|| ISLAND_STUB.to_string());
+        islands.insert(island.clone(), module);
     }
 }

@@ -122,6 +122,27 @@ const FULLSTACK_USERS: &str = include_str!("../../templates/flow-fullstack/pages
 const FULLSTACK_REGISTRY: &str = include_str!("../../templates/flow-fullstack/pages/_registry.rs");
 const FULLSTACK_MIGRATION: &str = include_str!("../../templates/add/sqlx/001_users.sql");
 
+const CARGO_PRODUCTION: &str = r#"[package]
+name = "%NAME%"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+resuma = "%RESUMA_VERSION%"
+tokio  = { version = "1", features = ["full"] }
+serde  = { version = "1", features = ["derive"] }
+serde_json = "1"
+"#;
+
+const PRODUCTION_MAIN: &str = include_str!("../../templates/production/main.rs");
+const PRODUCTION_SECURITY: &str = include_str!("../../templates/production/security.rs");
+const PRODUCTION_PAGES_MOD: &str = include_str!("../../templates/production/pages/mod.rs");
+const PRODUCTION_REGISTRY: &str = include_str!("../../templates/production/pages/_registry.rs");
+const PRODUCTION_INDEX: &str = include_str!("../../templates/production/pages/index.rs");
+const PRODUCTION_DOCKERFILE: &str = include_str!("../../templates/production/Dockerfile");
+const PRODUCTION_FLY: &str = include_str!("../../templates/production/fly.toml");
+const PRODUCTION_ENV: &str = include_str!("../../templates/production/env.example");
+
 const RUST_TOOLCHAIN: &str = r#"[toolchain]
 channel = "stable"
 "#;
@@ -137,6 +158,7 @@ Created with [Resuma](https://github.com/GolfredoPerezFernandez/resuma).
 - **flow** - multi-page app with `src/pages/` and FlowApp
 - **flow-fullstack** - Flow + SQLx (SQLite) with users CRUD sample
 - **flow-booking** - appointments with query-driven `#[load]` + `loader_refresh_input`
+- **production** - Flow + security stub + Dockerfile + fly.toml
 
 ## Develop
 
@@ -255,9 +277,44 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
             fs::write(mig.join("001_users.sql"), FULLSTACK_MIGRATION)?;
             fs::write(dir.join(".env.example"), "DATABASE_URL=sqlite:local.db\n").ok();
         }
+        "production" => {
+            fs::write(dir.join("Cargo.toml"), render_cargo(CARGO_PRODUCTION, name))
+                .context("write Cargo.toml")?;
+            fs::write(
+                dir.join("src/main.rs"),
+                PRODUCTION_MAIN.replace("%NAME%", name),
+            )
+            .context("write src/main.rs")?;
+            fs::write(dir.join("src/security.rs"), PRODUCTION_SECURITY)
+                .context("write src/security.rs")?;
+            let pages = dir.join("src/pages");
+            fs::create_dir_all(&pages)?;
+            fs::write(pages.join("mod.rs"), PRODUCTION_PAGES_MOD).context("write pages/mod.rs")?;
+            fs::write(pages.join("_registry.rs"), PRODUCTION_REGISTRY)
+                .context("write pages/_registry.rs")?;
+            fs::write(
+                pages.join("index.rs"),
+                PRODUCTION_INDEX.replace("%NAME%", name),
+            )
+            .context("write pages/index.rs")?;
+            fs::write(
+                dir.join("Dockerfile"),
+                PRODUCTION_DOCKERFILE.replace("%NAME%", name),
+            )
+            .context("write Dockerfile")?;
+            fs::write(
+                dir.join("fly.toml"),
+                PRODUCTION_FLY.replace("%NAME%", name),
+            )
+            .context("write fly.toml")?;
+            fs::write(dir.join(".env.example"), PRODUCTION_ENV).context("write .env.example")?;
+            let public = dir.join("public");
+            fs::create_dir_all(&public)?;
+            fs::write(public.join(".gitkeep"), "").ok();
+        }
         other => {
             return Err(anyhow!(
-                "unknown template `{}` (try: basic, todo, flow, flow-booking, flow-fullstack)",
+                "unknown template `{}` (try: basic, todo, flow, flow-booking, flow-fullstack, production)",
                 other
             ));
         }

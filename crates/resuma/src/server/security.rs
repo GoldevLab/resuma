@@ -3,10 +3,8 @@
 //! Enabled by default on `ResumaApp::serve()` and `FlowApp::serve()`. Configure via
 //! [`SecurityConfig`] or environment variables (see `docs/SECURITY.md`).
 
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use crate::core::Result;
 use crate::core::ResumaError;
@@ -14,6 +12,8 @@ use axum::http::{header, HeaderMap, HeaderValue, Request};
 use axum::response::Response;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
+
+use super::rate_limit::{self, RateLimitBackend};
 
 /// Per-request CSP nonce stored in response extensions after HTML render.
 #[derive(Clone, Debug)]
@@ -28,8 +28,9 @@ pub const CSRF_FIELD: &str = "_csrf";
 
 static CONFIG: Lazy<RwLock<SecurityConfig>> = Lazy::new(|| RwLock::new(SecurityConfig::from_env()));
 
-static RATE_BUCKETS: Lazy<RwLock<HashMap<String, Vec<Instant>>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+static RATE_INIT: Lazy<()> = Lazy::new(|| {
+    rate_limit::install_default_backend();
+});
 
 /// Content-Security-Policy tuning (Qwik-style per-request nonces + configurable directives).
 ///
@@ -256,48 +257,14 @@ fn connect_addr<B>(req: &Request<B>) -> Option<SocketAddr> {
 
 /// Sliding-window rate limit. Returns `Err(RateLimited)` when exceeded.
 pub fn check_rate_limit(ip: &str, bucket: &str, limit_per_minute: u32) -> Result<()> {
-    if limit_per_minute == 0 {
-        return Ok(());
-    }
+    Lazy::force(&RATE_INIT);
     let key = format!("{bucket}:{ip}");
-    let now = Instant::now();
-    let window = Duration::from_secs(60);
-    let mut map = RATE_BUCKETS.write();
-
-    // Periodically evict fully-expired buckets so memory does not grow
-    // unbounded with one entry per distinct client IP that never returns.
-    sweep_rate_buckets(&mut map, now, window);
-
-    let entries = map.entry(key).or_default();
-    entries.retain(|t| now.duration_since(*t) < window);
-    if entries.len() as u32 >= limit_per_minute {
-        return Err(ResumaError::RateLimited);
-    }
-    entries.push(now);
-    Ok(())
+    rate_limit::check_rate_limit_key(&key, limit_per_minute)
 }
 
-/// Drop buckets whose every timestamp has aged out. Runs at most once per
-/// `window` (guarded by a global timestamp) so it stays O(n) amortized.
-fn sweep_rate_buckets(map: &mut HashMap<String, Vec<Instant>>, now: Instant, window: Duration) {
-    static LAST_SWEEP: Lazy<RwLock<Option<Instant>>> = Lazy::new(|| RwLock::new(None));
-    {
-        let last = *LAST_SWEEP.read();
-        let due = last.is_none_or(|t| now.duration_since(t) >= window);
-        if !due {
-            return;
-        }
-    }
-    *LAST_SWEEP.write() = Some(now);
-    prune_rate_buckets(map, now, window);
-}
-
-/// Remove aged-out timestamps and any bucket left empty. Always runs (no time gate).
-fn prune_rate_buckets(map: &mut HashMap<String, Vec<Instant>>, now: Instant, window: Duration) {
-    map.retain(|_, entries| {
-        entries.retain(|t| now.duration_since(*t) < window);
-        !entries.is_empty()
-    });
+/// Install a distributed rate-limit backend (Redis when `redis-rate-limit` + `RESUMA_REDIS_URL`).
+pub fn configure_rate_limit_backend(backend: Arc<dyn RateLimitBackend>) {
+    rate_limit::configure_rate_limit_backend(backend);
 }
 
 fn header_str(headers: &HeaderMap, name: &str) -> Option<String> {
@@ -573,6 +540,8 @@ impl SecurityState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn origin_matches_ignoring_port() {
@@ -639,13 +608,17 @@ mod tests {
 
     #[test]
     fn rate_bucket_sweep_drops_expired_entries() {
+        use std::time::Instant;
         let mut map: HashMap<String, Vec<Instant>> = HashMap::new();
         let now = Instant::now();
         let window = Duration::from_secs(60);
         let old = now - Duration::from_secs(120);
         map.insert("a:1".into(), vec![old]);
         map.insert("a:2".into(), vec![now]);
-        super::prune_rate_buckets(&mut map, now, window);
+        map.retain(|_, entries| {
+            entries.retain(|t| now.duration_since(*t) < window);
+            !entries.is_empty()
+        });
         assert!(!map.contains_key("a:1"), "expired bucket should be evicted");
         assert!(map.contains_key("a:2"), "fresh bucket should remain");
     }

@@ -55,8 +55,7 @@ pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
             let __island_id = ::resuma::__private::current_context()
                 .map(|c| c.next_signal_id().0)
                 .unwrap_or(0);
-            let __view: ::resuma::__private::View = (|| #block)();
-            ::resuma::__private::wrap_in_island(#name_str, __island_id, __view, #load_policy)
+            ::resuma::__private::wrap_in_island(#name_str, __island_id, || #block, #load_policy)
         }
     }
 }

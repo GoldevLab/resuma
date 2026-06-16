@@ -77,7 +77,7 @@ cd my-app
 resuma dev --open
 ```
 
-**Templates:** `basic` · `todo` · `flow` · `flow-booking` · `flow-fullstack`
+**Templates:** `basic` · `todo` · `flow` · `flow-booking` · `flow-fullstack` · `production`
 
 ### AI assistants (Cursor, Codex, Gemini)
 
@@ -113,7 +113,7 @@ Handlers compile to JavaScript automatically — lazy-loaded on first interactio
 
 ```toml
 [dependencies]
-resuma = "0.4"
+resuma = "1.0"
 tokio  = { version = "1", features = ["full"] }
 ```
 

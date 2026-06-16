@@ -43,7 +43,7 @@ pub fn expand(input: TokenStream) -> TokenStream {
         Err(e) => {
             return syn::Error::new(
                 parsed.closure.span(),
-                format!("debounce! cannot translate closure: {e}"),
+                crate::rs2js::translation_help("debounced effect", &e),
             )
             .to_compile_error();
         }

@@ -5,6 +5,8 @@ use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::{parse2, ItemFn, LitStr, ReturnType};
 
+use crate::extract_codegen::extract_flow_params;
+
 struct LoadArgs {
     cache: Option<LitStr>,
     stream: bool,
@@ -141,12 +143,24 @@ pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
         }
     };
 
+    let extracted = match extract_flow_params(&inputs.iter().cloned().collect::<Vec<_>>()) {
+        Ok(p) => p,
+        Err(e) => return e.to_compile_error(),
+    };
+    let call_args: Vec<TokenStream> = if extracted.is_empty() {
+        vec![quote!(&req)]
+    } else {
+        extracted.iter().map(|p| p.call_expr.clone()).collect()
+    };
+    let param_bindings: Vec<TokenStream> = extracted.iter().map(|p| p.binding.clone()).collect();
+
     quote! {
         #vis async fn #name ( #inputs ) #output #block
 
         #[doc(hidden)]
         pub async fn #dispatcher(req: ::resuma::FlowRequest) -> ::resuma::__private::Result<::resuma::__private::serde_json::Value> {
-            let res = #name( &req ).await;
+            #(#param_bindings)*
+            let res = #name( #(#call_args),* ).await;
             ::resuma::__private::serde_json::to_value(&res)
                 .map_err(::resuma::__private::ResumaError::from)
         }

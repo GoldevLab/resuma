@@ -38,7 +38,7 @@ use syn::{
 };
 
 mod error;
-pub use error::Rs2JsError;
+pub use error::{translation_help, Rs2JsError};
 
 /// Outcome of translating a single closure / expression.
 #[derive(Debug, Clone)]

@@ -108,3 +108,15 @@ async fn seed(pool: &SqlitePool) -> anyhow::Result<()> {
 pub async fn reset_test_db() -> anyhow::Result<()> {
     init_db_with_url("sqlite::memory:").await
 }
+
+#[cfg(test)]
+mod sqlx_ci {
+    use super::*;
+
+    #[tokio::test]
+    async fn memory_migrations_and_seed() {
+        init_db_with_url("sqlite::memory:").await.expect("init db");
+        let meta = meta().expect("meta");
+        assert!(meta.todo_count >= 3);
+    }
+}

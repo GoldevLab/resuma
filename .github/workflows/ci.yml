@@ -46,7 +46,13 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Browser E2E
-        run: npm run e2e
+        run: npm run e2e:all
+
+      - name: SQLx (ephemeral SQLite)
+        run: cargo test -p example-resuma-audit sqlx_ci
+
+      - name: Benchmark (Resuma only)
+        run: node benchmark/run.mjs --skip-build
 
   publish-dry-run:
     runs-on: ubuntu-latest

@@ -3,3 +3,4 @@
 .vinxi/
 .svelte-kit/
 build-output.txt
+.resuma-counter-handler.js
