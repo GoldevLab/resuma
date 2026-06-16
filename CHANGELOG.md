@@ -6,15 +6,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Added
+## [1.0.1] - 2026-06-16
 
-- **Typed extractors** — `Path<T>`, `Query<T>`, `FromFlowRequest` for `#[load]` / `#[submit]`.
-- **`<Match>`** — reactive `<Match value={signal}>` with `<When is={…}>` / `<Default>`.
-- **Reactive `<For>`** — keyed client diffing when `each={signal}` (`<For key="id">`).
-- **Distributed rate limiting** — optional `redis-rate-limit` feature + `RESUMA_REDIS_URL`.
-- **E2E** — `examples/todo` (`npm run e2e:todo` / `e2e:all` in CI).
-- **SQLx CI** — ephemeral SQLite test in `example-resuma-audit`.
-- **Migration guides** — [MIGRATION_LEPTOS.md](docs/MIGRATION_LEPTOS.md), [MIGRATION_QWIK.md](docs/MIGRATION_QWIK.md).
+### Fixed
+
+- **`js!` async handlers** — when `js!{ async (...) => { ... } }` already contains a full arrow function, do not double-wrap it (fixes handlers that never ran, e.g. docs site server-function demo).
 
 ## [1.0.0] - 2026-06-16
 

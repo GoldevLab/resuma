@@ -835,7 +835,7 @@ fn emit_event_handler(attr_name: String, value: AttrVal) -> TokenStream {
             // `js!{...}` escape hatch: take the inner tokens verbatim as JS.
             if let Some(js) = extract_js_macro(ts) {
                 let captures = scan_state_refs(&js);
-                let body = format!("(async (event, state, __resuma) => {{ {} }})", js);
+                let body = normalize_js_escape_hatch(&js);
                 (body, captures, vec![])
             } else {
                 let parsed: Result<syn::Expr, _> = syn::parse2(ts.clone());
@@ -899,6 +899,17 @@ fn emit_event_handler(attr_name: String, value: AttrVal) -> TokenStream {
                 vec![ #(#action_lits),* ],
             )
         )
+    }
+}
+
+/// When `js!{...}` already contains a full `async (...) => { ... }` handler,
+/// use it verbatim. Otherwise wrap statements in the standard handler signature.
+fn normalize_js_escape_hatch(js: &str) -> String {
+    let trimmed = js.trim();
+    if trimmed.starts_with("async") && trimmed.contains("=>") {
+        trimmed.to_string()
+    } else {
+        format!("async (event, state, __resuma) => {{ {} }}", js)
     }
 }
 
