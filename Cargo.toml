@@ -51,7 +51,7 @@ getrandom     = { version = "0.2", features = ["std"] }
 async-trait   = "0.1"
 ctor          = "1.0"
 futures-util  = { version = "0.3", default-features = false, features = ["std"] }
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
 
 [profile.release]
 opt-level = 3
