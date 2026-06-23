@@ -541,7 +541,7 @@ impl SecurityState {
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     #[test]
     fn origin_matches_ignoring_port() {

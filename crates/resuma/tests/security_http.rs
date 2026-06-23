@@ -4,7 +4,9 @@ use axum::body::Body;
 use axum::extract::ConnectInfo;
 use axum::http::{header, HeaderValue, Request, StatusCode};
 use resuma::prelude::*;
-use resuma::server::{configure_security, guard_mutation, validate_csrf, validate_origin, SecurityConfig};
+use resuma::server::{
+    configure_security, guard_mutation, validate_csrf, validate_origin, SecurityConfig,
+};
 use std::net::SocketAddr;
 use tower::ServiceExt;
 
@@ -36,10 +38,7 @@ fn security_guards_sequential() {
         ..SecurityConfig::from_env()
     });
     let mut bad_origin = axum::http::HeaderMap::new();
-    bad_origin.insert(
-        header::ORIGIN,
-        HeaderValue::from_static("http://evil.test"),
-    );
+    bad_origin.insert(header::ORIGIN, HeaderValue::from_static("http://evil.test"));
     assert!(matches!(
         validate_origin(&bad_origin, "127.0.0.1:3000"),
         Err(ResumaError::Forbidden(_))

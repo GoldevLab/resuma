@@ -127,7 +127,7 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
         }
 
         #[doc(hidden)]
-        #[::resuma::__private::ctor::ctor]
+        #[::resuma::__private::ctor::ctor(unsafe, crate_path = ::resuma::__private::ctor)]
         fn #registry_ctor() {
             ::resuma::__private::register_server_action(#name_str, #trampoline_name);
         }

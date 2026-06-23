@@ -18,7 +18,7 @@ pub fn install_action_middleware() {
     crate::server::set_action_middleware(run_action_middleware);
 }
 
-#[ctor::ctor]
+#[ctor::ctor(unsafe)]
 fn auto_install_action_middleware() {
     install_action_middleware();
 }

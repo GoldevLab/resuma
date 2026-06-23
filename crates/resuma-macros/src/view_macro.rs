@@ -519,7 +519,9 @@ fn emit_for(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
                         if let Ok(lit) = syn::parse2::<syn::LitStr>(ts) {
                             lit.value()
                         } else {
-                            return compile_err("For key={...} must be a string literal field name");
+                            return compile_err(
+                                "For key={...} must be a string literal field name",
+                            );
                         }
                     }
                     AttrVal::Bool => "id".to_string(),
@@ -847,7 +849,10 @@ fn emit_event_handler(attr_name: String, value: AttrVal) -> TokenStream {
                             t.actions.into_iter().collect(),
                         ),
                         Err(e) => {
-                            return compile_err_at(e.span, &rs2js::translation_help("event handler", &e))
+                            return compile_err_at(
+                                e.span,
+                                &rs2js::translation_help("event handler", &e),
+                            )
                         }
                     },
                     Ok(other) => match rs2js::translate_expr(&other) {
@@ -857,7 +862,10 @@ fn emit_event_handler(attr_name: String, value: AttrVal) -> TokenStream {
                             t.actions.into_iter().collect(),
                         ),
                         Err(e) => {
-                            return compile_err_at(e.span, &rs2js::translation_help("event handler", &e))
+                            return compile_err_at(
+                                e.span,
+                                &rs2js::translation_help("event handler", &e),
+                            )
                         }
                     },
                     Err(e) => return compile_err(&format!("invalid handler expression: {}", e)),

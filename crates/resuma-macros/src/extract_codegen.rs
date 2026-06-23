@@ -68,10 +68,7 @@ fn is_type(ty: &Type, name: &str) -> bool {
     let Type::Path(tp) = ty else {
         return false;
     };
-    tp.path
-        .segments
-        .last()
-        .is_some_and(|s| s.ident == name)
+    tp.path.segments.last().is_some_and(|s| s.ident == name)
 }
 
 fn is_extractor(ty: &Type, name: &str) -> bool {

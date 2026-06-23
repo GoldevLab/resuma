@@ -33,11 +33,7 @@ pub fn invalidate_href_now(path: &str, query: &[(&str, &str)]) -> String {
 }
 
 /// `<a data-r-nav>` that navigates to [`invalidate_href_now`] for the current path + optional query.
-pub fn invalidate_link(
-    path: &str,
-    query: &[(&str, &str)],
-    label: impl Into<String>,
-) -> View {
+pub fn invalidate_link(path: &str, query: &[(&str, &str)], label: impl Into<String>) -> View {
     let href = invalidate_href_now(path, query);
     View::Element(crate::core::view::Element {
         tag: "a".into(),

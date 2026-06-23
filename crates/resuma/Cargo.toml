@@ -51,7 +51,7 @@ futures-util  = { version = "0.3", default-features = false, features = ["std"] 
 async-stream  = "0.3"
 serde_urlencoded = "0.7"
 flate2        = "1"
-brotli        = "7"
+brotli        = "8"
 getrandom         = { workspace = true }
 ctor              = { workspace = true }
 walkdir           = { workspace = true }

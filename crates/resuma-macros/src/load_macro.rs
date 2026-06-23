@@ -86,7 +86,7 @@ pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
     let register_cache = match &load_args.cache {
         Some(lit) => quote! {
             #[doc(hidden)]
-            #[::resuma::__private::ctor::ctor]
+            #[::resuma::__private::ctor::ctor(unsafe, crate_path = ::resuma::__private::ctor)]
             fn #cache_registry() {
                 ::resuma::register_loader_cache(#name_str, #lit);
             }
@@ -97,7 +97,7 @@ pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
     let stream_registration = if load_args.stream {
         quote! {
             #[doc(hidden)]
-            #[::resuma::__private::ctor::ctor]
+            #[::resuma::__private::ctor::ctor(unsafe, crate_path = ::resuma::__private::ctor)]
             fn #stream_registry() {
                 ::resuma::register_stream_loader(#name_str);
             }
@@ -110,7 +110,7 @@ pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
             }
 
             #[doc(hidden)]
-            #[::resuma::__private::ctor::ctor]
+            #[::resuma::__private::ctor::ctor(unsafe, crate_path = ::resuma::__private::ctor)]
             fn #stream_chunk_registry() {
                 ::resuma::register_stream_chunk(#name_str, #stream_chunk_fn);
             }
@@ -173,7 +173,7 @@ pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
         }
 
         #[doc(hidden)]
-        #[::resuma::__private::ctor::ctor]
+        #[::resuma::__private::ctor::ctor(unsafe, crate_path = ::resuma::__private::ctor)]
         fn #registry() {
             ::resuma::register_loader(#name_str, #trampoline);
         }

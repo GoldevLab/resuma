@@ -105,7 +105,7 @@ pub fn install_deferred_stream_hook() {
     crate::server::set_deferred_stream_hook(deferred_stream_hook);
 }
 
-#[ctor::ctor]
+#[ctor::ctor(unsafe)]
 fn auto_install_deferred_stream() {
     install_deferred_stream_hook();
 }

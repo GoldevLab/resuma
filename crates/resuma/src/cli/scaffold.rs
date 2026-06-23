@@ -302,11 +302,8 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
                 PRODUCTION_DOCKERFILE.replace("%NAME%", name),
             )
             .context("write Dockerfile")?;
-            fs::write(
-                dir.join("fly.toml"),
-                PRODUCTION_FLY.replace("%NAME%", name),
-            )
-            .context("write fly.toml")?;
+            fs::write(dir.join("fly.toml"), PRODUCTION_FLY.replace("%NAME%", name))
+                .context("write fly.toml")?;
             fs::write(dir.join(".env.example"), PRODUCTION_ENV).context("write .env.example")?;
             let public = dir.join("public");
             fs::create_dir_all(&public)?;

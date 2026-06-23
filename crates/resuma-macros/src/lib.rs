@@ -14,12 +14,12 @@
 //! | [`#[island]`](island) | Optional heavy lazy boundary (`load = "visible"`) |
 //! | [`js!`](js) | Raw JavaScript handler escape hatch |
 
-mod extract_codegen;
 mod component_macro;
 mod computed_macro;
 mod data_macro;
 mod debounce_macro;
 mod effect_macro;
+mod extract_codegen;
 mod island_macro;
 mod js_macro;
 mod layout_macro;

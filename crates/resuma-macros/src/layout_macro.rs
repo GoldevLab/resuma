@@ -66,7 +66,7 @@ pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
 
         #[doc(hidden)]
         #[allow(non_snake_case)]
-        #[::resuma::__private::ctor::ctor]
+        #[::resuma::__private::ctor::ctor(unsafe, crate_path = ::resuma::__private::ctor)]
         fn #registry() {
             ::resuma::register_layout(
                 #pattern_lit,

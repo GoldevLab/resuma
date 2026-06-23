@@ -11,7 +11,7 @@
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
-use crate::core::{FlowRequest, ResumaError, Result};
+use crate::core::{FlowRequest, Result, ResumaError};
 
 /// Extract route params (`:id`, `:slug`, …) into a typed value.
 ///
@@ -123,7 +123,8 @@ mod tests {
     fn path_single_param_u64() {
         let mut params = BTreeMap::new();
         params.insert("id".into(), "42".into());
-        let req = FlowRequest::from_parts("GET", "/users/42", BTreeMap::new(), params, BTreeMap::new());
+        let req =
+            FlowRequest::from_parts("GET", "/users/42", BTreeMap::new(), params, BTreeMap::new());
         let Path(id): Path<u64> = Path::from_request(&req).unwrap();
         assert_eq!(id, 42);
     }

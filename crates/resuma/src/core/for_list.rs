@@ -95,9 +95,7 @@ mod tests {
                 id: 1,
                 title: "a".into(),
             }]);
-            let v = for_signal(&rows, Some("id"), |r| {
-                vec![Child::Text(r.title.clone())]
-            });
+            let v = for_signal(&rows, Some("id"), |r| vec![Child::Text(r.title.clone())]);
             render_view(&v)
         });
         assert!(html.contains("<resuma-for"));

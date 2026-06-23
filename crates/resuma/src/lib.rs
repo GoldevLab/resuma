@@ -80,12 +80,13 @@ pub use crate::client::{
 pub use crate::core::view::AttrValue;
 pub use crate::core::{
     combine_js, error_boundary, for_signal, match_signal, nav_link, no_serialize, portal,
-    provide_context, provide_theme, push_slots, resolve_slot, show, show_signal, signal, stream_chunk, stream_slot, theme_css_vars,
-    use_computed, use_computed_with_js, use_context, use_debounce, use_effect, use_signal,
-    use_store, use_task, use_theme, use_visible_task, visible_task_js, with_default_slot,
-    with_view_transition, Child, Component, Computed, ContextId, Effect, FlowRequest, IntoView,
-    NoSerialize, ReadSignal, RenderContext, RenderMode, Result, ResumaError, ResumePayload, Signal,
-    SlotGuard, SlottedChild, Store, Theme, View, WriteSignal,
+    provide_context, provide_theme, push_slots, resolve_slot, show, show_signal, signal,
+    stream_chunk, stream_slot, theme_css_vars, use_computed, use_computed_with_js, use_context,
+    use_debounce, use_effect, use_signal, use_store, use_task, use_theme, use_visible_task,
+    visible_task_js, with_default_slot, with_view_transition, Child, Component, Computed,
+    ContextId, Effect, FlowRequest, IntoView, NoSerialize, ReadSignal, RenderContext, RenderMode,
+    Result, ResumaError, ResumePayload, Signal, SlotGuard, SlottedChild, Store, Theme, View,
+    WriteSignal,
 };
 
 pub use crate::server::{
@@ -140,7 +141,7 @@ pub mod prelude {
     pub use super::{
         build_query_href, client_component, client_script_url, combine_js, component, computed,
         configure_security, current_request, data, debounce, effect, error_boundary, error_page,
-        extract_redirect, flash_message, form, for_signal, invalidate_href, invalidate_href_now,
+        extract_redirect, flash_message, for_signal, form, invalidate_href, invalidate_href_now,
         invalidate_link, island, js, layout, load, load_boundary, loader_refresh_form,
         loader_refresh_input, match_signal, middleware, nav_link, not_found_page, portal,
         provide_context, provide_theme, push_slots, query_nav_link, redirect, redirect_with_flash,
@@ -150,9 +151,10 @@ pub mod prelude {
         use_store, use_task, use_theme, use_visible_task, view, with_view_transition, AttrValue,
         Child, ClientComponent, Component, Computed, CspConfig, Effect, FlowApp, FlowError,
         FlowPageRegistry, FlowPwaConfig, FlowRequest, FlowServeOptions, FromFlowRequest, IntoView,
-        LoadValue, LoaderError, PageOptions, Path, PublicAsset, PwaShortcut, Query, ReadSignal, Redirect, Result,
-        ResumaApp, ResumaError, SecurityConfig, ServeOptions, Signal, SlottedChild, Store,
-        SubmitError, Theme, View, WriteSignal, CLIENT_SCRIPT_PREFIX, CSRF_FIELD, CSRF_HEADER,
+        LoadValue, LoaderError, PageOptions, Path, PublicAsset, PwaShortcut, Query, ReadSignal,
+        Redirect, Result, ResumaApp, ResumaError, SecurityConfig, ServeOptions, Signal,
+        SlottedChild, Store, SubmitError, Theme, View, WriteSignal, CLIENT_SCRIPT_PREFIX,
+        CSRF_FIELD, CSRF_HEADER,
     };
 }
 
@@ -161,7 +163,9 @@ pub mod __private {
     //! Re-exports used by the macro-generated code.
     pub use crate::core::effect::{attach_client_effect, use_computed_with_js, use_effect};
     pub use crate::core::task::{register_debounce_effect, use_debounce};
-    pub use crate::core::{combine_js, for_signal, match_signal, match_static, nav_link, show, show_signal};
+    pub use crate::core::{
+        combine_js, for_signal, match_signal, match_static, nav_link, show, show_signal,
+    };
     pub use crate::core::{
         context::{current_context, with_handler_chunk, RenderContext, RenderMode},
         handler::{HandlerCapture, HandlerRef},

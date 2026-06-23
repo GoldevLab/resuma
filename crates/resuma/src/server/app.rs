@@ -287,10 +287,10 @@ impl ResumaApp {
             .route("/_resuma/loader.js", get(serve_loader))
             .route("/_resuma/core.js", get(serve_core))
             .route("/_resuma/runtime.js", get(serve_runtime))
-            .route("/_resuma/action/:name", post(serve_action))
-            .route("/_resuma/handler/:chunk", get(serve_handler_chunk))
-            .route("/_resuma/island-chunk/:chunk", get(serve_island_chunk))
-            .route("/_resuma/island/:instance", get(serve_island_refresh));
+            .route("/_resuma/action/{name}", post(serve_action))
+            .route("/_resuma/handler/{chunk}", get(serve_handler_chunk))
+            .route("/_resuma/island-chunk/{chunk}", get(serve_island_chunk))
+            .route("/_resuma/island/{instance}", get(serve_island_refresh));
 
         if super::dev::dev_mode_enabled() {
             router = router.route("/_resuma/dev/ws", get(super::dev::dev_ws_handler));
@@ -458,7 +458,7 @@ async fn serve_fallback(
     if let Some(fb) = &state.fallback {
         let opts = page_security_opts(&state.page_options);
         super::page_cache::stage_page_csrf(opts.csrf_token.clone());
-    super::page_cache::stage_page_csp_nonce(opts.csp_nonce.clone());
+        super::page_cache::stage_page_csp_nonce(opts.csp_nonce.clone());
         let ctx = RenderContext::new(RenderMode::Ssr);
         if let Some(view) = with_context(ctx.clone(), || fb(path, flow_req)) {
             return render_page_response(&state, view, ctx, opts, path, request_is_https(&req));

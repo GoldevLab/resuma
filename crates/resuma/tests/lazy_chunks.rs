@@ -72,8 +72,7 @@ fn write_benchmark_counter_handler() {
         ctx.snapshot_full()
     });
 
-    let module =
-        resuma::server::handler_assets::handler_chunk_module(&full.handlers["Counter"]);
+    let module = resuma::server::handler_assets::handler_chunk_module(&full.handlers["Counter"]);
     assert!(!module.is_empty());
 
     if std::env::var_os("RESUMA_WRITE_BENCHMARK_HANDLER").is_some() {

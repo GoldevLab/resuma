@@ -43,8 +43,10 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
         Ok(p) => p,
         Err(e) => return e.to_compile_error(),
     };
-    let rest_bindings: Vec<TokenStream> = rest_extracted.iter().map(|p| p.binding.clone()).collect();
-    let rest_call_args: Vec<TokenStream> = rest_extracted.iter().map(|p| p.call_expr.clone()).collect();
+    let rest_bindings: Vec<TokenStream> =
+        rest_extracted.iter().map(|p| p.binding.clone()).collect();
+    let rest_call_args: Vec<TokenStream> =
+        rest_extracted.iter().map(|p| p.call_expr.clone()).collect();
 
     let dispatcher = format_ident!("__resuma_submit_dispatch_{}", name);
     let trampoline = format_ident!("__resuma_submit_trampoline_{}", name);
@@ -117,7 +119,7 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
         }
 
         #[doc(hidden)]
-        #[::resuma::__private::ctor::ctor]
+        #[::resuma::__private::ctor::ctor(unsafe, crate_path = ::resuma::__private::ctor)]
         fn #registry() {
             ::resuma::register_submit(#name_str, #trampoline);
         }

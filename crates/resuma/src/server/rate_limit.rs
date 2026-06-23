@@ -7,7 +7,7 @@ use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 
-use crate::core::{ResumaError, Result};
+use crate::core::{Result, ResumaError};
 
 pub trait RateLimitBackend: Send + Sync {
     fn check(&self, key: &str, limit_per_minute: u32, window: Duration) -> Result<()>;

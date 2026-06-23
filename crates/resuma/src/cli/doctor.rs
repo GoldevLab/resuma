@@ -147,7 +147,10 @@ fn check_flow_pages(root: &Path) {
         .collect();
 
     if missing.is_empty() && stale.is_empty() {
-        println!("  src/pages/_registry.rs: in sync ({} routes)", discovered.len());
+        println!(
+            "  src/pages/_registry.rs: in sync ({} routes)",
+            discovered.len()
+        );
     } else {
         if !missing.is_empty() {
             println!(
@@ -187,7 +190,9 @@ fn check_runtime_bundle_sizes() {
     let core = dist.join("core.js");
 
     if !loader.exists() || !core.exists() {
-        println!("  runtime bundles: not built — run `npm run build` in runtime/ (or `resuma dev`)");
+        println!(
+            "  runtime bundles: not built — run `npm run build` in runtime/ (or `resuma dev`)"
+        );
         return;
     }
 

@@ -513,7 +513,11 @@ fn write_match(buf: &mut String, m: &crate::core::view::MatchView) {
         escape_attr(&m.initial),
     );
     for case in &m.cases {
-        let hidden = if case.when == m.initial { "" } else { " hidden" };
+        let hidden = if case.when == m.initial {
+            ""
+        } else {
+            " hidden"
+        };
         let _ = write!(
             buf,
             r#"<div data-r-match-case="{}" data-r-match-when="{}"{hidden}>"#,
@@ -532,7 +536,11 @@ fn write_match(buf: &mut String, m: &crate::core::view::MatchView) {
         } else {
             ""
         };
-        let _ = write!(buf, r#"<div data-r-match-default{hidden}>"#, hidden = hidden);
+        let _ = write!(
+            buf,
+            r#"<div data-r-match-default{hidden}>"#,
+            hidden = hidden
+        );
         for c in default {
             write_child(buf, c);
         }

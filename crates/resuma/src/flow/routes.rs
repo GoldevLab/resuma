@@ -322,5 +322,5 @@ pub fn attach_flow_routes(router: Router, seo: FlowSeoConfig) -> Router {
         .route("/og.svg", axum::routing::get(serve_og_image))
         .route("/favicon.svg", axum::routing::get(serve_favicon))
         .route("/favicon.ico", axum::routing::get(serve_favicon))
-        .route("/_resuma/submit/:name", axum::routing::post(handle_submit))
+        .route("/_resuma/submit/{name}", axum::routing::post(handle_submit))
 }
