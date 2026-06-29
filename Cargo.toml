@@ -50,7 +50,7 @@ parking_lot = "0.12"
 notify      = "6"
 clap        = { version = "4", features = ["derive"] }
 walkdir     = "2"
-getrandom     = { version = "0.2", features = ["std"] }
+getrandom     = { version = "0.4", features = ["std"] }
 async-trait   = "0.1"
 ctor          = "1.0"
 futures-util  = { version = "0.3", default-features = false, features = ["std"] }
