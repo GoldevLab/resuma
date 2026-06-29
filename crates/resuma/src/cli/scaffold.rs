@@ -129,6 +129,7 @@ edition = "2021"
 
 [dependencies]
 resuma = "%RESUMA_VERSION%"
+resuma-flow = "%RESUMA_VERSION%"
 tokio  = { version = "1", features = ["full"] }
 serde  = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -139,6 +140,7 @@ const PRODUCTION_SECURITY: &str = include_str!("../../templates/production/secur
 const PRODUCTION_PAGES_MOD: &str = include_str!("../../templates/production/pages/mod.rs");
 const PRODUCTION_REGISTRY: &str = include_str!("../../templates/production/pages/_registry.rs");
 const PRODUCTION_INDEX: &str = include_str!("../../templates/production/pages/index.rs");
+const PRODUCTION_OPS: &str = include_str!("../../templates/production/pages/ops.rs");
 const PRODUCTION_DOCKERFILE: &str = include_str!("../../templates/production/Dockerfile");
 const PRODUCTION_FLY: &str = include_str!("../../templates/production/fly.toml");
 const PRODUCTION_ENV: &str = include_str!("../../templates/production/env.example");
@@ -297,6 +299,7 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
                 PRODUCTION_INDEX.replace("%NAME%", name),
             )
             .context("write pages/index.rs")?;
+            fs::write(pages.join("ops.rs"), PRODUCTION_OPS).context("write pages/ops.rs")?;
             fs::write(
                 dir.join("Dockerfile"),
                 PRODUCTION_DOCKERFILE.replace("%NAME%", name),

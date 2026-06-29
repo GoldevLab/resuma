@@ -12,6 +12,7 @@ fn RootLayout() -> View {
         <div class="shell">
             <nav>
                 <NavLink href="/" activeClass="active">"Home"</NavLink>
+                <NavLink href="/ops" activeClass="active">"Ops"</NavLink>
             </nav>
             <Slot />
         </div>
@@ -20,7 +21,7 @@ fn RootLayout() -> View {
 
 const CSS: &str = r#"<style>
 body { font-family: system-ui, sans-serif; background: #0b1020; color: #e6e8ee; margin: 0; }
-.shell { max-width: 42rem; margin: 0 auto; padding: 2rem 1rem; }
+.shell { max-width: 56rem; margin: 0 auto; padding: 2rem 1rem; }
 nav { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
 nav a { color: #b9bfd2; text-decoration: none; }
 nav a.active { color: #818cf8; font-weight: 600; }

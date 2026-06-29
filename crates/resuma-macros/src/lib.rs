@@ -30,6 +30,7 @@ mod server_macro;
 mod store_macro;
 mod submit_macro;
 mod view_macro;
+mod worker_macro;
 
 use proc_macro::TokenStream;
 
@@ -91,6 +92,17 @@ pub fn layout(args: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn middleware(args: TokenStream, input: TokenStream) -> TokenStream {
     middleware_macro::expand(args.into(), input.into()).into()
+}
+
+/// `#[worker]` — registers an async fn as a Resuma execution worker.
+///
+/// ```ignore
+/// #[worker(intent = "analyze leads")]
+/// async fn lead_agent(input: Value, ctx: WorkerContext) -> Result<Value> { ... }
+/// ```
+#[proc_macro_attribute]
+pub fn worker(args: TokenStream, input: TokenStream) -> TokenStream {
+    worker_macro::expand(args.into(), input.into()).into()
 }
 
 /// `js!` — raw JavaScript escape hatch for event handlers.

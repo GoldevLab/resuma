@@ -231,6 +231,7 @@ impl ResumaApp {
     }
 
     pub async fn serve(self, opts: ServeOptions) -> std::io::Result<()> {
+        crate::exec::init_exec().await;
         security::configure(opts.security.clone());
         let router = self
             .into_router()
@@ -295,6 +296,8 @@ impl ResumaApp {
         if super::dev::dev_mode_enabled() {
             router = router.route("/_resuma/dev/ws", get(super::dev::dev_ws_handler));
         }
+
+        router = crate::exec::attach_exec_routes(router);
 
         if let Some(kit) = seo_kit {
             router = crate::flow::routes::attach_seo_kit_routes(

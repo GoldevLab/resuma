@@ -1,0 +1,399 @@
+/**
+ * Resuma Flow widgets — ops dashboard, live graph, event stream.
+ */
+
+export interface WorkerEventBase {
+  type: string;
+  timestamp_ms: number;
+}
+
+export interface WorkerEventLog extends WorkerEventBase {
+  type: "log";
+  message: string;
+  node: { 0: string } | string;
+}
+
+export type WorkerEvent = WorkerEventLog | Record<string, unknown>;
+
+export interface ExecStatus {
+  ok: boolean;
+  uptime_ms: number;
+  workers: { registered: number; names: string[] };
+  graphs: { active: number; running: number; paused: number };
+  queues: Array<{
+    queue: string;
+    pending: number;
+    processing: number;
+    done: number;
+    failed: number;
+  }>;
+  scheduler: { total: number; enabled: number; due: number };
+}
+
+declare global {
+  interface Window {
+    __resuma?: {
+      action: (name: string, args: unknown[]) => Promise<unknown>;
+    };
+  }
+}
+
+function graphIdFrom(el: HTMLElement): string {
+  return (
+    el.getAttribute("data-r-flow-graph") ??
+    el.getAttribute("data-r-event-stream") ??
+    el.getAttribute("data-r-worker-panel") ??
+    ""
+  );
+}
+
+function graphTokenFrom(el: HTMLElement): string {
+  return el.getAttribute("data-r-graph-token") ?? "";
+}
+
+function nodeLabel(node: unknown): string {
+  if (typeof node === "string") return node;
+  if (node && typeof node === "object" && "0" in node) {
+    return String((node as Record<string, string>)["0"]);
+  }
+  return "node";
+}
+
+function formatEvent(ev: WorkerEvent): string {
+  const t = ev.type ?? "event";
+  switch (t) {
+    case "log":
+      return `[log] ${(ev as WorkerEventLog).message}`;
+    case "progress":
+      return `[progress] ${(ev as { value: number }).value}%`;
+    case "ai_thinking":
+      return `[ai] ${(ev as { content: string }).content}`;
+    case "tool_call":
+      return `[tool] ${(ev as { tool: string }).tool}`;
+    case "node_start":
+      return `[start] ${nodeLabel((ev as { node: unknown }).node)}`;
+    case "node_done":
+      return `[done] ${nodeLabel((ev as { node: unknown }).node)} (${(ev as { duration_ms: number }).duration_ms}ms)`;
+    case "node_failed":
+      return `[error] ${(ev as { error: string }).error}`;
+    case "result":
+      return `[result] ${JSON.stringify((ev as { data: unknown }).data)}`;
+    case "graph_done":
+      return `[graph] complete`;
+    default:
+      return `[${t}]`;
+  }
+}
+
+function withGraphToken(path: string, token: string): string {
+  if (!token) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}token=${encodeURIComponent(token)}`;
+}
+
+function graphFetchHeaders(token: string): HeadersInit {
+  const headers: Record<string, string> = {};
+  if (token) headers["X-Resuma-Graph-Token"] = token;
+  return headers;
+}
+
+function csrfToken(): string {
+  const node = document.getElementById("resuma-state");
+  if (!node?.textContent) return "";
+  try {
+    const payload = JSON.parse(node.textContent) as { csrf_token?: string };
+    return payload.csrf_token ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function graphMutationHeaders(token: string): HeadersInit {
+  const headers = graphFetchHeaders(token) as Record<string, string>;
+  const csrf = csrfToken();
+  if (csrf) headers["x-resuma-csrf"] = csrf;
+  return headers;
+}
+
+function formatUptime(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function fetchExecStatus(): Promise<ExecStatus | null> {
+  if (typeof window.__resuma?.action === "function") {
+    try {
+      const data = await window.__resuma.action("exec_status", []);
+      return data as ExecStatus;
+    } catch {
+      /* fall through */
+    }
+  }
+  try {
+    const res = await fetch("/_resuma/status", { credentials: "same-origin" });
+    if (!res.ok) return null;
+    return (await res.json()) as ExecStatus;
+  } catch {
+    return null;
+  }
+}
+
+function renderDashboard(root: HTMLElement, status: ExecStatus): void {
+  const pending = status.queues.reduce((n, q) => n + q.pending, 0);
+  const processing = status.queues.reduce((n, q) => n + q.processing, 0);
+  const badgeClass =
+    pending > 10
+      ? "r-flow-dash__badge r-flow-dash__badge--warn"
+      : status.ok
+        ? "r-flow-dash__badge"
+        : "r-flow-dash__badge r-flow-dash__badge--err";
+
+  const workerChips =
+    status.workers.names.length > 0
+      ? status.workers.names
+          .map((n) => `<span class="r-flow-dash__chip">${escapeHtml(n)}</span>`)
+          .join("")
+      : '<span class="r-flow-dash__chip">none registered</span>';
+
+  const queueRows = status.queues
+    .map((q) => {
+      const total = q.pending + q.processing + q.done + q.failed || 1;
+      const pct = Math.round((q.processing / total) * 100);
+      return `<tr>
+        <td>${escapeHtml(q.queue)}</td>
+        <td>${q.pending}</td>
+        <td>${q.processing}</td>
+        <td>${q.done}</td>
+        <td>${q.failed}</td>
+        <td><div class="r-flow-dash__bar"><span style="width:${pct}%"></span></div></td>
+      </tr>`;
+    })
+    .join("");
+
+  root.innerHTML = `
+    <header class="r-flow-dash__header">
+      <h2 class="r-flow-dash__title">Resuma OS</h2>
+      <span class="${badgeClass}">${status.ok ? "healthy" : "degraded"} · uptime ${formatUptime(status.uptime_ms)}</span>
+    </header>
+    <div class="r-flow-dash__grid">
+      <div class="r-flow-dash__stat"><p class="r-flow-dash__stat-label">Workers</p><p class="r-flow-dash__stat-value">${status.workers.registered}</p></div>
+      <div class="r-flow-dash__stat"><p class="r-flow-dash__stat-label">Graphs running</p><p class="r-flow-dash__stat-value">${status.graphs.running}</p></div>
+      <div class="r-flow-dash__stat"><p class="r-flow-dash__stat-label">Graphs paused</p><p class="r-flow-dash__stat-value">${status.graphs.paused}</p></div>
+      <div class="r-flow-dash__stat"><p class="r-flow-dash__stat-label">Queue pending</p><p class="r-flow-dash__stat-value">${pending}</p></div>
+      <div class="r-flow-dash__stat"><p class="r-flow-dash__stat-label">Processing</p><p class="r-flow-dash__stat-value">${processing}</p></div>
+      <div class="r-flow-dash__stat"><p class="r-flow-dash__stat-label">Scheduler due</p><p class="r-flow-dash__stat-value">${status.scheduler.due}</p></div>
+    </div>
+    <section class="r-flow-dash__section">
+      <h3>Workers</h3>
+      <div class="r-flow-dash__chips">${workerChips}</div>
+    </section>
+    <section class="r-flow-dash__section">
+      <h3>Queues</h3>
+      <table class="r-flow-dash__table">
+        <thead><tr><th>Name</th><th>Pending</th><th>Active</th><th>Done</th><th>Failed</th><th>Load</th></tr></thead>
+        <tbody>${queueRows}</tbody>
+      </table>
+    </section>
+    <section class="r-flow-dash__section">
+      <h3>Scheduler</h3>
+      <p style="margin:0;font-size:.8rem;color:#94a3b8">${status.scheduler.enabled} enabled · ${status.scheduler.total} total · ${status.scheduler.due} due now</p>
+    </section>`;
+}
+
+function mountFlowDashboard(el: HTMLElement): void {
+  const root = el.querySelector<HTMLElement>("[data-r-flow-dashboard-root]") ?? el;
+  const pollMs = Number(el.getAttribute("data-r-flow-dashboard-poll") ?? "5000") || 5000;
+  const initRaw = el.getAttribute("data-r-flow-dashboard-init");
+
+  const refresh = async () => {
+    const status = await fetchExecStatus();
+    if (status) renderDashboard(root, status);
+  };
+
+  if (initRaw) {
+    try {
+      renderDashboard(root, JSON.parse(initRaw) as ExecStatus);
+    } catch {
+      /* ignore */
+    }
+  }
+  void refresh();
+  const timer = window.setInterval(() => void refresh(), pollMs);
+  el.addEventListener("resuma:disconnect", () => clearInterval(timer), { once: true });
+}
+
+function subscribeGraphEvents(
+  graphId: string,
+  token: string,
+  onEvent: (ev: WorkerEvent) => void,
+): () => void {
+  if (!graphId || typeof EventSource === "undefined") return () => {};
+  const url = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}/events`, token);
+  const es = new EventSource(url);
+  es.onmessage = (msg) => {
+    try {
+      onEvent(JSON.parse(msg.data) as WorkerEvent);
+    } catch {
+      /* ignore */
+    }
+  };
+  return () => es.close();
+}
+
+function renderGraph(
+  el: HTMLElement,
+  snapshot: {
+    nodes?: Array<{ id: unknown; label: string; status: string }>;
+    status?: string;
+    worker?: string;
+  },
+): void {
+  const track = el.querySelector<HTMLElement>("[data-r-flow-graph-track]");
+  const statusEl = el.querySelector<HTMLElement>("[data-r-flow-graph-status]");
+  const nodes = snapshot.nodes ?? [];
+
+  if (track) {
+    if (!nodes.length) {
+      track.textContent = "No nodes";
+    } else {
+      track.innerHTML = "";
+      nodes.forEach((n, i) => {
+        if (i > 0) {
+          const arrow = document.createElement("span");
+          arrow.className = "r-flow-graph__arrow";
+          arrow.textContent = "→";
+          track.appendChild(arrow);
+        }
+        const pill = document.createElement("span");
+        pill.className = `r-flow-graph__node r-flow-graph__node--${n.status}`;
+        const sym =
+          n.status === "done"
+            ? "✓"
+            : n.status === "running"
+              ? "●"
+              : n.status === "failed"
+                ? "✗"
+                : n.status === "paused"
+                  ? "‖"
+                  : "○";
+        pill.textContent = `${sym} ${n.label}`;
+        track.appendChild(pill);
+      });
+    }
+  }
+
+  if (statusEl) {
+    const worker = snapshot.worker ? ` · ${snapshot.worker}` : "";
+    const st = snapshot.status ?? "unknown";
+    statusEl.textContent = `Status: ${st}${worker}`;
+  }
+}
+
+async function refreshGraph(el: HTMLElement, graphId: string, token: string): Promise<void> {
+  const path = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}`, token);
+  const res = await fetch(path, { headers: graphFetchHeaders(token), credentials: "same-origin" });
+  if (!res.ok) return;
+  const snap = (await res.json()) as {
+    nodes?: Array<{ id: unknown; label: string; status: string }>;
+    status?: string;
+    worker?: string;
+  };
+  renderGraph(el, snap);
+}
+
+function mountFlowGraph(el: HTMLElement): void {
+  const graphId = graphIdFrom(el);
+  const token = graphTokenFrom(el);
+  if (!graphId) return;
+  void refreshGraph(el, graphId, token);
+  const live = el.getAttribute("data-r-flow-graph-live") === "true";
+  if (!live) return;
+  subscribeGraphEvents(graphId, token, () => {
+    void refreshGraph(el, graphId, token);
+  });
+}
+
+function mountEventStream(el: HTMLElement): void {
+  const graphId = graphIdFrom(el);
+  const token = graphTokenFrom(el);
+  if (!graphId) return;
+  const list = el.querySelector("ul") ?? el;
+  const max = 200;
+  const append = (line: string) => {
+    const li = document.createElement("li");
+    li.textContent = line;
+    list.appendChild(li);
+    while (list.children.length > max) {
+      list.removeChild(list.firstChild!);
+    }
+    list.scrollTop = list.scrollHeight;
+  };
+  subscribeGraphEvents(graphId, token, (ev) => append(formatEvent(ev)));
+}
+
+function mountWorkerPanel(el: HTMLElement): void {
+  const graphId = graphIdFrom(el);
+  const token = graphTokenFrom(el);
+  if (!graphId) return;
+  const postOpts = (): RequestInit => ({
+    method: "POST",
+    credentials: "same-origin",
+    headers: graphMutationHeaders(token),
+  });
+  const graphRoot = el.closest("[data-r-flow-execution]");
+  const postControl = async (path: "pause" | "resume" | "cancel") => {
+    const res = await fetch(
+      withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}/${path}`, token),
+      postOpts(),
+    );
+    if (!res.ok) return;
+    const graphEl = graphRoot?.querySelector<HTMLElement>("[data-r-flow-graph]");
+    if (graphEl) void refreshGraph(graphEl, graphId, token);
+  };
+  el.querySelector("[data-r-worker-pause]")?.addEventListener("click", () => {
+    void postControl("pause");
+  });
+  el.querySelector("[data-r-worker-resume]")?.addEventListener("click", () => {
+    void postControl("resume");
+  });
+  el.querySelector("[data-r-worker-cancel]")?.addEventListener("click", () => {
+    void postControl("cancel");
+  });
+  el.querySelector("[data-r-worker-replay]")?.addEventListener("click", async () => {
+    const res = await fetch(
+      withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}/replay`, token),
+      { headers: graphFetchHeaders(token), credentials: "same-origin" },
+    );
+    if (!res.ok) return;
+    const events = (await res.json()) as WorkerEvent[];
+    const stream = el.closest("[data-r-flow-execution]")?.querySelector("[data-r-event-stream] ul");
+    if (!stream) return;
+    stream.innerHTML = "";
+    for (const ev of events) {
+      const li = document.createElement("li");
+      li.textContent = formatEvent(ev);
+      stream.appendChild(li);
+    }
+  });
+}
+
+/** Mount all Flow widgets (dashboard, graph, events, controls). */
+export function initFlowWidgets(scope: ParentNode = document): void {
+  scope.querySelectorAll<HTMLElement>("[data-r-flow-dashboard]").forEach(mountFlowDashboard);
+  scope.querySelectorAll<HTMLElement>("[data-r-flow-graph]").forEach(mountFlowGraph);
+  scope.querySelectorAll<HTMLElement>("[data-r-event-stream]").forEach(mountEventStream);
+  scope.querySelectorAll<HTMLElement>("[data-r-worker-panel]").forEach(mountWorkerPanel);
+}

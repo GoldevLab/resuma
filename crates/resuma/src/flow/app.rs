@@ -279,7 +279,14 @@ impl FlowApp {
         self
     }
 
+    /// Register execution workers (Resuma OS).
+    pub fn workers(self, registry: crate::exec::WorkerRegistry) -> Self {
+        registry.install();
+        self
+    }
+
     pub async fn serve(self, opts: FlowServeOptions) -> std::io::Result<()> {
+        crate::exec::init_exec().await;
         crate::server::configure_security(opts.security.clone());
         let router = self.into_router(opts.clone());
         let (listener, bound) = crate::server::listen::bind_listener(opts.addr).await?;

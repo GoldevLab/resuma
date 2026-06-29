@@ -17,6 +17,15 @@ pub enum ResumaError {
     #[error("submit `{0}` not found")]
     UnknownSubmit(String),
 
+    #[error("worker `{0}` not found")]
+    UnknownWorker(String),
+
+    #[error("tool `{0}` not found")]
+    UnknownTool(String),
+
+    #[error("graph `{0}` not found")]
+    UnknownGraph(String),
+
     #[error("island `{0}` not found")]
     UnknownIsland(String),
 
@@ -41,6 +50,9 @@ pub enum ResumaError {
     #[error("validation error: {0}")]
     Validation(String),
 
+    #[error("execution cancelled")]
+    Cancelled,
+
     #[error("{0}")]
     Other(String),
 }
@@ -52,9 +64,13 @@ impl ResumaError {
             Self::Unauthorized => 401,
             Self::Forbidden(_) | Self::InvalidCsrf => 403,
             Self::RateLimited => 429,
+            Self::Cancelled => 409,
             Self::UnknownAction(_)
             | Self::UnknownLoader(_)
             | Self::UnknownSubmit(_)
+            | Self::UnknownWorker(_)
+            | Self::UnknownTool(_)
+            | Self::UnknownGraph(_)
             | Self::UnknownIsland(_) => 404,
             Self::Serde(_) | Self::PayloadTooLarge | Self::Validation(_) => 422,
             Self::Render(_) | Self::Io(_) => 500,
@@ -70,9 +86,13 @@ impl ResumaError {
                 Self::Unauthorized => "Unauthorized".into(),
                 Self::Forbidden(_) | Self::InvalidCsrf => "Forbidden".into(),
                 Self::RateLimited => "Too many requests".into(),
-                Self::UnknownAction(_) | Self::UnknownLoader(_) | Self::UnknownSubmit(_) => {
-                    "Not found".into()
-                }
+                Self::Cancelled => "Execution cancelled".into(),
+                Self::UnknownAction(_)
+                | Self::UnknownLoader(_)
+                | Self::UnknownSubmit(_)
+                | Self::UnknownWorker(_)
+                | Self::UnknownTool(_)
+                | Self::UnknownGraph(_) => "Not found".into(),
                 Self::Serde(_) | Self::PayloadTooLarge | Self::Validation(_) => {
                     "Invalid request".into()
                 }

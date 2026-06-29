@@ -299,10 +299,15 @@ pub fn validate_csrf(headers: &HeaderMap, form_csrf: Option<&str>) -> Result<()>
         .as_deref()
         .or(form_csrf)
         .ok_or(ResumaError::InvalidCsrf)?;
-    if token.len() < 16 || !constant_time_eq(token.as_bytes(), cookie.as_bytes()) {
+    if token.len() < 16 || !verify_secret(&cookie, token) {
         return Err(ResumaError::InvalidCsrf);
     }
     Ok(())
+}
+
+/// Constant-time comparison for API keys, graph tokens, and CSRF secrets.
+pub fn verify_secret(expected: &str, provided: &str) -> bool {
+    constant_time_eq(expected.as_bytes(), provided.as_bytes())
 }
 
 /// Length-independent, constant-time byte comparison for secrets/tokens.

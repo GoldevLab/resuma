@@ -9,6 +9,12 @@ import { initEffects, type ClientEffectSpec } from "./effects.js";
 import { prefetchLazyChunks } from "./boundaries.js";
 import { resolveHandler, type Handler } from "./handler-loader.js";
 import { initNavLinks, followRedirect, navigate, buildUrl, invalidate, setPageMounter } from "./navigation.js";
+import { initFlowWidgets } from "./flow.js";
+
+/** Mount Flow widgets inside `scope` (or `document` when omitted). */
+export function mountFlowWidgets(scope: ParentNode = document): void {
+  initFlowWidgets(scope);
+}
 
 interface ResumePayload {
   signals: Array<{ id: RawSignalId; value: unknown }>;
@@ -61,7 +67,7 @@ function csrfToken(): string {
   }
 }
 
-function mutationHeaders(extra: Record<string, string> = {}): Record<string, string> {
+export function mutationHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const headers: Record<string, string> = { ...extra };
   const token = csrfToken();
   if (token) headers["x-resuma-csrf"] = token;
@@ -128,6 +134,7 @@ export function mountPage(): void {
   applyStreamSlots(scope);
   initPortals(scope);
   initViewTransitions(scope);
+  initFlowWidgets(scope);
   runVisibleTasks(payload.visible_tasks ?? {}, state);
   initEffects(payload.effects ?? [], signals, __resuma);
   prefetchLazyChunks(payload.lazy_chunks ?? [], scope);

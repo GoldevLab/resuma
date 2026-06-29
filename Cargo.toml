@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/resuma-macros",
     "crates/resuma",
+    "crates/resuma-flow",
     "examples/counter",
     "examples/todo",
     "examples/flow-demo",
@@ -27,6 +28,8 @@ readme = "README.md"
 
 [workspace.dependencies]
 resuma-macros = { path = "crates/resuma-macros", version = "1.0.0" }
+resuma = { path = "crates/resuma", version = "1.0.2" }
+resuma-flow = { path = "crates/resuma-flow", version = "1.0.2" }
 
 # 3rd-party
 serde       = { version = "1", features = ["derive"] }

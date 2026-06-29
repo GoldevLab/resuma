@@ -101,12 +101,30 @@ pub fn configure_rate_limit_backend(backend: Arc<dyn RateLimitBackend>) {
 }
 
 pub fn install_default_backend() {
+    let backend = std::env::var("RESUMA_RATE_BACKEND").unwrap_or_default();
     #[cfg(feature = "redis-rate-limit")]
-    if let Some(redis) = redis_backend::try_default() {
-        configure_rate_limit_backend(redis);
+    if backend.eq_ignore_ascii_case("redis") {
+        if let Some(redis) = redis_backend::try_default() {
+            configure_rate_limit_backend(redis);
+            return;
+        }
+    }
+    if backend.eq_ignore_ascii_case("disk") || disk_backend_enabled() {
+        let root = std::env::var("RESUMA_DATA_DIR").unwrap_or_else(|_| ".resuma".into());
+        super::rate_limit_disk::configure(format!("{root}/rate-limit"));
+        configure_rate_limit_backend(Arc::new(super::rate_limit_disk::DiskBackend));
         return;
     }
     configure_rate_limit_backend(Arc::new(MemoryBackend));
+}
+
+fn disk_backend_enabled() -> bool {
+    matches!(
+        std::env::var("RESUMA_ENV").as_deref(),
+        Ok("production") | Ok("prod")
+    ) && std::env::var("RESUMA_RATE_BACKEND")
+        .map(|v| !v.eq_ignore_ascii_case("memory"))
+        .unwrap_or(true)
 }
 
 pub fn check_rate_limit_key(key: &str, limit_per_minute: u32) -> Result<()> {

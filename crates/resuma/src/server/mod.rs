@@ -33,6 +33,7 @@ pub mod listen;
 pub mod ops;
 pub mod page_cache;
 pub mod rate_limit;
+pub mod rate_limit_disk;
 pub mod request_path;
 pub mod runtime_asset;
 pub mod security;

@@ -1,0 +1,22 @@
+[package]
+name = "resuma-flow"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Resuma Flow — full-stack pages, observable execution UI (FlowGraph, EventStream)."
+readme = "../../README.md"
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+categories.workspace = true
+keywords = ["web", "framework", "ssr", "flow", "workers"]
+
+[dependencies]
+resuma = { path = "../resuma", version = "1.0.2" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true

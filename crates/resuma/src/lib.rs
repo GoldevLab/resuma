@@ -60,6 +60,7 @@
 
 pub mod client;
 pub mod core;
+pub mod exec;
 pub mod flow;
 pub mod router;
 pub mod server;
@@ -70,7 +71,7 @@ pub mod cli;
 
 pub use resuma_macros::{
     component, computed, data, debounce, effect, island, js, layout, load, middleware, server,
-    submit, view, Store,
+    submit, view, worker, Store,
 };
 
 pub use crate::client::{
@@ -108,6 +109,14 @@ pub use crate::flow::{
     try_use_load_value, use_load, with_request, DiscoveredPage, FlowApp, FlowError, FlowExtensions,
     FlowPageRegistry, FlowPwaConfig, FlowServeOptions, FromFlowRequest, LoadValue, LoaderError,
     Path, PublicAsset, PwaShortcut, Query, Redirect, SubmitError, SubmitValue,
+};
+
+pub use crate::exec::{
+    attach_exec_routes, dispatch_tool, durable_get, durable_set, enqueue, init_exec,
+    plan as plan_execution, queue_stats, register_tool, register_worker, resolve_resources,
+    ExecutionRecord, FlowEngine, GraphId, GraphSnapshot, PlannerHints, QueueMessage,
+    QueueStats, ResourceProfile, Resources, RuntimeChoice, RuntimeTarget, StartWorkerResponse,
+    WorkerContext, WorkerEvent, WorkerMeta, WorkerRegistry,
 };
 
 /// CLI entry point (`cargo install resuma`).
