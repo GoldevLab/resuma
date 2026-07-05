@@ -12,6 +12,7 @@ on:
           - all
           - resuma-macros
           - resuma
+          - resuma-flow
 
 env:
   CARGO_TERM_COLOR: always
