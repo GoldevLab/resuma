@@ -38,6 +38,8 @@ jobs:
             publish_one resuma-macros
             sleep 90
             publish_one resuma
+            sleep 90
+            publish_one resuma-flow
           else
             publish_one "${{ inputs.crate }}"
           fi
