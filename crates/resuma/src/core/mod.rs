@@ -38,7 +38,9 @@ pub mod theme;
 pub mod view;
 pub mod view_transition;
 
-pub use app_context::{provide_context, push_context_frame, use_context, ContextGuard, ContextId};
+pub use app_context::{
+    provide_context, push_context_frame, try_use_context, use_context, ContextGuard, ContextId,
+};
 pub use component::{Component, IntoView};
 pub use context::{
     current_context, page_needs_client, with_context, with_handler_chunk, RenderContext,

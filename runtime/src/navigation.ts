@@ -74,6 +74,19 @@ function root(): HTMLElement {
   return document.getElementById(ROOT_ID) ?? document.body;
 }
 
+/**
+ * True when `href` resolves to the current origin. SPA navigation fetches the
+ * target and injects its markup into the page, so cross-origin hrefs must never
+ * be swapped in — that would render attacker-controlled HTML in our origin.
+ */
+function isSameOrigin(href: string): boolean {
+  try {
+    return new URL(href, location.origin).origin === location.origin;
+  } catch {
+    return false;
+  }
+}
+
 function readPayloadFromScript(node: HTMLElement | null): ResumePayload {
   if (!node?.textContent) {
     return { signals: [], handlers: {}, islands: [], actions: [] };
@@ -203,14 +216,31 @@ export async function invalidate(
   await navigate(buildUrl(targetPath, { ...query, _r: bust }));
 }
 
+// Generation counter + in-flight controller: a slow fetch from a stale
+// navigation must never overwrite the DOM after a newer navigation started.
+let navGen = 0;
+let navController: AbortController | null = null;
+
 export async function navigate(href: string, pushState = true): Promise<void> {
+  // SPA navigation swaps fetched HTML into our origin — never do that for a
+  // cross-origin target. Fall back to a full, browser-mediated navigation.
+  if (!isSameOrigin(href)) {
+    window.location.assign(href);
+    return;
+  }
+  const gen = ++navGen;
+  navController?.abort();
+  const controller = new AbortController();
+  navController = controller;
   try {
     let html: string | undefined = prefetchCache.get(href);
     if (!html) {
       const res = await fetch(href, {
         headers: { Accept: "text/html" },
         credentials: "same-origin",
+        signal: controller.signal,
       });
+      if (gen !== navGen) return;
       if (!res.ok) {
         window.location.href = href;
         return;
@@ -219,6 +249,8 @@ export async function navigate(href: string, pushState = true): Promise<void> {
     } else {
       prefetchCache.delete(href);
     }
+    // A newer navigation started while we were fetching — this one is stale.
+    if (gen !== navGen) return;
     const doc = new DOMParser().parseFromString(html, "text/html");
     const newRoot = doc.getElementById(ROOT_ID);
     const newState = doc.getElementById(STATE_SCRIPT_ID);
@@ -239,6 +271,8 @@ export async function navigate(href: string, pushState = true): Promise<void> {
     focusMain();
     document.dispatchEvent(new CustomEvent("resuma:navigate", { detail: { href } }));
   } catch (err) {
+    // Aborted by a newer navigation — stay silent, the newer one owns the page.
+    if (err instanceof DOMException && err.name === "AbortError") return;
     console.error("[resuma] navigation failed", err);
     window.location.href = href;
   }
@@ -246,11 +280,26 @@ export async function navigate(href: string, pushState = true): Promise<void> {
 
 /** Follow redirect hints from submit/action JSON — uses SPA nav for same-origin paths. */
 export function followRedirect(path: string): void {
+  // Same-origin absolute paths use SPA nav. Reject protocol-relative (`//host`)
+  // and non-http(s) schemes so a redirect hint can't bounce the user off-origin
+  // or into a `javascript:`/`data:` URL.
   if (path.startsWith("/") && !path.startsWith("//")) {
     void navigate(path);
-  } else {
-    window.location.assign(path);
+    return;
   }
+  try {
+    const url = new URL(path, location.origin);
+    if (url.origin === location.origin && (url.protocol === "http:" || url.protocol === "https:")) {
+      // Same-origin absolute URLs take the same SPA path as root-relative ones.
+      void navigate(url.pathname + url.search + url.hash);
+      return;
+    }
+  } catch {
+    /* fall through to ignore */
+  }
+  // Anything else (cross-origin, protocol-relative, javascript:, data:) is
+  // treated as untrusted: ignore rather than navigate.
+  console.warn("[resuma] ignored unsafe redirect target", path);
 }
 
 function shouldEnhanceLink(a: HTMLAnchorElement, ev: MouseEvent): boolean {

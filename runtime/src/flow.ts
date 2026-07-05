@@ -38,6 +38,27 @@ declare global {
   }
 }
 
+// Long-lived resources (poll timers, SSE connections) created by Flow widgets.
+// On SPA navigation the page HTML is swapped and widgets are re-mounted, so we
+// must tear down the previous page's timers/EventSources — otherwise every
+// navigation leaks a running interval and an open SSE stream to detached DOM.
+const flowCleanups: Array<() => void> = [];
+
+function registerFlowCleanup(fn: () => void): void {
+  flowCleanups.push(fn);
+}
+
+function flushFlowCleanups(): void {
+  while (flowCleanups.length) {
+    const fn = flowCleanups.pop();
+    try {
+      fn?.();
+    } catch {
+      /* ignore cleanup errors */
+    }
+  }
+}
+
 function graphIdFrom(el: HTMLElement): string {
   return (
     el.getAttribute("data-r-flow-graph") ??
@@ -130,7 +151,8 @@ function escapeHtml(s: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 async function fetchExecStatus(): Promise<ExecStatus | null> {
@@ -232,7 +254,9 @@ function mountFlowDashboard(el: HTMLElement): void {
   }
   void refresh();
   const timer = window.setInterval(() => void refresh(), pollMs);
-  el.addEventListener("resuma:disconnect", () => clearInterval(timer), { once: true });
+  const stop = () => clearInterval(timer);
+  el.addEventListener("resuma:disconnect", stop, { once: true });
+  registerFlowCleanup(stop);
 }
 
 function subscribeGraphEvents(
@@ -321,9 +345,10 @@ function mountFlowGraph(el: HTMLElement): void {
   void refreshGraph(el, graphId, token);
   const live = el.getAttribute("data-r-flow-graph-live") === "true";
   if (!live) return;
-  subscribeGraphEvents(graphId, token, () => {
+  const close = subscribeGraphEvents(graphId, token, () => {
     void refreshGraph(el, graphId, token);
   });
+  registerFlowCleanup(close);
 }
 
 function mountEventStream(el: HTMLElement): void {
@@ -341,7 +366,8 @@ function mountEventStream(el: HTMLElement): void {
     }
     list.scrollTop = list.scrollHeight;
   };
-  subscribeGraphEvents(graphId, token, (ev) => append(formatEvent(ev)));
+  const close = subscribeGraphEvents(graphId, token, (ev) => append(formatEvent(ev)));
+  registerFlowCleanup(close);
 }
 
 function mountWorkerPanel(el: HTMLElement): void {
@@ -392,6 +418,8 @@ function mountWorkerPanel(el: HTMLElement): void {
 
 /** Mount all Flow widgets (dashboard, graph, events, controls). */
 export function initFlowWidgets(scope: ParentNode = document): void {
+  // Tear down the previous mount's timers/SSE before wiring up fresh widgets.
+  flushFlowCleanups();
   scope.querySelectorAll<HTMLElement>("[data-r-flow-dashboard]").forEach(mountFlowDashboard);
   scope.querySelectorAll<HTMLElement>("[data-r-flow-graph]").forEach(mountFlowGraph);
   scope.querySelectorAll<HTMLElement>("[data-r-event-stream]").forEach(mountEventStream);

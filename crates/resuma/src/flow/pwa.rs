@@ -312,7 +312,7 @@ fn icon_svg(cfg: &FlowPwaConfig, size: u32, maskable: bool) -> String {
 </svg>"##,
         label = escape_xml(&cfg.short_name),
         fill = escape_xml(&cfg.theme_color),
-        letter = letter,
+        letter = escape_xml(&letter.to_string()),
     )
 }
 
@@ -348,19 +348,21 @@ fn manifest_json(cfg: &FlowPwaConfig) -> String {
 }
 
 fn service_worker(cfg: &FlowPwaConfig) -> String {
+    // Serialize via serde_json so cache_version / precache paths cannot break
+    // out of the JS string literals (JS injection into service-worker scope).
     let cache_name = format!("resuma-pwa-{}", cfg.cache_version);
+    let cache_name_js =
+        serde_json::to_string(&cache_name).unwrap_or_else(|_| "\"resuma-pwa\"".into());
     let precache: Vec<String> = cfg
         .precache_list()
         .into_iter()
-        .map(|p| format!("\"{}\"", p.replace('\\', "/")))
+        .map(|p| p.replace('\\', "/"))
         .collect();
-    let precache_js = precache.join(",\n  ");
+    let precache_js = serde_json::to_string(&precache).unwrap_or_else(|_| "[]".into());
 
     format!(
-        r#"const CACHE = "{cache_name}";
-const PRECACHE = [
-  {precache_js}
-];
+        r#"const CACHE = {cache_name_js};
+const PRECACHE = {precache_js};
 
 self.addEventListener("install", (event) => {{
   event.waitUntil(
@@ -422,7 +424,7 @@ self.addEventListener("fetch", (event) => {{
   }}
 }});
 "#,
-        cache_name = cache_name,
+        cache_name_js = cache_name_js,
         precache_js = precache_js,
     )
 }

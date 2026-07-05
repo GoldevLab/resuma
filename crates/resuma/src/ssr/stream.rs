@@ -6,6 +6,7 @@ use crate::core::context::{RenderContext, RenderMode, ResumePayload};
 use crate::core::{with_context, View};
 use futures_util::Stream;
 
+use super::escape::escape_attr;
 use super::escape::escape_text;
 use super::seo;
 use crate::{render_view, PageOptions};
@@ -26,7 +27,7 @@ pub fn stream_head(opts: &PageOptions, path: &str) -> String {
     let stylesheet = opts
         .stylesheet
         .as_ref()
-        .map(|s| format!(r#"<link rel="stylesheet" href="{s}" />"#))
+        .map(|s| format!(r#"<link rel="stylesheet" href="{}" />"#, escape_attr(s)))
         .unwrap_or_default();
 
     format!(

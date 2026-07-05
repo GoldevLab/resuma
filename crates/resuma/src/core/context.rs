@@ -7,7 +7,7 @@
 
 use std::any::TypeId;
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -49,7 +49,11 @@ pub struct RenderContext {
     next_signal: AtomicU32,
     next_effect: AtomicU32,
     state: RefCell<BTreeMap<SignalId, Value>>,
-    effects: RefCell<BTreeMap<u32, Box<dyn FnMut()>>>,
+    #[allow(clippy::type_complexity)]
+    effects: RefCell<BTreeMap<u32, Rc<RefCell<Box<dyn FnMut()>>>>>,
+    /// Effect ids currently executing — guards against re-entrant cascades and
+    /// dependency cycles that would otherwise deadlock or panic.
+    running_effects: RefCell<BTreeSet<u32>>,
     current_effect: RefCell<Option<u32>>,
     /// Handler chunks referenced by this page. Maps chunk id → symbol → JS
     /// source. Populated by the macro layer.
@@ -65,6 +69,8 @@ pub struct RenderContext {
     next_visible_task: AtomicU32,
     /// Effect id → signal dependencies collected during SSR.
     effect_deps: RefCell<BTreeMap<u32, Vec<SignalId>>>,
+    /// Signal id → effect ids subscribed during the current dependency pass.
+    signal_subscribers: RefCell<BTreeMap<SignalId, Vec<u32>>>,
     /// Client-replayable effects (computed, debounce, side effects with JS).
     client_effects: RefCell<Vec<ClientEffectSpec>>,
     /// Active component/island boundary stack for handler chunk ids.
@@ -79,6 +85,7 @@ impl RenderContext {
             next_effect: AtomicU32::new(1),
             state: RefCell::new(BTreeMap::new()),
             effects: RefCell::new(BTreeMap::new()),
+            running_effects: RefCell::new(BTreeSet::new()),
             current_effect: RefCell::new(None),
             handler_chunks: RefCell::new(BTreeMap::new()),
             islands: RefCell::new(Vec::new()),
@@ -87,6 +94,7 @@ impl RenderContext {
             visible_tasks: RefCell::new(BTreeMap::new()),
             next_visible_task: AtomicU32::new(1),
             effect_deps: RefCell::new(BTreeMap::new()),
+            signal_subscribers: RefCell::new(BTreeMap::new()),
             client_effects: RefCell::new(Vec::new()),
             handler_chunk_stack: RefCell::new(Vec::new()),
         })
@@ -134,12 +142,43 @@ impl RenderContext {
     }
 
     pub fn register_effect<F: FnMut() + 'static>(&self, id: EffectId, f: F) {
-        self.effects.borrow_mut().insert(id.0, Box::new(f));
+        self.effects
+            .borrow_mut()
+            .insert(id.0, Rc::new(RefCell::new(Box::new(f))));
     }
 
+    /// Run a registered effect by id.
+    ///
+    /// The callback is cloned out (via `Rc`) before invocation so the `effects`
+    /// map is not borrowed while the effect runs — this is what allows one
+    /// effect to trigger another (cascading `computed`/`effect` chains) without
+    /// hitting a `RefCell already borrowed` panic. A `running_effects` guard
+    /// short-circuits re-entrant cycles (A → B → A) instead of deadlocking.
     pub fn run_effect(&self, id: u32) {
-        if let Some(eff) = self.effects.borrow_mut().get_mut(&id) {
-            eff();
+        // The effect currently tracking dependencies (initial run) must not be
+        // re-entered, and neither must an effect already on the run stack.
+        if *self.current_effect.borrow() == Some(id) {
+            tracing::warn!(
+                effect_id = id,
+                "effect re-entered while tracking dependencies — skipped (possible dependency cycle)"
+            );
+            return;
+        }
+        if self.running_effects.borrow().contains(&id) {
+            tracing::warn!(
+                effect_id = id,
+                "effect cycle detected — skipped re-entrant run (derived state may be stale)"
+            );
+            return;
+        }
+        let cb = self.effects.borrow().get(&id).cloned();
+        if let Some(cb) = cb {
+            self.clear_effect_deps(id);
+            self.running_effects.borrow_mut().insert(id);
+            self.set_current_effect(Some(EffectId(id)));
+            (cb.borrow_mut())();
+            self.set_current_effect(None);
+            self.running_effects.borrow_mut().remove(&id);
         }
     }
 
@@ -178,11 +217,41 @@ impl RenderContext {
     }
 
     pub fn record_effect_dep(&self, effect_id: u32, signal_id: SignalId) {
-        let mut deps = self.effect_deps.borrow_mut();
-        let list = deps.entry(effect_id).or_default();
-        if !list.contains(&signal_id) {
-            list.push(signal_id);
+        {
+            let mut deps = self.effect_deps.borrow_mut();
+            let list = deps.entry(effect_id).or_default();
+            if !list.contains(&signal_id) {
+                list.push(signal_id);
+            }
         }
+        let mut subs = self.signal_subscribers.borrow_mut();
+        let list = subs.entry(signal_id).or_default();
+        if !list.contains(&effect_id) {
+            list.push(effect_id);
+        }
+    }
+
+    /// Drop tracked deps for an effect before re-running it (conditional branches).
+    pub fn clear_effect_deps(&self, effect_id: u32) {
+        let old = self
+            .effect_deps
+            .borrow_mut()
+            .remove(&effect_id)
+            .unwrap_or_default();
+        let mut subs = self.signal_subscribers.borrow_mut();
+        for sig_id in old {
+            if let Some(list) = subs.get_mut(&sig_id) {
+                list.retain(|&e| e != effect_id);
+            }
+        }
+    }
+
+    pub fn signal_subscriber_ids(&self, signal_id: SignalId) -> Vec<u32> {
+        self.signal_subscribers
+            .borrow()
+            .get(&signal_id)
+            .cloned()
+            .unwrap_or_default()
     }
 
     pub fn take_effect_deps(&self, effect_id: u32) -> Vec<SignalId> {
@@ -341,6 +410,8 @@ pub fn page_needs_client(payload: &ResumePayload, body_html: &str) -> bool {
         "resuma-boundary",
         "resuma-dyn",
         "resuma-show",
+        "resuma-for",
+        "resuma-match",
         "data-r-bind:",
         "data-r-nav",
         "data-r-portal",
@@ -373,4 +444,43 @@ pub fn with_handler_chunk<R>(chunk: impl Into<String>, f: impl FnOnce() -> R) ->
 
 pub fn current_context() -> Option<Rc<RenderContext>> {
     CURRENT.with(|cell| cell.borrow().clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn page_needs_client_detects_resuma_for_marker() {
+        let payload = ResumePayload {
+            signals: vec![],
+            handlers: Default::default(),
+            islands: vec![],
+            actions: vec![],
+            contexts: Default::default(),
+            visible_tasks: Default::default(),
+            effects: vec![],
+            lazy_chunks: vec![],
+            csrf_token: None,
+        };
+        let body = r#"<resuma-for data-r-for="s1"><div data-r-for-list></div></resuma-for>"#;
+        assert!(page_needs_client(&payload, body));
+    }
+
+    #[test]
+    fn page_needs_client_detects_resuma_match_marker() {
+        let payload = ResumePayload {
+            signals: vec![],
+            handlers: Default::default(),
+            islands: vec![],
+            actions: vec![],
+            contexts: Default::default(),
+            visible_tasks: Default::default(),
+            effects: vec![],
+            lazy_chunks: vec![],
+            csrf_token: None,
+        };
+        let body = r#"<resuma-match data-r-match="s1"></resuma-match>"#;
+        assert!(page_needs_client(&payload, body));
+    }
 }

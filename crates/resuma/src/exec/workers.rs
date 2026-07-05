@@ -39,10 +39,9 @@ static WORKERS: Lazy<RwLock<HashMap<String, WorkerEntry>>> =
 
 /// Register a named worker handler.
 pub fn register_worker(name: &str, meta: WorkerMeta, run: WorkerFn) {
-    WORKERS.write().insert(
-        name.to_string(),
-        WorkerEntry { meta, run },
-    );
+    WORKERS
+        .write()
+        .insert(name.to_string(), WorkerEntry { meta, run });
 }
 
 pub fn get_worker(name: &str) -> Option<(WorkerMeta, WorkerFn)> {
@@ -54,6 +53,11 @@ pub fn list_worker_names() -> Vec<String> {
     let mut names: Vec<_> = WORKERS.read().keys().cloned().collect();
     names.sort();
     names
+}
+
+/// True when at least one worker handler was registered.
+pub fn has_registered_workers() -> bool {
+    !WORKERS.read().is_empty()
 }
 
 /// Per-invocation context passed to worker `run` closures.
@@ -110,17 +114,9 @@ impl WorkerContext {
 
     pub async fn tool(&self, name: &str, args: Value) -> Result<Value> {
         self.check_cancelled()?;
-        self.emit(emit::tool_call(
-            NodeId::new(name),
-            name,
-            Some(args.clone()),
-        ));
+        self.emit(emit::tool_call(NodeId::new(name), name, Some(args.clone())));
         let started = super::id::now_ms();
-        let out = super::cancel::run_cancellable(
-            &self.cancel,
-            tools::dispatch(name, args),
-        )
-        .await;
+        let out = super::cancel::run_cancellable(&self.cancel, tools::dispatch(name, args)).await;
         let duration = super::id::now_ms().saturating_sub(started);
         match &out {
             Ok(_) => self.emit(emit::node_done(NodeId::new(name), duration)),
@@ -132,11 +128,8 @@ impl WorkerContext {
     pub async fn ai(&self, prompt: impl Into<String>, data: &Value) -> Result<Value> {
         let prompt = prompt.into();
         self.emit(emit::ai_thinking(self.node_id.clone(), &prompt));
-        self.tool(
-            "ai",
-            json!({ "prompt": prompt, "data": data }),
-        )
-        .await
+        self.tool("ai", json!({ "prompt": prompt, "data": data }))
+            .await
     }
 
     pub fn state(&self) -> &StateStore {

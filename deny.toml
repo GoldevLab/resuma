@@ -1,0 +1,36 @@
+# Supply-chain policy for the Resuma workspace.
+# Run locally: cargo install cargo-deny && cargo deny check
+
+[advisories]
+version = 2
+ignore = []
+
+[bans]
+multiple-versions = "warn"
+wildcards = "warn"
+deny = []
+skip = [
+    { crate = "tower-http", reason = "reqwest 0.12 pulls 0.6 while resuma uses 0.7" },
+    { crate = "getrandom", reason = "transitive 0.2 via legacy deps" },
+]
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+[licenses]
+version = 2
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "CDLA-Permissive-2.0",
+    "OpenSSL",
+    "Zlib",
+]
+confidence-threshold = 0.8

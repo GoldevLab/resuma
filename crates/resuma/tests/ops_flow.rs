@@ -77,10 +77,11 @@ async fn loader_failure_renders_error_page_without_crashing() {
 
     let app = FlowApp::new()
         .page("/boom", |_req| {
-            // Panicking accessor on a failed loader — must be caught and turned
-            // into an error page rather than aborting the request.
-            let _data: String = resuma::use_load("ops_flow_failing_loader");
-            view! { <main>"never reached"</main> }
+            match resuma::use_load::<String>("ops_flow_failing_loader") {
+                resuma::LoadValue::Ok(_) => view! { <main>"never reached"</main> },
+                resuma::LoadValue::Err(err) => error_page(&FlowError::Loader(err)),
+                resuma::LoadValue::Pending => view! { <main>"pending"</main> },
+            }
         })
         .into_router(FlowServeOptions::default());
 

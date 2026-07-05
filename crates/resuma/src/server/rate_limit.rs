@@ -24,6 +24,9 @@ impl RateLimitBackend for MemoryBackend {
 static MEMORY_BUCKETS: Lazy<RwLock<HashMap<String, Vec<Instant>>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 
+/// Cap in-memory rate-limit keys to avoid unbounded growth from IP rotation attacks.
+const MEMORY_BUCKET_KEY_CAP: usize = 10_000;
+
 fn memory_check(key: &str, limit_per_minute: u32, window: Duration) -> Result<()> {
     if limit_per_minute == 0 {
         return Ok(());
@@ -34,6 +37,9 @@ fn memory_check(key: &str, limit_per_minute: u32, window: Duration) -> Result<()
         entries.retain(|t| now.duration_since(*t) < window);
         !entries.is_empty()
     });
+    if !map.contains_key(key) && map.len() >= MEMORY_BUCKET_KEY_CAP {
+        return Err(ResumaError::RateLimited);
+    }
     let entries = map.entry(key.to_string()).or_default();
     entries.retain(|t| now.duration_since(*t) < window);
     if entries.len() as u32 >= limit_per_minute {

@@ -21,11 +21,19 @@ static LOADS: Lazy<RwLock<HashMap<String, LoadFn>>> = Lazy::new(|| RwLock::new(H
 static SUBMITS: Lazy<RwLock<HashMap<String, SubmitFn>>> = Lazy::new(|| RwLock::new(HashMap::new()));
 
 pub fn register_loader(name: &str, f: LoadFn) {
-    LOADS.write().insert(name.to_string(), f);
+    let mut reg = LOADS.write();
+    if reg.contains_key(name) {
+        panic!("loader `{name}` registered twice");
+    }
+    reg.insert(name.to_string(), f);
 }
 
 pub fn register_submit(name: &str, f: SubmitFn) {
-    SUBMITS.write().insert(name.to_string(), f);
+    let mut reg = SUBMITS.write();
+    if reg.contains_key(name) {
+        panic!("submit handler `{name}` registered twice");
+    }
+    reg.insert(name.to_string(), f);
 }
 
 pub fn get_loader(name: &str) -> Option<LoadFn> {

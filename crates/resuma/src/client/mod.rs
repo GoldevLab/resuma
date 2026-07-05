@@ -114,11 +114,21 @@ pub fn client_component(comp: ClientComponent) -> View {
 }
 
 fn valid_client_id(id: &str) -> bool {
-    !id.is_empty()
-        && id.len() <= 64
-        && id
+    validate_client_id(id).is_ok()
+}
+
+/// Validate a client component bundle id (`/static/client/{id}.js`).
+#[allow(clippy::result_unit_err)]
+pub fn validate_client_id(id: &str) -> Result<(), ()> {
+    if id.is_empty()
+        || id.len() > 64
+        || !id
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(());
+    }
+    Ok(())
 }
 
 fn escape_attr(value: &str) -> String {

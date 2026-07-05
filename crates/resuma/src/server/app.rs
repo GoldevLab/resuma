@@ -10,6 +10,7 @@ use crate::core::view::View;
 use crate::core::Component;
 use crate::core::{FlowRequest, ResumaError};
 use crate::flow::extract_redirect;
+use crate::flow::runtime::with_request;
 use crate::ssr::PageOptions;
 use axum::body::Body;
 use axum::extract::ConnectInfo;
@@ -25,10 +26,12 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use super::actions::dispatch as dispatch_action;
-use super::compressed_asset::{self, core_asset, loader_asset, runtime_asset, serve_js};
+use super::compressed_asset::{
+    self, core_asset, flow_asset, loader_asset, runtime_asset, serve_js,
+};
 use super::deferred_stream::try_deferred_stream;
 use super::page_cache::take_response_cache_control;
-use super::runtime_asset::{CORE_JS, LOADER_JS, RUNTIME_JS};
+use super::runtime_asset::{CORE_JS, FLOW_JS, LOADER_JS, RUNTIME_JS};
 use super::security::{
     self, client_ip_from_parts, csrf_set_cookie, csrf_token, guard_mutation, http_status,
     random_token, request_is_https, CspNonce, SecurityConfig, SecurityHeaderOptions,
@@ -215,6 +218,13 @@ impl ResumaApp {
     /// Register a precompiled handler chunk to be served at
     /// `/_resuma/handler/<chunk>.js`.
     pub fn handler_chunk(self, chunk_id: &str, source: impl Into<String>) -> Self {
+        if security::validate_chunk_id(chunk_id).is_err() {
+            tracing::warn!(
+                chunk = chunk_id,
+                "invalid handler chunk id — not registered"
+            );
+            return self;
+        }
         self.handler_chunks
             .write()
             .insert(chunk_id.to_string(), source.into());
@@ -224,6 +234,10 @@ impl ResumaApp {
     /// Register a precompiled island chunk to be served at
     /// `/_resuma/island-chunk/<chunk>.js`.
     pub fn island_chunk(self, chunk_id: &str, source: impl Into<String>) -> Self {
+        if security::validate_chunk_id(chunk_id).is_err() {
+            tracing::warn!(chunk = chunk_id, "invalid island chunk id — not registered");
+            return self;
+        }
         self.island_chunks
             .write()
             .insert(chunk_id.to_string(), source.into());
@@ -233,12 +247,14 @@ impl ResumaApp {
     pub async fn serve(self, opts: ServeOptions) -> std::io::Result<()> {
         crate::exec::init_exec().await;
         security::configure(opts.security.clone());
-        let router = self
-            .into_router()
-            .layer(DefaultBodyLimit::max(opts.security.body_limit_bytes))
-            .layer(middleware::from_fn(security_headers_middleware))
-            .layer(middleware::from_fn(super::ops::request_id_middleware));
+        let router = super::limits::apply_server_limits(
+            self.into_router()
+                .layer(DefaultBodyLimit::max(opts.security.body_limit_bytes))
+                .layer(middleware::from_fn(security_headers_middleware))
+                .layer(middleware::from_fn(super::ops::request_id_middleware)),
+        );
         let (listener, bound) = super::listen::bind_listener(opts.addr).await?;
+        super::limits::warn_if_exposed_without_hardening(bound, opts.security.production);
         info!(addr = %bound, "resuma server listening");
         println!("resuma listening on http://{}", bound);
         axum::serve(
@@ -280,24 +296,27 @@ impl ResumaApp {
 
         router = router.fallback(get(serve_fallback));
 
-        if !state.hide_benchmark {
-            router = router.route("/_resuma/benchmark.json", get(serve_benchmark));
-        }
-
         let mut router = router
             .route("/_resuma/loader.js", get(serve_loader))
             .route("/_resuma/core.js", get(serve_core))
+            .route("/_resuma/flow.js", get(serve_flow))
             .route("/_resuma/runtime.js", get(serve_runtime))
             .route("/_resuma/action/{name}", post(serve_action))
             .route("/_resuma/handler/{chunk}", get(serve_handler_chunk))
-            .route("/_resuma/island-chunk/{chunk}", get(serve_island_chunk))
-            .route("/_resuma/island/{instance}", get(serve_island_refresh));
+            .route("/_resuma/island-chunk/{chunk}", get(serve_island_chunk));
 
         if super::dev::dev_mode_enabled() {
-            router = router.route("/_resuma/dev/ws", get(super::dev::dev_ws_handler));
+            if !state.hide_benchmark {
+                router = router.route("/_resuma/benchmark.json", get(serve_benchmark));
+            }
+            router = router
+                .route("/_resuma/island/{instance}", get(serve_island_refresh))
+                .route("/_resuma/dev/ws", get(super::dev::dev_ws_handler));
         }
 
-        router = crate::exec::attach_exec_routes(router);
+        if crate::exec::exec_routes_enabled() {
+            router = crate::exec::attach_exec_routes(router);
+        }
 
         if let Some(kit) = seo_kit {
             router = crate::flow::routes::attach_seo_kit_routes(
@@ -348,15 +367,26 @@ struct AppState {
     hide_benchmark: bool,
 }
 
-fn page_security_opts(base: &PageOptions) -> PageOptions {
+fn page_security_opts(base: &PageOptions, headers: &HeaderMap) -> (PageOptions, bool) {
     let mut opts = base.clone();
     opts.csp_nonce = random_token();
-    opts.csrf_token = csrf_token();
-    opts
+    // Reuse the session CSRF cookie when present so multi-tab browsing keeps a
+    // valid double-submit token instead of overwriting the cookie on every render.
+    let (token, is_new) = match security::csrf_from_cookie(headers) {
+        Some(t) => (t, false),
+        None => (csrf_token(), true),
+    };
+    opts.csrf_token = token;
+    (opts, is_new)
 }
 
-fn attach_page_security(mut res: Response, opts: &PageOptions, https: bool) -> Response {
-    if !opts.csrf_token.is_empty() {
+fn attach_page_security(
+    mut res: Response,
+    opts: &PageOptions,
+    https: bool,
+    set_csrf_cookie: bool,
+) -> Response {
+    if set_csrf_cookie && !opts.csrf_token.is_empty() {
         res.headers_mut()
             .insert(header::SET_COOKIE, csrf_set_cookie(&opts.csrf_token, https));
     }
@@ -372,8 +402,18 @@ fn render_page_response(
     opts: PageOptions,
     path: &str,
     https: bool,
+    set_csrf_cookie: bool,
 ) -> Response {
     let cache = take_response_cache_control();
+    let status_code = super::page_cache::take_response_status()
+        .and_then(|s| StatusCode::from_u16(s).ok())
+        .unwrap_or(StatusCode::OK);
+    // Error / non-200 pages must not be advertised as indexable.
+    let robots_tag = if status_code == StatusCode::OK {
+        "index, follow"
+    } else {
+        "noindex"
+    };
     if state.streaming {
         use axum::body::Body;
         use futures_util::StreamExt;
@@ -398,19 +438,20 @@ fn render_page_response(
                 .map_err(std::io::Error::other)
         });
         let mut builder = Response::builder()
+            .status(status_code)
             .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
             .header(header::TRANSFER_ENCODING, "chunked");
         if let Some(ref cache) = cache {
             builder = builder.header(header::CACHE_CONTROL, cache.as_str());
         }
         let res = match builder
-            .header("x-robots-tag", "index, follow")
+            .header("x-robots-tag", robots_tag)
             .body(Body::from_stream(stream))
         {
             Ok(res) => res,
             Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         };
-        attach_page_security(res, &opts, https)
+        attach_page_security(res, &opts, https, set_csrf_cookie)
     } else {
         let payload = ctx.snapshot_full();
         let html = crate::ssr::render_prebuilt_document(&opts, path, &view, &payload);
@@ -419,7 +460,7 @@ fn render_page_response(
             &state.island_chunks,
             &payload,
         );
-        let mut res = Html(html).into_response();
+        let mut res = (status_code, Html(html)).into_response();
         if let Some(cache) = cache {
             res.headers_mut().insert(
                 header::CACHE_CONTROL,
@@ -429,9 +470,9 @@ fn render_page_response(
         }
         res.headers_mut().insert(
             header::HeaderName::from_static("x-robots-tag"),
-            HeaderValue::from_static("index, follow"),
+            HeaderValue::from_static(robots_tag),
         );
-        attach_page_security(res, &opts, https)
+        attach_page_security(res, &opts, https, set_csrf_cookie)
     }
 }
 
@@ -443,12 +484,15 @@ async fn serve_page(uri: Uri, State(state): State<Arc<AppState>>, req: Request<B
     };
 
     let flow_req = crate::flow::request::from_http_request(&req, &path, Default::default());
-    let opts = page_security_opts(&state.page_options);
+    let https = request_is_https(&req);
+    let (opts, new_csrf) = page_security_opts(&state.page_options, req.headers());
     super::page_cache::stage_page_csrf(opts.csrf_token.clone());
     super::page_cache::stage_page_csp_nonce(opts.csp_nonce.clone());
     let ctx = RenderContext::new(RenderMode::Ssr);
-    let view = with_context(ctx.clone(), || factory(flow_req));
-    render_page_response(&state, view, ctx, opts, &path, request_is_https(&req))
+    let (view, _final_req) = with_request(flow_req.clone(), || {
+        with_context(ctx.clone(), || factory(flow_req))
+    });
+    render_page_response(&state, view, ctx, opts, &path, https, new_csrf)
 }
 
 async fn serve_fallback(
@@ -459,12 +503,16 @@ async fn serve_fallback(
     let path = uri.path();
     let flow_req = crate::flow::request::from_http_request(&req, path, Default::default());
     if let Some(fb) = &state.fallback {
-        let opts = page_security_opts(&state.page_options);
+        let https = request_is_https(&req);
+        let (opts, new_csrf) = page_security_opts(&state.page_options, req.headers());
         super::page_cache::stage_page_csrf(opts.csrf_token.clone());
         super::page_cache::stage_page_csp_nonce(opts.csp_nonce.clone());
         let ctx = RenderContext::new(RenderMode::Ssr);
-        if let Some(view) = with_context(ctx.clone(), || fb(path, flow_req)) {
-            return render_page_response(&state, view, ctx, opts, path, request_is_https(&req));
+        let (view, _final_req) = with_request(flow_req.clone(), || {
+            with_context(ctx.clone(), || fb(path, flow_req))
+        });
+        if let Some(view) = view {
+            return render_page_response(&state, view, ctx, opts, path, https, new_csrf);
         }
     }
     (StatusCode::NOT_FOUND, "not found").into_response()
@@ -511,6 +559,10 @@ async fn serve_core(headers: HeaderMap) -> Response {
     serve_js(&headers, core_asset(), CORE_JS)
 }
 
+async fn serve_flow(headers: HeaderMap) -> Response {
+    serve_js(&headers, flow_asset(), FLOW_JS)
+}
+
 async fn serve_runtime(headers: HeaderMap) -> Response {
     serve_js(&headers, runtime_asset(), RUNTIME_JS)
 }
@@ -545,6 +597,14 @@ async fn serve_action(
     let ip = client_ip_from_parts(&headers, Some(connect.0));
 
     if let Err(err) = guard_mutation(&headers, &host, &ip, "action", cfg.actions_per_minute, None) {
+        return action_error(err);
+    }
+
+    // Bound argument size and JSON nesting before dispatch (defense against
+    // deeply-nested / oversized payloads that survive the byte body limit).
+    if let Err(err) =
+        crate::exec::security::validate_input(&serde_json::Value::Array(body.args.clone()))
+    {
         return action_error(err);
     }
 
@@ -601,6 +661,9 @@ async fn serve_handler_chunk(
     State(state): State<Arc<AppState>>,
 ) -> Response {
     let key = chunk.trim_end_matches(".js").to_string();
+    if security::validate_chunk_id(&key).is_err() {
+        return (StatusCode::BAD_REQUEST, "invalid chunk id").into_response();
+    }
     match state.handler_chunks.read().get(&key).cloned() {
         Some(src) => {
             let mut res = Response::new(src.into());
@@ -608,6 +671,8 @@ async fn serve_handler_chunk(
                 header::CONTENT_TYPE,
                 HeaderValue::from_static("application/javascript; charset=utf-8"),
             );
+            res.headers_mut()
+                .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
             res
         }
         None => (StatusCode::NOT_FOUND, "handler chunk not found").into_response(),
@@ -615,6 +680,9 @@ async fn serve_handler_chunk(
 }
 
 async fn serve_island_refresh(Path(instance): Path<String>) -> Response {
+    if security::validate_chunk_id(&instance).is_err() {
+        return (StatusCode::BAD_REQUEST, "invalid island instance id").into_response();
+    }
     match super::island_cache::island_refresh_html(&instance) {
         Some(html) => Html(html).into_response(),
         None => (StatusCode::NOT_FOUND, "island instance not found").into_response(),
@@ -626,6 +694,9 @@ async fn serve_island_chunk(
     State(state): State<Arc<AppState>>,
 ) -> Response {
     let key = chunk.trim_end_matches(".js").to_string();
+    if security::validate_chunk_id(&key).is_err() {
+        return (StatusCode::BAD_REQUEST, "invalid chunk id").into_response();
+    }
     match state.island_chunks.read().get(&key).cloned() {
         Some(src) => {
             let mut res = Response::new(src.into());
@@ -633,6 +704,8 @@ async fn serve_island_chunk(
                 header::CONTENT_TYPE,
                 HeaderValue::from_static("application/javascript; charset=utf-8"),
             );
+            res.headers_mut()
+                .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
             res
         }
         None => (StatusCode::NOT_FOUND, "island chunk not found").into_response(),

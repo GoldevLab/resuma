@@ -57,20 +57,17 @@ fn tool_fetch(args: Value) -> ToolFuture {
             .and_then(|v| v.as_str())
             .ok_or_else(|| ResumaError::validation("fetch requires url"))?;
 
-        super::ssrf::validate_fetch_url(url)?;
+        let (parsed_url, pinned_ip) = super::ssrf::validate_fetch_url_resolved(url).await?;
+        let client = super::ssrf::pinned_fetch_client(&parsed_url, pinned_ip)?;
 
-        let method = args
-            .get("method")
-            .and_then(|v| v.as_str())
-            .unwrap_or("GET");
+        let method = args.get("method").and_then(|v| v.as_str()).unwrap_or("GET");
 
-        let client = http_client();
         let mut req = match method.to_uppercase().as_str() {
-            "POST" => client.post(url),
-            "PUT" => client.put(url),
-            "DELETE" => client.delete(url),
-            "PATCH" => client.patch(url),
-            _ => client.get(url),
+            "POST" => client.post(parsed_url.as_str()),
+            "PUT" => client.put(parsed_url.as_str()),
+            "DELETE" => client.delete(parsed_url.as_str()),
+            "PATCH" => client.patch(parsed_url.as_str()),
+            _ => client.get(parsed_url.as_str()),
         };
 
         if let Some(headers) = args.get("headers").and_then(|h| h.as_object()) {
@@ -79,7 +76,9 @@ fn tool_fetch(args: Value) -> ToolFuture {
                     .iter()
                     .any(|blocked| k.eq_ignore_ascii_case(blocked))
                 {
-                    continue;
+                    return Err(ResumaError::validation(format!(
+                        "header `{k}` is not allowed on fetch requests"
+                    )));
                 }
                 if let Some(s) = v.as_str() {
                     req = req.header(k.as_str(), s);
@@ -117,7 +116,7 @@ fn tool_fetch(args: Value) -> ToolFuture {
         let body = String::from_utf8_lossy(&body).into_owned();
 
         Ok(json!({
-            "url": url,
+            "url": parsed_url.as_str(),
             "status": status,
             "content_type": content_type,
             "body": body,
@@ -136,10 +135,7 @@ fn tool_scrape(args: Value) -> ToolFuture {
         // Apps can register a custom `scrape` tool for production crawlers.
         let search_url = format!("https://html.duckduckgo.com/html/?q={}", urlencoding(query));
         let fetched = tool_fetch(json!({ "url": search_url })).await?;
-        let body = fetched
-            .get("body")
-            .and_then(|b| b.as_str())
-            .unwrap_or("");
+        let body = fetched.get("body").and_then(|b| b.as_str()).unwrap_or("");
 
         let items: Vec<Value> = body
             .split("result__a")
@@ -198,7 +194,10 @@ fn tool_ai(args: Value) -> ToolFuture {
         let user_content = if data.is_null() {
             prompt.to_string()
         } else {
-            format!("{prompt}\n\nData:\n{}", serde_json::to_string_pretty(&data).unwrap_or_default())
+            format!(
+                "{prompt}\n\nData:\n{}",
+                serde_json::to_string_pretty(&data).unwrap_or_default()
+            )
         };
 
         let body = json!({
@@ -211,8 +210,11 @@ fn tool_ai(args: Value) -> ToolFuture {
         });
 
         let url = format!("{}/chat/completions", base.trim_end_matches('/'));
-        let res = http_client()
-            .post(&url)
+        super::ssrf::validate_fetch_url(&url)?;
+        let (parsed_url, pinned_ip) = super::ssrf::validate_fetch_url_resolved(&url).await?;
+        let client = super::ssrf::pinned_fetch_client(&parsed_url, pinned_ip)?;
+        let res = client
+            .post(parsed_url.as_str())
             .bearer_auth(api_key)
             .json(&body)
             .send()
@@ -228,8 +230,7 @@ fn tool_ai(args: Value) -> ToolFuture {
         if !status.is_success() {
             return Err(ResumaError::Other(format!(
                 "AI provider error {}: {}",
-                status,
-                payload
+                status, payload
             )));
         }
 

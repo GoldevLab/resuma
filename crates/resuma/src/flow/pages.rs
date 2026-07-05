@@ -46,6 +46,13 @@ pub fn discover_pages(root: impl AsRef<Path>) -> Vec<DiscoveredPage> {
 /// Trait implemented by generated or hand-written page registries.
 pub trait FlowPageRegistry: Send + Sync {
     fn render(&self, module: &str, req: FlowRequest) -> Option<View>;
+
+    /// Compile-time route table `(url_pattern, module)` embedded by `resuma routes --generate`.
+    /// When non-empty, [`FlowApp::pages_from_registry`] uses this instead of scanning the
+    /// filesystem at runtime (so production containers without the source tree still route).
+    fn routes(&self) -> &'static [(&'static str, &'static str)] {
+        &[]
+    }
 }
 
 /// Look up a discovered route by URL pattern.

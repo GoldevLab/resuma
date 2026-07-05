@@ -63,4 +63,8 @@ export function bootClientComponent(id: string, init: ClientInit): void {
   } else {
     run();
   }
+
+  document.addEventListener('resuma:navigate', () => {
+    mountClientRoots(id);
+  });
 }

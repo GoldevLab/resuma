@@ -25,11 +25,12 @@ use crate::core::{
 };
 
 mod escape;
+pub(crate) use escape::escape_attr;
 pub mod pwa;
 pub mod seo;
 pub mod seo_kit;
 pub mod stream;
-use escape::{escape_attr, escape_text};
+use escape::escape_text;
 
 pub use stream::{
     build_page_stream, render_stream_parts, render_to_stream, stream_head, stream_placeholder,
@@ -350,14 +351,77 @@ fn write_element(buf: &mut String, el: &Element) {
     }
 
     let _ = write!(buf, ">");
-    for c in &el.children {
-        write_child(buf, c);
+    if is_raw_text_tag(&el.tag) {
+        // `<style>` / `<script>` are raw-text elements: browsers do NOT decode
+        // HTML entities inside them, so entity-escaping would corrupt CSS/JS
+        // (e.g. `a > b`). Emit content verbatim but neutralize the element's own
+        // closing tag to prevent breakout.
+        for c in &el.children {
+            match c {
+                Child::Text(t) => buf.push_str(&escape_raw_text(t, &el.tag)),
+                Child::View(View::Text(t)) => buf.push_str(&escape_raw_text(t, &el.tag)),
+                other => write_child(buf, other),
+            }
+        }
+    } else {
+        for c in &el.children {
+            write_child(buf, c);
+        }
     }
     let _ = write!(buf, "</{}>", el.tag);
 }
 
+fn is_raw_text_tag(tag: &str) -> bool {
+    tag.eq_ignore_ascii_case("style") || tag.eq_ignore_ascii_case("script")
+}
+
+/// Neutralize the closing tag of a raw-text element so its content cannot break
+/// out of `<style>`/`<script>`. Content is otherwise emitted verbatim.
+fn escape_raw_text(content: &str, tag: &str) -> String {
+    let needle = format!("</{}", tag.to_ascii_lowercase());
+    let mut out = String::with_capacity(content.len());
+    let mut rest = content;
+    loop {
+        match rest.to_ascii_lowercase().find(&needle) {
+            Some(pos) => {
+                out.push_str(&rest[..pos]);
+                // Break the `</tag` token with a backslash (valid in JS; tolerated
+                // in CSS) so the HTML parser doesn't see an end tag.
+                out.push_str("<\\/");
+                out.push_str(&rest[pos + 2..pos + needle.len()]);
+                rest = &rest[pos + needle.len()..];
+            }
+            None => {
+                out.push_str(rest);
+                break;
+            }
+        }
+    }
+    out
+}
+
+/// Attribute names come from the `view!` macro (trusted), but validate them as
+/// defense-in-depth so a malformed name can never break out of the tag context.
+fn is_safe_attr_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | ':' | '.'))
+}
+
+/// A DOM event name safe to embed in an attribute name (`data-r-prevent:<ev>`).
+fn is_safe_event_name(ev: &str) -> bool {
+    !ev.is_empty()
+        && ev
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+}
+
 fn write_attr(buf: &mut String, attr: &Attr) {
     let name = &attr.name;
+    if !is_safe_attr_name(name) {
+        return;
+    }
     match &attr.value {
         AttrValue::Static(s) => {
             let _ = write!(buf, r#" {}="{}""#, name, escape_attr(s));
@@ -379,39 +443,41 @@ fn write_attr(buf: &mut String, attr: &Attr) {
         }
         AttrValue::Handler(h) => write_handler_attr(buf, h),
         AttrValue::PreventDefault(ev) => {
-            let _ = write!(buf, r#" data-r-prevent:{ev}="" "#, ev = ev);
+            // `ev` lands in attribute-name position (`data-r-prevent:<ev>`), so a
+            // dynamic/user-controlled value must be a safe token or it could
+            // break out of the tag. Validate and drop anything unsafe.
+            if is_safe_event_name(ev) {
+                let _ = write!(buf, r#" data-r-prevent:{ev}="" "#, ev = ev);
+            }
         }
         AttrValue::StopPropagation(ev) => {
-            let _ = write!(buf, r#" data-r-stop:{ev}="" "#, ev = ev);
+            if is_safe_event_name(ev) {
+                let _ = write!(buf, r#" data-r-stop:{ev}="" "#, ev = ev);
+            }
         }
     }
 }
 
 fn write_handler_attr(buf: &mut String, h: &HandlerRef) {
-    // data-r-on:click="<chunk>#<symbol>" — runtime resolves this lazily.
-    let _ = write!(
-        buf,
-        r#" data-r-on:{ev}="{chunk}#{sym}""#,
-        ev = h.event,
-        chunk = h.chunk,
-        sym = h.symbol,
-    );
+    let ev = escape_attr(&h.event);
+    let chunk = escape_attr(&h.chunk);
+    let sym = escape_attr(&h.symbol);
+    let _ = write!(buf, r#" data-r-on:{ev}="{chunk}#{sym}""#,);
 
     if !h.captures.is_empty() {
-        // Format: `name:s1,other:s5` — the runtime parses each pair to map
-        // the Rust identifier to its stable signal id.
         let captures = h
             .captures
             .iter()
-            .map(|c| format!("{}:{}", c.name, c.id))
+            .map(|c| {
+                format!(
+                    "{}:{}",
+                    escape_attr(&c.name),
+                    escape_attr(&c.id.0.to_string())
+                )
+            })
             .collect::<Vec<_>>()
             .join(",");
-        let _ = write!(
-            buf,
-            r#" data-r-cap:{ev}="{cap}""#,
-            ev = h.event,
-            cap = captures
-        );
+        let _ = write!(buf, r#" data-r-cap:{ev}="{cap}""#, cap = captures);
     }
 
     // Handler source lives only in the resumability JSON payload — not duplicated
@@ -438,14 +504,14 @@ fn write_island(buf: &mut String, island: &Island) {
         &island.chunk_id,
         load,
     );
+    let chunk = escape_attr(&island.chunk_id);
+    let inst = escape_attr(&island.instance_id);
+    let signals = escape_attr(&signals);
+    let load = escape_attr(load);
     let _ = write!(
         buf,
         r#"<resuma-island data-r-chunk="{chunk}" data-r-instance="{inst}" data-r-signals="{signals}" data-r-props="{props}" data-r-load="{load}">"#,
-        chunk = island.chunk_id,
-        inst = island.instance_id,
-        signals = signals,
         props = escape_attr(&props),
-        load = load,
     );
     buf.push_str(&inner);
     let _ = write!(buf, "</resuma-island>");

@@ -2,7 +2,9 @@
 
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{parse::Parse, parse::ParseStream, parse2, FnArg, ItemFn, LitStr, Pat, ReturnType, Token, Type};
+use syn::{
+    parse::Parse, parse::ParseStream, parse2, FnArg, ItemFn, LitStr, Pat, ReturnType, Token, Type,
+};
 
 struct WorkerAttrs {
     intent: LitStr,
@@ -28,7 +30,9 @@ impl Parse for WorkerAttrs {
             }
         }
         Ok(WorkerAttrs {
-            intent: intent.ok_or_else(|| syn::Error::new(Span::call_site(), "#[worker] requires intent = \"...\""))?,
+            intent: intent.ok_or_else(|| {
+                syn::Error::new(Span::call_site(), "#[worker] requires intent = \"...\"")
+            })?,
             resources,
         })
     }

@@ -35,6 +35,12 @@ fn resume_lock(id: &str) -> Arc<tokio::sync::Mutex<()>> {
         .clone()
 }
 
+/// Drop in-memory execution state once a graph reaches a terminal status.
+/// Snapshots remain available via durable storage.
+fn release_live_graph(id: &GraphId) {
+    GRAPHS.write().remove(&id.0);
+}
+
 /// Live graph execution state.
 pub struct GraphExecution {
     pub snapshot: Arc<RwLock<GraphSnapshot>>,
@@ -78,8 +84,8 @@ impl FlowEngine {
     }
 
     pub async fn start(name: &str, input: Value) -> Result<StartWorkerResponse> {
-        let (meta, run) =
-            workers::get_worker(name).ok_or_else(|| ResumaError::UnknownWorker(name.to_string()))?;
+        let (meta, run) = workers::get_worker(name)
+            .ok_or_else(|| ResumaError::UnknownWorker(name.to_string()))?;
 
         let hints = PlannerHints {
             use_ai: meta.intent.to_lowercase().contains("ai"),
@@ -131,12 +137,11 @@ impl FlowEngine {
             }
         }
 
-        let (_, run) = workers::get_worker(&record.worker).ok_or_else(|| {
-            ResumaError::UnknownWorker(record.worker.clone())
-        })?;
+        let (_, run) = workers::get_worker(&record.worker)
+            .ok_or_else(|| ResumaError::UnknownWorker(record.worker.clone()))?;
 
-        let snapshot = durable::load_graph(id)
-            .ok_or_else(|| ResumaError::UnknownGraph(id.0.clone()))?;
+        let snapshot =
+            durable::load_graph(id).ok_or_else(|| ResumaError::UnknownGraph(id.0.clone()))?;
         let state = durable::load_checkpoint(id).unwrap_or_default();
 
         spawn_execution(
@@ -259,11 +264,7 @@ impl FlowEngine {
                     };
                     let _ = durable::save_execution_record(&record);
                     super::metrics::inc_graph_failed();
-                    super::webhooks::notify_failed(
-                        &snap,
-                        0,
-                        "cancelled by operator".into(),
-                    );
+                    super::webhooks::notify_failed(&snap, 0, "cancelled by operator".into());
                     return Ok(());
                 }
                 GraphStatus::Running => {}
@@ -288,6 +289,7 @@ impl FlowEngine {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn spawn_execution(
     graph_id: GraphId,
     worker_name: String,
@@ -299,9 +301,8 @@ async fn spawn_execution(
     existing_snapshot: Option<GraphSnapshot>,
     existing_state: Option<StateStore>,
 ) -> Result<()> {
-    let snapshot = existing_snapshot.unwrap_or_else(|| {
-        graph::materialize(graph_id.clone(), &worker_name, &intent, &plan)
-    });
+    let snapshot = existing_snapshot
+        .unwrap_or_else(|| graph::materialize(graph_id.clone(), &worker_name, &intent, &plan));
     let bus = Arc::new(EventBus::new());
 
     if let Some(events) = durable::load_events(&graph_id) {
@@ -380,6 +381,7 @@ fn restore_exec_from_durable(id: &GraphId) -> Option<Arc<GraphExecution>> {
     }))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_worker(
     graph_id: GraphId,
     _name: String,
@@ -435,7 +437,8 @@ async fn run_worker(
             drop(snap);
             super::metrics::inc_graph_completed();
             super::webhooks::notify_done(&final_snap, duration, Some(value));
-            bus.emit(emit::graph_done(graph_id));
+            bus.emit(emit::graph_done(graph_id.clone()));
+            release_live_graph(&graph_id);
         }
         Err(ResumaError::Cancelled) => {
             let duration = super::id::now_ms().saturating_sub(started);
@@ -456,7 +459,8 @@ async fn run_worker(
                     duration,
                     "cancelled by operator".into(),
                 );
-                bus.emit(emit::graph_done(graph_id));
+                bus.emit(emit::graph_done(graph_id.clone()));
+                release_live_graph(&graph_id);
             } else {
                 ctx.log("execution paused (cancelled)");
                 let mut snap = snapshot.write();
@@ -483,7 +487,8 @@ async fn run_worker(
             drop(snap);
             super::metrics::inc_graph_failed();
             super::webhooks::notify_failed(&final_snap, duration, err);
-            bus.emit(emit::graph_done(graph_id));
+            bus.emit(emit::graph_done(graph_id.clone()));
+            release_live_graph(&graph_id);
         }
     }
 }

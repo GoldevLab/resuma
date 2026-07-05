@@ -104,9 +104,10 @@ pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
 
             #[doc(hidden)]
             fn #stream_chunk_fn(value: &::resuma::__private::serde_json::Value) -> ::resuma::View {
-                let data: #return_ty = ::resuma::__private::serde_json::from_value(value.clone())
-                    .expect(concat!("stream chunk decode failed for `{}`", #name_str));
-                #stream_view_fn(&data)
+                match ::resuma::__private::serde_json::from_value::<#return_ty>(value.clone()) {
+                    Ok(data) => #stream_view_fn(&data),
+                    Err(_) => ::resuma::View::empty(),
+                }
             }
 
             #[doc(hidden)]
@@ -132,8 +133,11 @@ pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
         }
     } else {
         quote! {
-            #vis fn #use_fn() -> #return_ty {
-                ::resuma::use_load(#name_str)
+            #vis fn #use_fn() -> ::resuma::LoadValue<#return_ty> {
+                match ::resuma::try_use_load(#name_str) {
+                    Ok(v) => ::resuma::LoadValue::Ok(v),
+                    Err(e) => ::resuma::LoadValue::Err(e),
+                }
             }
 
             /// Fallible accessor — returns the loader error instead of panicking.

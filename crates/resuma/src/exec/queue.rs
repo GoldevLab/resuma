@@ -68,11 +68,13 @@ pub async fn start_consumers() {
 
 /// Register a named queue and spawn its disk consumer loop.
 pub fn register_queue(name: &str) {
-    if WAKES.read().contains_key(name) {
+    let mut wakes = WAKES.write();
+    if wakes.contains_key(name) {
         return;
     }
     let (tx, rx) = mpsc::channel(512);
-    WAKES.write().insert(name.to_string(), tx);
+    wakes.insert(name.to_string(), tx);
+    drop(wakes);
     let qname = name.to_string();
     task::spawn(async move {
         disk_consumer_loop(&qname, rx).await;
@@ -149,7 +151,14 @@ async fn process_message(queue: &str, msg: QueueMessage) {
             let graph_id = started.graph_id;
             tokio::spawn(async move {
                 let success = wait_graph_terminal(&graph_id).await;
-                let _ = queue_disk::complete(&queue, &msg_id, success);
+                if let Err(e) = queue_disk::complete(&queue, &msg_id, success) {
+                    tracing::error!(
+                        error = %e,
+                        queue = %queue,
+                        message_id = %msg_id,
+                        "failed to complete queued job"
+                    );
+                }
             });
         }
         Err(e) => {
@@ -161,6 +170,11 @@ async fn process_message(queue: &str, msg: QueueMessage) {
 
 async fn wait_graph_terminal(graph_id: &GraphId) -> bool {
     let poll = Duration::from_millis(100);
+    let timeout_secs = std::env::var("RESUMA_QUEUE_GRAPH_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(3600);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(timeout_secs);
     loop {
         match FlowEngine::snapshot(graph_id) {
             Some(snap) => match snap.status {
@@ -169,6 +183,14 @@ async fn wait_graph_terminal(graph_id: &GraphId) -> bool {
                 GraphStatus::Running | GraphStatus::Paused => {}
             },
             None => return false,
+        }
+        if tokio::time::Instant::now() >= deadline {
+            tracing::warn!(
+                graph_id = %graph_id.0,
+                timeout_secs,
+                "queued job graph wait timed out"
+            );
+            return false;
         }
         tokio::time::sleep(poll).await;
     }
@@ -179,6 +201,9 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    // The std mutex is held across `.await` only to serialize the shared
+    // on-disk queue between tests; there is no contention or deadlock risk here.
+    #[allow(clippy::await_holding_lock)]
     #[tokio::test]
     async fn enqueue_persists_for_disk_consumer() {
         let _guard = super::queue_disk::test_queue_lock().lock();

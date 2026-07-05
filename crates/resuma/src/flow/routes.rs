@@ -106,6 +106,11 @@ pub async fn handle_submit(
     }
 
     let data = serde_json::to_value(&form).unwrap_or(serde_json::Value::Null);
+    // Same input bounds as server actions (payload size / nesting depth) —
+    // see `serve_action` in server/app.rs.
+    if let Err(err) = crate::exec::security::validate_input(&data) {
+        return submit_error(err, wants_json);
+    }
     let mut req = super::request::from_http(
         "POST",
         uri.path(),
@@ -246,6 +251,13 @@ where
     router
 }
 
+/// Escape text placed inside XML element content (`<loc>` in the sitemap).
+fn escape_xml_text(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
 fn sitemap_xml(seo: &FlowSeoConfig) -> String {
     let base = seo.site_url.trim_end_matches('/');
     let mut paths = seo.paths.clone();
@@ -261,11 +273,11 @@ fn sitemap_xml(seo: &FlowSeoConfig) -> String {
         let priority = if path == "/" { "1.0" } else { "0.8" };
         let changefreq = if path == "/" { "weekly" } else { "monthly" };
         xml.push_str("<url><loc>");
-        xml.push_str(base);
+        xml.push_str(&escape_xml_text(base));
         if path == "/" {
             xml.push('/');
         } else {
-            xml.push_str(&path);
+            xml.push_str(&escape_xml_text(&path));
         }
         xml.push_str("</loc><changefreq>");
         xml.push_str(changefreq);

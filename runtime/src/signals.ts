@@ -46,7 +46,6 @@ function makeCell<T>(id: string, initial: T): SignalCell<T> {
     update(fn) {
       const next = fn(value);
       if (next !== undefined) cell.set(next as T);
-      else subs.forEach((s) => s(value));
     },
     subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
   };
@@ -55,14 +54,27 @@ function makeCell<T>(id: string, initial: T): SignalCell<T> {
 
 const TEXT_TAG = "RESUMA-DYN";
 
+// Track already-bound nodes so repeated `applyDom()` passes (island refresh /
+// HMR) never subscribe the same element twice — a duplicate subscription leaks
+// closures and double-writes on every signal update. Nodes removed from the DOM
+// are garbage-collected out of these sets automatically.
+const boundTextNodes = new WeakSet<Element>();
+const boundAttrEls = new WeakSet<Element>();
+const boundShowEls = new WeakSet<Element>();
+const boundForEls = new WeakSet<Element>();
+const boundMatchEls = new WeakSet<Element>();
+
 export function bindReactiveText(root: HTMLElement, signals: Map<string, SignalCell<unknown>>): void {
   const nodes = root.querySelectorAll<HTMLElement>(TEXT_TAG.toLowerCase());
   nodes.forEach((node) => {
+    if (boundTextNodes.has(node)) return;
     const sigId = node.getAttribute("data-r-signal");
     if (!sigId) return;
     const cell = signals.get(sigId);
     if (!cell) return;
+    node.textContent = formatValue(cell.value);
     cell.subscribe((v) => { node.textContent = formatValue(v); });
+    boundTextNodes.add(node);
   });
 }
 
@@ -84,21 +96,60 @@ function scanAndBindAttrs(root: HTMLElement, signals: Map<string, SignalCell<unk
   }
 }
 
+// Attributes that must never receive a reactive (potentially user-derived)
+// value: inline event handlers execute JS, and `style` allows CSS injection.
+function isUnsafeBindTarget(target: string): boolean {
+  const lower = target.toLowerCase();
+  return lower.startsWith("on") || lower === "style";
+}
+
+// Attributes interpreted as URLs — sanitize dangerous schemes so a bound value
+// like `javascript:...` cannot execute when the attribute is later activated.
+const URL_BIND_ATTRS = new Set([
+  "href",
+  "src",
+  "action",
+  "formaction",
+  "xlink:href",
+  "poster",
+  "background",
+  "ping",
+  "data",
+]);
+
+function sanitizeUrlValue(value: string): string {
+  // Strip control chars/whitespace that browsers ignore when parsing schemes
+  // (e.g. `java\tscript:`), then reject dangerous URL schemes.
+  const collapsed = value.replace(/[\u0000-\u0020]+/g, "");
+  if (/^(?:javascript|vbscript|data):/i.test(collapsed)) return "";
+  return value;
+}
+
 function bindElementAttrs(el: HTMLElement, signals: Map<string, SignalCell<unknown>>): void {
+  if (boundAttrEls.has(el)) return;
+  let boundAny = false;
   for (const attr of Array.from(el.attributes)) {
     const name = attr.name;
     if (!name.startsWith("data-r-bind:")) continue;
     const target = name.slice("data-r-bind:".length);
+    if (isUnsafeBindTarget(target)) {
+      // Refuse to reflect reactive values into event-handler / style attributes.
+      continue;
+    }
     const [sigId, fmt = "{}"] = attr.value.split("|");
     const cell = signals.get(sigId);
     if (!cell) continue;
+    const isUrl = URL_BIND_ATTRS.has(target.toLowerCase());
     const apply = (v: unknown) => {
-      const formatted = fmt.replace("{}", formatValue(v));
+      let formatted = fmt.replace("{}", formatValue(v));
+      if (isUrl) formatted = sanitizeUrlValue(formatted);
       el.setAttribute(target, formatted);
     };
     apply(cell.value);
     cell.subscribe(apply);
+    boundAny = true;
   }
+  if (boundAny) boundAttrEls.add(el);
 }
 
 function formatValue(v: unknown): string {
@@ -111,6 +162,7 @@ function formatValue(v: unknown): string {
 /** Toggle `<Show>` branches bound to bool signals. */
 export function bindShows(root: HTMLElement, signals: Map<string, SignalCell<unknown>>): void {
   root.querySelectorAll<HTMLElement>("resuma-show").forEach((el) => {
+    if (boundShowEls.has(el)) return;
     const sigId = el.getAttribute("data-r-show");
     if (!sigId) return;
     const inverted = el.getAttribute("data-r-inverted") === "true";
@@ -143,6 +195,7 @@ export function bindShows(root: HTMLElement, signals: Map<string, SignalCell<unk
     };
     apply(cell.value);
     cell.subscribe(apply);
+    boundShowEls.add(el);
   });
 }
 
@@ -170,28 +223,56 @@ function itemLabel(item: unknown): string {
   return formatValue(item);
 }
 
+function isSignalBoundDyn(el: HTMLElement): boolean {
+  return el.hasAttribute("data-r-signal");
+}
+
+/** Bind reactive text/attrs inside a subtree (e.g. after `<For>` list reconciliation). */
+export function bindReactiveSubtree(
+  root: HTMLElement,
+  signals: Map<string, SignalCell<unknown>>,
+): void {
+  bindReactiveText(root, signals);
+  bindReactiveAttrs(root, signals);
+}
+
 function createForItemNode(item: unknown, key: string, sample: HTMLElement | undefined): HTMLElement {
   if (sample) {
     const node = sample.cloneNode(true) as HTMLElement;
     node.setAttribute("data-r-for-key", key);
     node.removeAttribute("data-r-for-new");
-    const titleEl = node.querySelector(".todo-title");
-    if (titleEl) {
-      titleEl.textContent = itemLabel(item);
+    // Refresh static placeholders; leave signal-bound `resuma-dyn` for bindReactiveSubtree.
+    node.querySelectorAll<HTMLElement>("resuma-dyn").forEach((el) => {
+      if (isSignalBoundDyn(el)) return;
+      el.textContent = itemLabel(item);
+    });
+    // Legacy samples without resuma-dyn (e.g. todo demo) keep the old hook.
+    if (!node.querySelector("resuma-dyn")) {
+      const titleEl = node.querySelector(".todo-title");
+      if (titleEl) {
+        titleEl.textContent = itemLabel(item);
+      }
     }
     return node;
   }
   const wrap = document.createElement("div");
   wrap.setAttribute("data-r-for-item", "");
   wrap.setAttribute("data-r-for-key", key);
-  const li = document.createElement("li");
-  li.className = "todo-item";
-  const span = document.createElement("span");
-  span.className = "todo-title";
-  span.textContent = itemLabel(item);
-  li.appendChild(span);
-  wrap.appendChild(li);
+  const label = document.createElement("span");
+  label.textContent = itemLabel(item);
+  wrap.appendChild(label);
   return wrap;
+}
+
+function updateForItemContent(node: HTMLElement, item: unknown): void {
+  node.querySelectorAll<HTMLElement>("resuma-dyn").forEach((el) => {
+    if (isSignalBoundDyn(el)) return;
+    el.textContent = itemLabel(item);
+  });
+  if (!node.querySelector("resuma-dyn")) {
+    const titleEl = node.querySelector(".todo-title");
+    if (titleEl) titleEl.textContent = itemLabel(item);
+  }
 }
 
 function listKey(item: unknown, keyField: string | null, index: number): string {
@@ -205,6 +286,7 @@ function listKey(item: unknown, keyField: string | null, index: number): string 
 /** Keyed list reconciliation for `<For each={signal}>`. */
 export function bindFor(root: HTMLElement, signals: Map<string, SignalCell<unknown>>): void {
   root.querySelectorAll<HTMLElement>("resuma-for").forEach((el) => {
+    if (boundForEls.has(el)) return;
     const sigId = el.getAttribute("data-r-for");
     if (!sigId) return;
     const keyField = el.getAttribute("data-r-key");
@@ -231,6 +313,7 @@ export function bindFor(root: HTMLElement, signals: Map<string, SignalCell<unkno
         let node = existing.get(key);
         if (node) {
           existing.delete(key);
+          updateForItemContent(node, item);
         } else {
           node = createForItemNode(item, key, sample);
           node.setAttribute("data-r-for-new", "true");
@@ -241,16 +324,21 @@ export function bindFor(root: HTMLElement, signals: Map<string, SignalCell<unkno
       listEl.replaceChildren(frag);
 
       existing.forEach((orphan) => orphan.remove());
+
+      // New/cloned rows may contain `resuma-dyn` markers that were not bound on first pass.
+      bindReactiveSubtree(listEl, signals);
     };
 
     apply(cell.value);
     cell.subscribe(apply);
+    boundForEls.add(el);
   });
 }
 
 /** Multi-branch match for `<Match value={signal}>`. */
 export function bindMatch(root: HTMLElement, signals: Map<string, SignalCell<unknown>>): void {
   root.querySelectorAll<HTMLElement>("resuma-match").forEach((el) => {
+    if (boundMatchEls.has(el)) return;
     const sigId = el.getAttribute("data-r-match");
     if (!sigId) return;
     const cell = signals.get(sigId);
@@ -275,6 +363,7 @@ export function bindMatch(root: HTMLElement, signals: Map<string, SignalCell<unk
 
     apply(cell.value);
     cell.subscribe(apply);
+    boundMatchEls.add(el);
   });
 }
 

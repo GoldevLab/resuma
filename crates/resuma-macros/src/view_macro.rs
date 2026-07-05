@@ -773,6 +773,17 @@ fn take_slot_attr(attrs: &mut Vec<Attr>) -> Option<AttrVal> {
         .map(|idx| attrs.remove(idx).value)
 }
 
+fn is_html_event_attr(lower: &str) -> bool {
+    if !lower.starts_with("on") || lower.len() <= 2 {
+        return false;
+    }
+    // English words that start with "on" but are not DOM events.
+    if matches!(lower, "only" | "one" | "online" | "onion" | "onto" | "once") {
+        return false;
+    }
+    lower[2..].chars().all(|c| c.is_ascii_alphabetic())
+}
+
 fn emit_attr(attr: Attr) -> TokenStream {
     let name = attr.name.clone();
     let lower = name.to_lowercase();
@@ -786,9 +797,13 @@ fn emit_attr(attr: Attr) -> TokenStream {
 
     // Detect event handlers in any of the common spellings:
     //   * Solid-style `on:click=...`
-    //   * React-style `onClick=...`   (lowercased to "onclick" for matching)
-    //   * HTML-style  `onclick=...`
-    let is_event = name.starts_with("on:") || lower.starts_with("on") && lower.len() > 2;
+    //   * React-style `onClick=...`   (third char uppercase)
+    //   * HTML-style  `onclick=...`   (not bare words like `only`, `one`, `online`)
+    let is_event = name.starts_with("on:")
+        || (name.len() > 2
+            && name.starts_with("on")
+            && name.chars().nth(2).is_some_and(|c| c.is_ascii_uppercase()))
+        || is_html_event_attr(&lower);
 
     if is_event {
         return emit_event_handler(name, attr.value);
@@ -1078,5 +1093,13 @@ mod tests {
     fn allows_chained_get_in_interpolation() {
         let ts: TokenStream = quote::quote! { visible.get().into_iter().map(|t| t) };
         assert!(signal_get_span(&ts).is_none());
+    }
+
+    #[test]
+    fn html_event_attr_rejects_false_positives() {
+        assert!(!is_html_event_attr("only"));
+        assert!(!is_html_event_attr("one"));
+        assert!(!is_html_event_attr("online"));
+        assert!(is_html_event_attr("onclick"));
     }
 }

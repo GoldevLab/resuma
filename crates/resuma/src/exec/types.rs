@@ -14,6 +14,12 @@ impl GraphId {
     }
 }
 
+impl Default for GraphId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Node within an [`ExecutionGraph`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -114,8 +120,15 @@ impl Default for ExecutionPlan {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum GraphEdge {
-    DataFlow { from: NodeId, to: NodeId, key: Option<String> },
-    ControlFlow { from: NodeId, to: NodeId },
+    DataFlow {
+        from: NodeId,
+        to: NodeId,
+        key: Option<String>,
+    },
+    ControlFlow {
+        from: NodeId,
+        to: NodeId,
+    },
 }
 
 /// Snapshot of a node for API / UI.

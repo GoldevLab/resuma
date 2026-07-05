@@ -82,15 +82,11 @@ impl ExecSecurityConfig {
     }
 
     /// True when admin routes require a configured API key.
+    ///
+    /// Fail-closed by default: routes require `RESUMA_EXEC_API_KEY` unless
+    /// `RESUMA_EXEC_PUBLIC=1` is explicitly set (dev only; ignored in production).
     pub fn requires_api_key(&self) -> bool {
-        if self.public {
-            return false;
-        }
-        self.api_key.is_some()
-            || matches!(
-                std::env::var("RESUMA_ENV").as_deref(),
-                Ok("production") | Ok("prod")
-            )
+        !self.public
     }
 
     pub fn api_key(&self) -> Option<&str> {
@@ -168,6 +164,20 @@ fn api_key_valid(headers: &HeaderMap) -> bool {
     verify_secret(expected, &provided)
 }
 
+/// Like [`api_key_valid`] but never satisfied by public mode: a key must be
+/// configured *and* match. Used for per-graph routes where public mode must
+/// not grant access.
+fn api_key_valid_strict(headers: &HeaderMap) -> bool {
+    let cfg = config();
+    let Some(expected) = cfg.api_key() else {
+        return false;
+    };
+    let Some(provided) = extract_api_key(headers) else {
+        return false;
+    };
+    verify_secret(expected, &provided)
+}
+
 /// Guard `exec_status` server action — same trust as admin HTTP routes.
 pub fn guard_exec_status_action(req: &FlowRequest) -> Result<()> {
     let cfg = config();
@@ -190,7 +200,10 @@ fn api_key_valid_from_request(req: &FlowRequest) -> bool {
     };
     let provided = req
         .header("authorization")
-        .and_then(|v| v.strip_prefix("Bearer ").or_else(|| v.strip_prefix("bearer ")))
+        .and_then(|v| {
+            v.strip_prefix("Bearer ")
+                .or_else(|| v.strip_prefix("bearer "))
+        })
         .map(str::trim)
         .or_else(|| req.header(EXEC_API_HEADER));
     let Some(provided) = provided else {
@@ -247,6 +260,9 @@ pub fn guard_admin(
 }
 
 /// Guard graph read routes (GET snapshot, replay, SSE).
+///
+/// A valid graph token or API key is always required — public mode only
+/// relaxes worker/queue admin routes, never per-graph access.
 pub fn guard_graph_read(
     headers: &HeaderMap,
     host: &str,
@@ -255,16 +271,12 @@ pub fn guard_graph_read(
     query_token: Option<&str>,
 ) -> Result<()> {
     let cfg = config();
+    let _ = host;
     check_rate_limit(ip, "exec:graph", cfg.graph_reads_per_minute)?;
     if graph_access_granted(headers, graph_id, query_token) {
         return Ok(());
     }
-    if cfg.requires_api_key() {
-        return Err(ResumaError::Unauthorized);
-    }
-    // Dev / public mode: still enforce same-origin on reads when origin check is on.
-    validate_origin(headers, host)?;
-    Ok(())
+    Err(ResumaError::Unauthorized)
 }
 
 /// Guard graph control routes (pause, resume, cancel).
@@ -278,9 +290,7 @@ pub fn guard_graph_control(
 ) -> Result<()> {
     let cfg = config();
     check_rate_limit(ip, "exec:control", cfg.graph_controls_per_minute)?;
-    let token_ok = graph_access_granted(headers, graph_id, query_token);
-    let key_ok = api_key_valid(headers);
-    if !token_ok && !key_ok && cfg.requires_api_key() {
+    if !graph_access_granted(headers, graph_id, query_token) {
         return Err(ResumaError::Unauthorized);
     }
     if cfg.strict_origin {
@@ -300,7 +310,7 @@ fn graph_access_granted(
     graph_id: &GraphId,
     query_token: Option<&str>,
 ) -> bool {
-    if api_key_valid(headers) {
+    if api_key_valid_strict(headers) {
         return true;
     }
     let header_token = extract_graph_token(headers);
@@ -313,9 +323,7 @@ fn validate_origin_strict(headers: &HeaderMap, host: &str) -> Result<()> {
     let has_origin = headers.get("origin").is_some();
     let has_referer = headers.get("referer").is_some();
     if !has_origin && !has_referer {
-        return Err(ResumaError::Forbidden(
-            "origin or referer required".into(),
-        ));
+        return Err(ResumaError::Forbidden("origin or referer required".into()));
     }
     validate_origin(headers, host)
 }
@@ -332,6 +340,23 @@ pub fn validate_resource_name(name: &str) -> Result<()> {
         return Err(ResumaError::validation(
             "resource name must be alphanumeric, dash, or underscore",
         ));
+    }
+    Ok(())
+}
+
+/// Validate a scheduler/webhook resource id used to build on-disk paths.
+///
+/// Rejects path separators, `..`, and any character outside `[A-Za-z0-9_-]`, so a
+/// percent-decoded path param such as `..%2f..%2fsecret` can never escape the jobs dir.
+pub fn validate_schedule_id(id: &str) -> Result<()> {
+    if id.is_empty() || id.len() > 128 {
+        return Err(ResumaError::validation("invalid schedule id length"));
+    }
+    if !id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(ResumaError::validation("invalid schedule id characters"));
     }
     Ok(())
 }
@@ -365,12 +390,8 @@ pub fn validate_input(value: &serde_json::Value) -> Result<()> {
 
 fn json_depth(value: &serde_json::Value) -> u32 {
     match value {
-        serde_json::Value::Object(map) => {
-            1 + map.values().map(json_depth).max().unwrap_or(0)
-        }
-        serde_json::Value::Array(items) => {
-            1 + items.iter().map(json_depth).max().unwrap_or(0)
-        }
+        serde_json::Value::Object(map) => 1 + map.values().map(json_depth).max().unwrap_or(0),
+        serde_json::Value::Array(items) => 1 + items.iter().map(json_depth).max().unwrap_or(0),
         _ => 1,
     }
 }
@@ -384,6 +405,9 @@ pub fn client_ip(headers: &HeaderMap, connect: Option<std::net::SocketAddr>) -> 
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::sync::Mutex;
+
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn resource_name_rejects_traversal() {
@@ -392,7 +416,37 @@ mod tests {
     }
 
     #[test]
+    fn schedule_id_rejects_traversal() {
+        // Percent-decoded traversal payloads must be rejected before touching disk.
+        assert!(validate_schedule_id("../../etc/passwd").is_err());
+        assert!(validate_schedule_id("..%2f..%2fsecret").is_err());
+        assert!(validate_schedule_id("a/b").is_err());
+        assert!(validate_schedule_id("a.b").is_err());
+        assert!(validate_schedule_id("").is_err());
+        assert!(validate_schedule_id("s_0123456789abcdef0123456789abcdef").is_ok());
+    }
+
+    #[test]
+    fn requires_api_key_fail_closed_by_default() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        configure(ExecSecurityConfig {
+            api_key: None,
+            public: false,
+            ..ExecSecurityConfig::from_env()
+        });
+        assert!(config().requires_api_key());
+
+        configure(ExecSecurityConfig {
+            api_key: None,
+            public: true,
+            ..ExecSecurityConfig::from_env()
+        });
+        assert!(!config().requires_api_key());
+    }
+
+    #[test]
     fn input_depth_limit() {
+        let _guard = TEST_LOCK.lock().unwrap();
         configure(ExecSecurityConfig {
             max_input_depth: 3,
             max_input_bytes: 1024,
@@ -404,6 +458,7 @@ mod tests {
 
     #[test]
     fn graph_token_roundtrip() {
+        let _guard = TEST_LOCK.lock().unwrap();
         let _guard = super::super::queue_disk::test_queue_lock().lock();
         super::super::durable::configure(
             std::env::temp_dir().join(format!("resuma-tok-{}", super::super::id::next_id())),

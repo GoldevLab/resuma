@@ -30,6 +30,11 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      - name: Supply chain (cargo-deny)
+        run: |
+          cargo install cargo-deny --locked
+          cargo deny check bans licenses sources
+
       - name: Check workspace
         run: cargo check --workspace
 

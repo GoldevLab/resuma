@@ -46,7 +46,11 @@ impl FlowError {
 }
 
 /// Default error page view.
+///
+/// Stages the error's HTTP status so the response is returned with the correct
+/// code (401/403/404/500…) instead of a soft `200 OK`.
 pub fn error_page(err: &FlowError) -> View {
+    crate::server::page_cache::stage_response_status(err.status());
     view_error_shell(err.status(), err.message())
 }
 

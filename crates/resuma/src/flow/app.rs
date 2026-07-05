@@ -17,7 +17,7 @@ use super::errors::{error_page, FlowError};
 use super::layout::apply_layouts;
 use super::match_route::match_route;
 use super::middleware::run_middleware;
-use super::pages::{discover_pages, FlowPageRegistry};
+use super::pages::{discover_pages, DiscoveredPage, FlowPageRegistry};
 use super::request::FlowRequest;
 use super::routes::attach_flow_routes;
 use super::runtime::{first_load_error, stage_deferred_stream_plan, with_request_deferred};
@@ -123,7 +123,15 @@ impl FlowApp {
 
     /// Register a TypeScript client component bundle at `/static/client/{id}.js`.
     pub fn client_asset(self, id: impl AsRef<str>, body: &'static [u8]) -> Self {
-        let path = crate::client::client_script_url(id.as_ref());
+        let id = id.as_ref();
+        if crate::client::validate_client_id(id).is_err() {
+            tracing::warn!(
+                client_id = id,
+                "invalid client component id — asset not registered"
+            );
+            return self;
+        }
+        let path = crate::client::client_script_url(id);
         self.static_asset(path, body, "application/javascript; charset=utf-8")
     }
 
@@ -265,7 +273,39 @@ impl FlowApp {
         pages_root: impl AsRef<std::path::Path>,
         registry: Arc<dyn FlowPageRegistry>,
     ) -> Self {
-        for meta in discover_pages(pages_root) {
+        let pages_root = pages_root.as_ref();
+        let embedded = registry.routes();
+        let discovered = if embedded.is_empty() {
+            discover_pages(pages_root)
+        } else {
+            let fs_layouts = discover_pages(pages_root);
+            embedded
+                .iter()
+                .map(|(pattern, module)| {
+                    let layouts = fs_layouts
+                        .iter()
+                        .find(|p| p.pattern == *pattern)
+                        .map(|p| p.layouts.clone())
+                        .unwrap_or_default();
+                    let is_dynamic = pattern.contains(':') || pattern.contains('*');
+                    DiscoveredPage {
+                        pattern: (*pattern).to_string(),
+                        module: (*module).to_string(),
+                        layouts,
+                        is_dynamic,
+                    }
+                })
+                .collect()
+        };
+        if discovered.is_empty() {
+            tracing::error!(
+                "auto_pages found no page modules: embedded route table is empty and the pages \
+                 directory is missing at runtime. File-based routing needs `resuma routes \
+                 --generate` (which embeds patterns in `_registry.rs`) or explicit route \
+                 registration."
+            );
+        }
+        for meta in discovered {
             let module = meta.module.clone();
             let layouts = meta.layouts.clone();
             let reg = registry.clone();
@@ -273,8 +313,16 @@ impl FlowApp {
                 reg.render(&module, req)
                     .unwrap_or_else(|| View::text(format!("missing page module `{module}`")))
             });
-            self.pages
-                .insert(meta.pattern.clone(), PageEntry { handler, layouts });
+            if self
+                .pages
+                .insert(meta.pattern.clone(), PageEntry { handler, layouts })
+                .is_some()
+            {
+                tracing::warn!(
+                    pattern = %meta.pattern,
+                    "duplicate route pattern — a later page module overrides an earlier one"
+                );
+            }
         }
         self
     }
@@ -288,8 +336,10 @@ impl FlowApp {
     pub async fn serve(self, opts: FlowServeOptions) -> std::io::Result<()> {
         crate::exec::init_exec().await;
         crate::server::configure_security(opts.security.clone());
-        let router = self.into_router(opts.clone());
+        let production = opts.security.production;
+        let router = crate::server::limits::apply_server_limits(self.into_router(opts.clone()));
         let (listener, bound) = crate::server::listen::bind_listener(opts.addr).await?;
+        crate::server::limits::warn_if_exposed_without_hardening(bound, production);
         tracing::info!(addr = %bound, "resuma flow listening");
         println!("resuma flow listening on http://{}", bound);
         axum::serve(
@@ -356,21 +406,33 @@ impl FlowApp {
             .unwrap_or_else(|| app.page_options().site_url.clone());
         let seo_kit = app.page_options().seo_kit.clone();
 
-        let dynamic_pages: HashMap<String, PageEntry> = self
+        // Dynamic routes are matched in specificity order (most specific first)
+        // so overlapping patterns resolve deterministically instead of depending
+        // on HashMap iteration order.
+        let mut dynamic_pages: Vec<(String, PageEntry)> = self
             .pages
             .into_iter()
             .filter(|(pat, _)| pat.contains(':') || pat.contains('*'))
             .collect();
+        dynamic_pages.sort_by_key(|(pat, _)| route_specificity_key(pat));
 
         if !dynamic_pages.is_empty() {
             let ds = deferred_streaming;
             let ext = global_extensions.clone();
             app = app.fallback_with_request(move |path, req| {
-                dispatch_dynamic(&dynamic_pages, path, req, ds, ext.clone())
-                    .or_else(|| not_found.as_ref().map(|f| f()))
+                dispatch_dynamic(&dynamic_pages, path, req, ds, ext.clone()).or_else(|| {
+                    not_found.as_ref().map(|f| {
+                        // No dynamic route matched: this is a genuine 404.
+                        crate::server::page_cache::stage_response_status(404);
+                        f()
+                    })
+                })
             });
         } else if let Some(nf) = not_found {
-            app = app.fallback(move |_path| Some(nf()));
+            app = app.fallback(move |_path| {
+                crate::server::page_cache::stage_response_status(404);
+                Some(nf())
+            });
         }
 
         let mut router = attach_flow_routes(
@@ -478,8 +540,39 @@ fn merge_route_precache(cfg: &mut super::pwa::FlowPwaConfig, routes: &[String]) 
     }
 }
 
+/// Ordering key for dynamic route patterns: more specific routes sort first.
+///
+/// Priority: patterns without a catch-all before those with one, then fewer
+/// named params, then more static segments, then longer paths. The pattern
+/// string is the final tiebreak so ordering is fully deterministic.
+fn route_specificity_key(
+    pattern: &str,
+) -> (
+    usize,
+    usize,
+    std::cmp::Reverse<usize>,
+    std::cmp::Reverse<usize>,
+    String,
+) {
+    let segments: Vec<&str> = pattern
+        .trim_matches('/')
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .collect();
+    let wildcard = segments.iter().filter(|s| s.starts_with('*')).count();
+    let params = segments.iter().filter(|s| s.starts_with(':')).count();
+    let statics = segments.len() - wildcard - params;
+    (
+        wildcard,
+        params,
+        std::cmp::Reverse(statics),
+        std::cmp::Reverse(segments.len()),
+        pattern.to_string(),
+    )
+}
+
 fn dispatch_dynamic(
-    pages: &HashMap<String, PageEntry>,
+    pages: &[(String, PageEntry)],
     path: &str,
     mut req: FlowRequest,
     deferred_streaming: bool,
@@ -517,9 +610,6 @@ fn render_with_flow(
 
     let (view, final_req, deferred) =
         with_request_deferred(req.clone(), deferred_streaming, || {
-            // Render may panic if a page uses the panicking `use_*_load()` accessor
-            // on a failed loader. Catch it so the connection survives and the proper
-            // error page is served (loaders record their error before panicking).
             let rendered = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 (entry.handler)(req.clone())
             }));
@@ -553,4 +643,35 @@ fn render_with_flow(
     }
 
     view
+}
+
+#[cfg(test)]
+mod tests {
+    use super::route_specificity_key;
+
+    fn ordered(mut patterns: Vec<&str>) -> Vec<&str> {
+        patterns.sort_by_key(|p| route_specificity_key(p));
+        patterns
+    }
+
+    #[test]
+    fn params_rank_before_catch_all() {
+        // A named-param route is more specific than a catch-all for the same prefix.
+        assert_eq!(
+            ordered(vec!["/blog/*slug", "/blog/:id"]),
+            vec!["/blog/:id", "/blog/*slug"]
+        );
+    }
+
+    #[test]
+    fn more_static_segments_rank_first() {
+        let out = ordered(vec!["/:a/:b", "/users/:id", "/users/settings/:tab"]);
+        assert_eq!(out, vec!["/users/settings/:tab", "/users/:id", "/:a/:b"]);
+    }
+
+    #[test]
+    fn ordering_is_deterministic_for_equal_specificity() {
+        // Same shape → deterministic tiebreak by pattern string (not HashMap order).
+        assert_eq!(ordered(vec!["/b/:x", "/a/:x"]), vec!["/a/:x", "/b/:x"]);
+    }
 }

@@ -26,10 +26,6 @@ impl std::fmt::Display for SignalId {
 struct SignalInner<T> {
     id: SignalId,
     value: RwLock<T>,
-    /// Subscribers tracked during effect execution. On the server we only
-    /// care about *which* effects depend on this signal — actual notification
-    /// is performed by [`super::effect::Effect::trigger`].
-    subscribers: RwLock<Vec<u32>>,
 }
 
 /// A reactive cell whose changes notify subscribers. Cheap to clone (Arc).
@@ -61,7 +57,6 @@ where
             inner: Arc::new(SignalInner {
                 id,
                 value: RwLock::new(initial),
-                subscribers: RwLock::new(Vec::new()),
             }),
         };
 
@@ -90,6 +85,9 @@ where
 
     /// Replace the current value and notify subscribers.
     pub fn set(&self, value: T) {
+        if Self::values_equal(&self.inner.value.read(), &value) {
+            return;
+        }
         *self.inner.value.write() = value;
         self.notify();
     }
@@ -100,8 +98,13 @@ where
         F: FnOnce(&mut T),
     {
         let mut guard = self.inner.value.write();
+        let before = guard.clone();
         f(&mut guard);
+        let after = guard.clone();
         drop(guard);
+        if Self::values_equal(&before, &after) {
+            return;
+        }
         self.notify();
     }
 
@@ -109,17 +112,13 @@ where
         if let Some(ctx) = current_context() {
             if let Some(eid) = ctx.current_effect_id() {
                 ctx.record_effect_dep(eid, self.inner.id);
-                let mut subs = self.inner.subscribers.write();
-                if !subs.contains(&eid) {
-                    subs.push(eid);
-                }
             }
         }
     }
 
     fn notify(&self) {
         if let Some(ctx) = current_context() {
-            let subs = self.inner.subscribers.read().clone();
+            let subs = ctx.signal_subscriber_ids(self.inner.id);
             for eid in subs {
                 ctx.run_effect(eid);
             }
@@ -129,6 +128,13 @@ where
 
     fn serialize_value(&self) -> Value {
         serde_json::to_value(&*self.inner.value.read()).unwrap_or(Value::Null)
+    }
+
+    fn values_equal(a: &T, b: &T) -> bool {
+        match (serde_json::to_value(a), serde_json::to_value(b)) {
+            (Ok(va), Ok(vb)) => va == vb,
+            _ => false,
+        }
     }
 
     /// Split into a read-only and a write-only handle.
@@ -198,4 +204,21 @@ fn fallback_id() -> SignalId {
     use std::sync::atomic::{AtomicU32, Ordering};
     static COUNTER: AtomicU32 = AtomicU32::new(1_000_000);
     SignalId(COUNTER.fetch_add(1, Ordering::Relaxed))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::context::{with_context, RenderContext, RenderMode};
+
+    #[test]
+    fn set_skips_notify_when_value_unchanged() {
+        let ctx = RenderContext::new(RenderMode::Ssr);
+        with_context(ctx, || {
+            let n = signal(0_i32);
+            n.set(0);
+            n.set(1);
+            assert_eq!(n.peek(), 1);
+        });
+    }
 }

@@ -5,15 +5,37 @@
 
 import { initSignals, type SignalCell, applyDom, bindReactiveText, bindReactiveAttrs, bindShows, bindFor, bindMatch, type RawSignalId } from "./signals.js";
 import { initIslands } from "./islands.js";
-import { initEffects, type ClientEffectSpec } from "./effects.js";
+import { initEffects, flushEffectCleanups, type ClientEffectSpec } from "./effects.js";
 import { prefetchLazyChunks } from "./boundaries.js";
 import { resolveHandler, type Handler } from "./handler-loader.js";
 import { initNavLinks, followRedirect, navigate, buildUrl, invalidate, setPageMounter } from "./navigation.js";
-import { initFlowWidgets } from "./flow.js";
+
+const FLOW_WIDGET_SELECTOR =
+  "[data-r-flow-dashboard], [data-r-flow-graph], [data-r-event-stream], [data-r-worker-panel]";
+
+function hasFlowWidgets(scope: ParentNode): boolean {
+  if (scope instanceof Document) {
+    return !!scope.querySelector(FLOW_WIDGET_SELECTOR);
+  }
+  if (scope instanceof Element) {
+    return !!scope.querySelector(FLOW_WIDGET_SELECTOR);
+  }
+  return false;
+}
+
+async function maybeInitFlowWidgets(scope: ParentNode): Promise<void> {
+  if (!hasFlowWidgets(scope)) return;
+  try {
+    const mod = await import("/_resuma/flow.js");
+    mod.initFlowWidgets(scope);
+  } catch (err) {
+    console.error("[resuma] flow widgets failed to load", err);
+  }
+}
 
 /** Mount Flow widgets inside `scope` (or `document` when omitted). */
 export function mountFlowWidgets(scope: ParentNode = document): void {
-  initFlowWidgets(scope);
+  void maybeInitFlowWidgets(scope);
 }
 
 interface ResumePayload {
@@ -101,6 +123,10 @@ let bootstrapped = false;
  * [`bootstrap`], not here.
  */
 export function mountPage(): void {
+  // Tear down the previous mount's effect subscriptions and debounce timers
+  // before re-initializing against fresh signal cells.
+  flushEffectCleanups();
+
   const payload = readPayload();
   const signals = initSignals(payload.signals);
 
@@ -134,7 +160,7 @@ export function mountPage(): void {
   applyStreamSlots(scope);
   initPortals(scope);
   initViewTransitions(scope);
-  initFlowWidgets(scope);
+  void maybeInitFlowWidgets(scope);
   runVisibleTasks(payload.visible_tasks ?? {}, state);
   initEffects(payload.effects ?? [], signals, __resuma);
   prefetchLazyChunks(payload.lazy_chunks ?? [], scope);
@@ -161,7 +187,10 @@ export function buildLocalState(captures: string[]): Record<string, SignalCell<u
   if (!captures.length) return r.state;
   const local: Record<string, SignalCell<unknown>> = {};
   for (const pair of captures) {
-    const [name, id] = pair.split(":");
+    // Split on the first `:` only — signal ids may themselves contain colons.
+    const sep = pair.indexOf(":");
+    const name = sep === -1 ? pair : pair.slice(0, sep);
+    const id = sep === -1 ? undefined : pair.slice(sep + 1);
     const key = id ?? name;
     const cell = r.signals.get(key);
     if (cell) local[name] = cell;
@@ -226,7 +255,7 @@ function attachFormEnhancement(): void {
 function showFieldErrors(form: HTMLFormElement, errors: Record<string, string>): void {
   clearFieldErrors(form);
   for (const [name, message] of Object.entries(errors)) {
-    const input = form.querySelector(`[name="${name}"]`) as HTMLElement | null;
+    const input = form.querySelector(`[name="${CSS.escape(name)}"]`) as HTMLElement | null;
     if (!input) continue;
     const el = document.createElement("span");
     el.className = "resuma-field-error";
@@ -279,6 +308,10 @@ function applyStreamSlots(scope: HTMLElement): void {
 function initPortals(scope: HTMLElement): void {
   scope.querySelectorAll("template[data-r-portal]").forEach((tpl) => {
     const showBranch = tpl.closest<HTMLElement>("[data-r-show-if]");
+    // Portals inside a reactive <Show> if-branch are owned by bindShows (which
+    // runs first and stamps data-r-portal-target on the show element) —
+    // mounting them here too would duplicate the portal content.
+    if (showBranch?.closest<HTMLElement>("resuma-show")?.dataset.rPortalTarget) return;
     if (showBranch?.hidden) return;
     const targetId = tpl.getAttribute("data-r-portal");
     if (!targetId) return;
@@ -286,7 +319,7 @@ function initPortals(scope: HTMLElement): void {
       document.getElementById(targetId) ??
       document.querySelector(`[data-r-portal-target="${targetId}"]`);
     if (!target) return;
-    target.appendChild(tpl.content.cloneNode(true));
+    target.replaceChildren(tpl.content.cloneNode(true));
   });
 }
 
@@ -344,6 +377,7 @@ function runVisibleTasks(
   };
 
   // Run eagerly so islands/tasks work in headless tests and above-the-fold UI.
+  // This covers every task, so the no-IntersectionObserver case needs nothing more.
   for (const [id, source] of entries) runOnce(id, source);
 
   if ("IntersectionObserver" in window) {
@@ -359,7 +393,9 @@ function runVisibleTasks(
       },
       { rootMargin: "50px" },
     );
-    for (const [id, source] of entries) {
+    // Drop markers left over from the previous mount (SPA navigation).
+    root().querySelectorAll("[data-r-visible-task]").forEach((n) => n.remove());
+    for (const [id] of entries) {
       const marker = document.createElement("span");
       marker.dataset.rVisibleTask = id;
       marker.style.cssText =
@@ -367,8 +403,6 @@ function runVisibleTasks(
       root().appendChild(marker);
       io.observe(marker);
     }
-  } else {
-    for (const [id, source] of entries) run(id, source);
   }
 }
 
@@ -406,6 +440,10 @@ async function refreshIsland(instance: string): Promise<void> {
   const target = document.querySelector(`resuma-island[data-r-instance="${instance}"]`);
   if (target) target.outerHTML = html;
   applyDom();
+  // outerHTML replaced the island element, so it lost its hydration — re-run
+  // island init (mirrors mountPage) to wire up the fresh node.
+  const signals = window.__resuma?.signals;
+  if (signals) initIslands(root(), signals);
 }
 
 function connectDevBridge(): void {

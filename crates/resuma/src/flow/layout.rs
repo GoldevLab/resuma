@@ -15,7 +15,12 @@ static LAYOUTS: Lazy<RwLock<HashMap<String, LayoutFn>>> = Lazy::new(|| RwLock::n
 
 /// Register a layout for a URL prefix (`/`, `/users`, …).
 pub fn register_layout(pattern: impl Into<String>, f: LayoutFn) {
-    LAYOUTS.write().insert(pattern.into(), f);
+    let pattern = pattern.into();
+    let mut layouts = LAYOUTS.write();
+    if layouts.contains_key(&pattern) {
+        panic!("layout `{pattern}` registered twice");
+    }
+    layouts.insert(pattern, f);
 }
 
 /// Wrap `page` with layouts from most specific prefix to root.

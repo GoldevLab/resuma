@@ -32,7 +32,10 @@ impl Parse for IslandArgs {
 }
 
 pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
-    let island_args = syn::parse2::<IslandArgs>(args).unwrap_or(IslandArgs { load: None });
+    let island_args = match syn::parse2::<IslandArgs>(args) {
+        Ok(a) => a,
+        Err(e) => return e.to_compile_error(),
+    };
     let load_policy = island_args
         .load
         .as_ref()

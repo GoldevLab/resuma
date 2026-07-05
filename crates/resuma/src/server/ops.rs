@@ -32,6 +32,9 @@ pub async fn ready() -> Response {
 /// Generate or propagate a request id, emit a tracing span with method/path/
 /// status/latency, and echo `x-request-id` on the response.
 pub async fn request_id_middleware(mut req: Request<Body>, next: Next) -> Response {
+    super::page_cache::clear_request_staging();
+    super::request_path::clear_request_staging();
+
     let incoming = req
         .headers()
         .get(REQUEST_ID_HEADER)
@@ -51,7 +54,13 @@ pub async fn request_id_middleware(mut req: Request<Body>, next: Next) -> Respon
     }
 
     let started = Instant::now();
-    let mut res = next.run(req).await;
+    // Isolate staged page metadata (CSRF token, CSP nonce, cache headers) per
+    // request task so concurrent requests on the same worker thread cannot
+    // clobber each other's staging mid-render.
+    let mut res = super::page_cache::scope_page_staging(crate::flow::runtime::scope_flow_runtime(
+        next.run(req),
+    ))
+    .await;
     let latency_ms = started.elapsed().as_millis();
     let status = res.status().as_u16();
 
@@ -68,6 +77,9 @@ pub async fn request_id_middleware(mut req: Request<Body>, next: Next) -> Respon
         res.headers_mut()
             .insert(HeaderName::from_static("x-request-id"), value);
     }
+
+    super::page_cache::clear_request_staging();
+    super::request_path::clear_request_staging();
     res
 }
 

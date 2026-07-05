@@ -45,7 +45,17 @@ impl<T: 'static> ContextId<T> {
 
 /// Provide a context value visible to this component and its descendants.
 pub fn provide_context<T: Serialize + Clone + 'static>(ctx: &ContextId<T>, value: T) {
-    let json = serde_json::to_value(&value).unwrap_or(Value::Null);
+    let json = match serde_json::to_value(&value) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(
+                type_name = std::any::type_name::<T>(),
+                error = %e,
+                "provide_context: failed to serialize context value"
+            );
+            return;
+        }
+    };
     CONTEXT_STACK.with(|stack| {
         let mut borrow = stack.borrow_mut();
         if borrow.is_empty() {
@@ -62,29 +72,37 @@ pub fn provide_context<T: Serialize + Clone + 'static>(ctx: &ContextId<T>, value
     }
 }
 
-/// Read a context value from an ancestor provider.
-pub fn use_context<T: DeserializeOwned + Clone + 'static>(ctx: &ContextId<T>) -> T {
-    CONTEXT_STACK.with(|stack| {
+/// Fallible context read — returns `None` when no ancestor provided the value.
+pub fn try_use_context<T: DeserializeOwned + Clone + 'static>(ctx: &ContextId<T>) -> Option<T> {
+    let from_stack = CONTEXT_STACK.with(|stack| {
         for frame in stack.borrow().iter().rev() {
             if let Some(v) = frame.get(&ctx.id) {
                 if let Ok(val) = serde_json::from_value(v.clone()) {
-                    return val;
+                    return Some(val);
                 }
             }
         }
+        None
     });
-    // Fallback: read from SSR payload registry (client resume path).
+    if let Some(val) = from_stack {
+        return Some(val);
+    }
     if let Some(render) = current_context() {
         if let Some(v) = render.get_context(ctx.id) {
-            if let Ok(val) = serde_json::from_value(v) {
-                return val;
-            }
+            return serde_json::from_value(v).ok();
         }
     }
-    panic!(
-        "use_context: no provider for `{}` — call provide_context first",
-        std::any::type_name::<T>()
-    );
+    None
+}
+
+/// Read a context value from an ancestor provider.
+pub fn use_context<T: DeserializeOwned + Clone + 'static>(ctx: &ContextId<T>) -> T {
+    try_use_context(ctx).unwrap_or_else(|| {
+        panic!(
+            "use_context: no provider for `{}` — call provide_context first",
+            std::any::type_name::<T>()
+        )
+    })
 }
 
 /// Push an empty context frame for a component subtree.

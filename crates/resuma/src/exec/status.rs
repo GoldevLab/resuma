@@ -31,17 +31,13 @@ pub struct GraphsStatus {
     pub paused: usize,
 }
 
-static STARTED_MS: once_cell::sync::Lazy<u64> =
-    once_cell::sync::Lazy::new(super::id::now_ms);
+static STARTED_MS: once_cell::sync::Lazy<u64> = once_cell::sync::Lazy::new(super::id::now_ms);
 
 /// Build the current execution-layer status snapshot.
 pub fn snapshot() -> ExecStatus {
     let graph_counts = FlowEngine::graph_counts();
     let queue_names = queue_disk::list_queues();
-    let mut queues: Vec<_> = queue_names
-        .iter()
-        .map(|q| queue_disk::stats(q))
-        .collect();
+    let mut queues: Vec<_> = queue_names.iter().map(|q| queue_disk::stats(q)).collect();
     if queues.is_empty() {
         queues.push(queue_disk::stats("default"));
     }

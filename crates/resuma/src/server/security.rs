@@ -3,7 +3,7 @@
 //! Enabled by default on `ResumaApp::serve()` and `FlowApp::serve()`. Configure via
 //! [`SecurityConfig`] or environment variables (see `docs/SECURITY.md`).
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 use crate::core::Result;
@@ -195,14 +195,41 @@ pub fn config() -> SecurityConfig {
 }
 
 /// Cryptographically random token (32 hex chars).
-pub fn random_token() -> String {
+pub fn try_random_token() -> Result<String> {
     let mut bytes = [0u8; 16];
-    getrandom::getrandom(&mut bytes).expect("OS random number generator");
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    getrandom::fill(&mut bytes)
+        .map_err(|e| ResumaError::Other(format!("random number generator unavailable: {e}")))?;
+    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Cryptographically random token (32 hex chars).
+///
+/// Falls back to a time-based token when the OS RNG is unavailable (logged as error).
+/// Prefer [`try_random_token`] for security-sensitive paths that must fail closed.
+pub fn random_token() -> String {
+    try_random_token().unwrap_or_else(|e| {
+        tracing::error!(error = %e, "OS random number generator failed");
+        fallback_token()
+    })
+}
+
+fn fallback_token() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let t = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!("{t:032x}")
 }
 
 pub fn csrf_token() -> String {
     random_token()
+}
+
+/// Reuse an existing CSRF double-submit cookie when present and well-formed.
+pub fn csrf_from_cookie(headers: &HeaderMap) -> Option<String> {
+    let token = cookie_value(headers, CSRF_COOKIE)?;
+    (token.len() >= 16).then_some(token)
 }
 
 /// True when the request arrived over HTTPS (direct TLS or `X-Forwarded-Proto`).
@@ -223,13 +250,22 @@ pub fn request_is_https<B>(req: &Request<B>) -> bool {
 }
 
 /// Best-effort client IP for rate limiting.
+///
+/// When `RESUMA_TRUST_PROXY=1`, the first `X-Forwarded-For` hop is trusted.
+/// Only enable this behind a reverse proxy that **overwrites** (not appends to)
+/// forwarding headers, or clients can spoof IPs to evade rate limits.
 pub fn client_ip<B>(req: &Request<B>) -> String {
     client_ip_from_parts(req.headers(), connect_addr(req))
 }
 
 pub fn client_ip_from_parts(headers: &HeaderMap, connect: Option<SocketAddr>) -> String {
     let cfg = config();
-    if cfg.trust_proxy {
+    // Trusting forwarding headers is only safe when the direct peer is a proxy
+    // we control (one that overwrites, not appends to, X-Forwarded-For). When
+    // `RESUMA_TRUSTED_PROXY_CIDRS` is set (comma/space-separated CIDRs, e.g.
+    // "10.0.0.0/8, fdaa::/16"), forwarding headers are only honored if the
+    // connecting socket address falls inside one of those ranges.
+    if cfg.trust_proxy && peer_is_trusted_proxy(connect) {
         if let Some(xff) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
             if let Some(first) = xff.split(',').next() {
                 let ip = first.trim();
@@ -253,6 +289,85 @@ fn connect_addr<B>(req: &Request<B>) -> Option<SocketAddr> {
     req.extensions()
         .get::<axum::extract::ConnectInfo<SocketAddr>>()
         .map(|ci| ci.0)
+}
+
+/// Parsed from `RESUMA_TRUSTED_PROXY_CIDRS` (comma/space-separated CIDRs).
+static TRUSTED_PROXY_CIDRS: Lazy<Vec<(IpAddr, u8)>> = Lazy::new(parse_trusted_proxy_cidrs);
+
+fn parse_trusted_proxy_cidrs() -> Vec<(IpAddr, u8)> {
+    std::env::var("RESUMA_TRUSTED_PROXY_CIDRS")
+        .ok()
+        .map(|raw| {
+            raw.split(|c: char| c.is_whitespace() || c == ',')
+                .filter(|s| !s.is_empty())
+                .filter_map(parse_cidr)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_cidr(s: &str) -> Option<(IpAddr, u8)> {
+    if let Some((ip, prefix)) = s.split_once('/') {
+        let addr: IpAddr = ip.parse().ok()?;
+        let p: u8 = prefix.parse().ok()?;
+        Some((addr, p))
+    } else {
+        let addr: IpAddr = s.parse().ok()?;
+        let p = if addr.is_ipv4() { 32 } else { 128 };
+        Some((addr, p))
+    }
+}
+
+fn ip_in_cidr(ip: IpAddr, network: IpAddr, prefix: u8) -> bool {
+    match (ip, network) {
+        (IpAddr::V4(ip), IpAddr::V4(net)) => {
+            let mask = if prefix >= 32 {
+                u32::MAX
+            } else {
+                u32::MAX << (32 - prefix)
+            };
+            (u32::from(ip) & mask) == (u32::from(net) & mask)
+        }
+        (IpAddr::V6(ip), IpAddr::V6(net)) if prefix >= 128 => ip == net,
+        (IpAddr::V6(ip), IpAddr::V6(net)) => {
+            let ip = ip.segments();
+            let net = net.segments();
+            let full = (prefix / 16) as usize;
+            let rem = prefix % 16;
+            for i in 0..full {
+                if ip[i] != net[i] {
+                    return false;
+                }
+            }
+            if rem == 0 {
+                return true;
+            }
+            let mask = !(0xffffu16 >> rem);
+            (ip[full] & mask) == (net[full] & mask)
+        }
+        _ => false,
+    }
+}
+
+fn is_private_or_loopback(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local(),
+        IpAddr::V6(v6) => v6.is_loopback() || (v6.segments()[0] & 0xffc0) == 0xfe80,
+    }
+}
+
+/// Only honor `X-Forwarded-For` when the direct TCP peer is a trusted proxy.
+fn peer_is_trusted_proxy(connect: Option<SocketAddr>) -> bool {
+    let Some(addr) = connect else {
+        return false;
+    };
+    let ip = addr.ip();
+    if TRUSTED_PROXY_CIDRS.is_empty() {
+        return is_private_or_loopback(ip);
+    }
+    TRUSTED_PROXY_CIDRS
+        .iter()
+        .any(|(net, prefix)| ip_in_cidr(ip, *net, *prefix))
 }
 
 /// Sliding-window rate limit. Returns `Err(RateLimited)` when exceeded.
@@ -299,7 +414,12 @@ pub fn validate_csrf(headers: &HeaderMap, form_csrf: Option<&str>) -> Result<()>
         .as_deref()
         .or(form_csrf)
         .ok_or(ResumaError::InvalidCsrf)?;
-    if token.len() < 16 || !verify_secret(&cookie, token) {
+    if token.len() < 16 {
+        // Compare against self to keep timing independent of token length.
+        let _ = constant_time_eq(cookie.as_bytes(), cookie.as_bytes());
+        return Err(ResumaError::InvalidCsrf);
+    }
+    if !verify_secret(&cookie, token) {
         return Err(ResumaError::InvalidCsrf);
     }
     Ok(())
@@ -346,6 +466,20 @@ pub fn validate_origin(headers: &HeaderMap, host: &str) -> Result<()> {
     Ok(())
 }
 
+/// Reject mutations when both `Origin` and `Referer` are absent (production hardening).
+pub fn validate_origin_strict(headers: &HeaderMap, host: &str) -> Result<()> {
+    let cfg = config();
+    if !cfg.origin_check {
+        return Ok(());
+    }
+    let has_origin = headers.get(header::ORIGIN.as_str()).is_some();
+    let has_referer = headers.get(header::REFERER.as_str()).is_some();
+    if !has_origin && !has_referer {
+        return Err(ResumaError::Forbidden("origin or referer required".into()));
+    }
+    validate_origin(headers, host)
+}
+
 fn origin_matches_host(origin: &str, host: &str) -> bool {
     origin
         .strip_prefix("http://")
@@ -367,7 +501,10 @@ fn referer_host_matches(referer: &str, host: &str) -> bool {
         .or_else(|| referer.strip_prefix("https://"))
         .and_then(|rest| rest.split('/').next())
         .map(|authority| authority.split(':').next().unwrap_or(authority))
-        .map(|h| h.eq_ignore_ascii_case(host))
+        .map(|h| {
+            h.eq_ignore_ascii_case(host)
+                || h.strip_prefix("www.").unwrap_or(h) == host.strip_prefix("www.").unwrap_or(host)
+        })
         .unwrap_or(false)
 }
 
@@ -503,6 +640,22 @@ fn insert_header(headers: &mut axum::http::HeaderMap, name: header::HeaderName, 
     }
 }
 
+/// Validate handler/island chunk identifiers used in URLs and dynamic imports.
+pub fn validate_chunk_id(id: &str) -> Result<()> {
+    if id.is_empty() || id.len() > 64 {
+        return Err(ResumaError::validation("invalid chunk id length"));
+    }
+    if !id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(ResumaError::validation(
+            "chunk id must be alphanumeric, dash, or underscore",
+        ));
+    }
+    Ok(())
+}
+
 /// Guard mutating API requests (CSRF + origin + rate limit).
 pub fn guard_mutation(
     headers: &HeaderMap,
@@ -513,7 +666,12 @@ pub fn guard_mutation(
     form_csrf: Option<&str>,
 ) -> Result<()> {
     check_rate_limit(ip, bucket, limit)?;
-    validate_origin(headers, host)?;
+    let cfg = config();
+    if cfg.production && cfg.origin_check {
+        validate_origin_strict(headers, host)?;
+    } else {
+        validate_origin(headers, host)?;
+    }
     validate_csrf(headers, form_csrf)?;
     Ok(())
 }
@@ -574,6 +732,20 @@ mod tests {
     }
 
     #[test]
+    fn validate_chunk_id_rejects_traversal() {
+        assert!(validate_chunk_id("../evil").is_err());
+        assert!(validate_chunk_id("valid-chunk_1").is_ok());
+    }
+
+    #[test]
+    fn referer_matches_ignoring_www() {
+        assert!(referer_host_matches(
+            "https://www.example.com/path",
+            "example.com"
+        ));
+    }
+
+    #[test]
     fn referer_matches_ignoring_port() {
         assert!(referer_host_matches(
             "http://localhost:3000/items",
@@ -609,6 +781,13 @@ mod tests {
         ));
         assert!(!super::constant_time_eq(b"short", b"longer-value"));
         assert!(super::constant_time_eq(b"", b""));
+    }
+
+    #[test]
+    fn try_random_token_returns_hex_string() {
+        let t = try_random_token().expect("rng");
+        assert_eq!(t.len(), 32);
+        assert!(t.chars().all(|c| c.is_ascii_hexdigit()));
     }
 
     #[test]

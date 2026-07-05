@@ -40,6 +40,7 @@ fn brotli_raw(input: &[u8]) -> Vec<u8> {
 
 static LOADER: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::LOADER_JS));
 static CORE: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::CORE_JS));
+static FLOW: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::FLOW_JS));
 static RUNTIME: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::RUNTIME_JS));
 
 pub(crate) fn serve_js(
@@ -84,6 +85,10 @@ pub(crate) fn loader_asset() -> &'static EncodedAsset {
 
 pub(crate) fn core_asset() -> &'static EncodedAsset {
     &CORE
+}
+
+pub(crate) fn flow_asset() -> &'static EncodedAsset {
+    &FLOW
 }
 
 pub(crate) fn runtime_asset() -> &'static EncodedAsset {

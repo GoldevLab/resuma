@@ -21,6 +21,7 @@ use parking_lot::RwLock;
 use crate::core::{Result, ResumaError};
 
 use super::queue::QueueMessage;
+use super::security::validate_schedule_id;
 
 static QUEUE_ROOT: RwLock<Option<PathBuf>> = RwLock::new(None);
 
@@ -70,19 +71,21 @@ fn sanitize(s: &str) -> String {
         .collect()
 }
 
-fn pending_path(queue: &str, id: &str) -> PathBuf {
-    pending_dir(queue).join(format!("{id}.json"))
+fn pending_path(queue: &str, id: &str) -> Result<PathBuf> {
+    validate_schedule_id(id)?;
+    Ok(pending_dir(queue).join(format!("{id}.json")))
 }
 
-fn processing_path(queue: &str, id: &str) -> PathBuf {
-    processing_dir(queue).join(format!("{id}.json"))
+fn processing_path(queue: &str, id: &str) -> Result<PathBuf> {
+    validate_schedule_id(id)?;
+    Ok(processing_dir(queue).join(format!("{id}.json")))
 }
 
 /// Atomic enqueue: write temp file then rename into `pending/`.
 pub fn persist_pending(queue: &str, msg: &QueueMessage) -> Result<()> {
     let dir = pending_dir(queue);
     fs::create_dir_all(&dir).map_err(ResumaError::Io)?;
-    let final_path = pending_path(queue, &msg.id);
+    let final_path = pending_path(queue, &msg.id)?;
     let tmp_path = dir.join(format!("{}.json.tmp", msg.id));
     let data = serde_json::to_string_pretty(msg)?;
     {
@@ -96,12 +99,12 @@ pub fn persist_pending(queue: &str, msg: &QueueMessage) -> Result<()> {
 
 /// Try to claim a specific job (pending → processing). Fails if another process got it.
 pub fn try_claim(queue: &str, id: &str) -> Result<()> {
-    let src = pending_path(queue, id);
+    let src = pending_path(queue, id)?;
     if !src.exists() {
         return Err(ResumaError::Other("job already claimed or missing".into()));
     }
     fs::create_dir_all(processing_dir(queue)).map_err(ResumaError::Io)?;
-    let dst = processing_path(queue, id);
+    let dst = processing_path(queue, id)?;
     fs::rename(&src, &dst).map_err(|e| ResumaError::Other(format!("claim failed: {e}")))
 }
 
@@ -125,10 +128,13 @@ pub fn claim_next(queue: &str) -> Option<QueueMessage> {
     names.sort();
 
     for id in names {
+        if validate_schedule_id(&id).is_err() {
+            continue;
+        }
         if try_claim(queue, &id).is_err() {
             continue;
         }
-        let path = processing_path(queue, &id);
+        let path = processing_path(queue, &id).ok()?;
         let data = fs::read_to_string(&path).ok()?;
         return serde_json::from_str(&data).ok();
     }
@@ -137,11 +143,15 @@ pub fn claim_next(queue: &str) -> Option<QueueMessage> {
 
 /// Mark a claimed job finished (`processing/` → `done/` or `failed/`).
 pub fn complete(queue: &str, id: &str, success: bool) -> Result<()> {
-    let src = processing_path(queue, id);
+    let src = processing_path(queue, id)?;
     if !src.exists() {
         return Ok(());
     }
-    let dest_dir = if success { done_dir(queue) } else { failed_dir(queue) };
+    let dest_dir = if success {
+        done_dir(queue)
+    } else {
+        failed_dir(queue)
+    };
     fs::create_dir_all(&dest_dir).map_err(ResumaError::Io)?;
     let dest = dest_dir.join(format!("{id}.json"));
     fs::rename(&src, &dest).or_else(|_| {
@@ -178,7 +188,12 @@ pub fn recover_processing(queue: &str) -> usize {
         let Some(id) = path.file_stem().and_then(|s| s.to_str()) else {
             continue;
         };
-        let dest = pending_path(queue, id);
+        if validate_schedule_id(id).is_err() {
+            continue;
+        }
+        let Ok(dest) = pending_path(queue, id) else {
+            continue;
+        };
         if fs::rename(&path, &dest).is_ok() {
             n += 1;
         }
@@ -223,20 +238,24 @@ fn count_json_files(dir: &Path) -> usize {
         .map(|entries| {
             entries
                 .flatten()
-                .filter(|e| {
-                    e.path()
-                        .extension()
-                        .and_then(|x| x.to_str())
-                        == Some("json")
-                })
+                .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("json"))
                 .count()
         })
         .unwrap_or(0)
 }
 
 #[cfg(test)]
+/// Serializes exec integration tests that share global worker/durable state.
+pub(crate) fn exec_test_lock() -> &'static parking_lot::Mutex<()> {
+    static LOCK: once_cell::sync::Lazy<parking_lot::Mutex<()>> =
+        once_cell::sync::Lazy::new(|| parking_lot::Mutex::new(()));
+    &LOCK
+}
+
+#[cfg(test)]
 pub(crate) fn test_queue_lock() -> &'static parking_lot::Mutex<()> {
-    static LOCK: once_cell::sync::OnceCell<parking_lot::Mutex<()>> = once_cell::sync::OnceCell::new();
+    static LOCK: once_cell::sync::OnceCell<parking_lot::Mutex<()>> =
+        once_cell::sync::OnceCell::new();
     LOCK.get_or_init(|| parking_lot::Mutex::new(()))
 }
 
@@ -266,5 +285,15 @@ mod tests {
         assert!(claim_next("default").is_none());
         complete("default", "m_test", true).unwrap();
         assert_eq!(stats("default").done, 1);
+    }
+
+    #[test]
+    fn claim_rejects_path_traversal_filename() {
+        let _guard = test_queue_lock().lock();
+        let _root = temp_queue();
+        let dir = pending_dir("default");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("..%2f..%2foutside.json"), b"{}").unwrap();
+        assert!(claim_next("default").is_none());
     }
 }

@@ -20,6 +20,7 @@ use super::types::{ExecutionPlan, ExecutionStrategy, GraphId, NodeId, NodeKind};
 use super::workers::{WorkerContext, WorkerFn};
 
 /// Run execution according to the planner strategy.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_with_plan(
     plan: &ExecutionPlan,
     input: Value,
@@ -46,6 +47,7 @@ pub async fn run_with_plan(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_map_reduce(
     plan: &ExecutionPlan,
     input: Value,
@@ -70,9 +72,7 @@ async fn run_map_reduce(
     if let Some(query) = input.get("query").and_then(|v| v.as_str()) {
         cancel::check(&cancel)?;
         ctx.log(format!("map-reduce: scrape `{query}`"));
-        let scraped = ctx
-            .tool("scrape", json!({ "query": query }))
-            .await?;
+        let scraped = ctx.tool("scrape", json!({ "query": query })).await?;
         working_data = scraped;
     }
 
@@ -93,55 +93,51 @@ async fn run_map_reduce(
     let parallel = profile.parallel_limit.max(1) as usize;
     let sem = Arc::new(tokio::sync::Semaphore::new(parallel));
 
-    let chunk_results: Vec<Value> = stream::iter(
-        chunks
-            .into_iter()
-            .enumerate()
-            .map(|(i, chunk)| {
-                let node_id = NodeId::new(format!("ai-{i}"));
-                let bus = bus.clone();
-                let snap = snapshot.clone();
-                let prompt = prompt.to_string();
-                let token = cancel.clone();
-                let sem = sem.clone();
-                async move {
-                    let _permit = sem
-                        .acquire_owned()
-                        .await
-                        .map_err(|_| ResumaError::Cancelled)?;
-                    cancel::check(&token)?;
-                    let start_evt = emit::node_start(node_id.clone(), NodeKind::Ai);
-                    graph::apply_event(&mut snap.write(), &start_evt);
-                    bus.emit(start_evt);
+    let chunk_results: Vec<Value> =
+        stream::iter(chunks.into_iter().enumerate().map(|(i, chunk)| {
+            let node_id = NodeId::new(format!("ai-{i}"));
+            let bus = bus.clone();
+            let snap = snapshot.clone();
+            let prompt = prompt.to_string();
+            let token = cancel.clone();
+            let sem = sem.clone();
+            async move {
+                let _permit = sem
+                    .acquire_owned()
+                    .await
+                    .map_err(|_| ResumaError::Cancelled)?;
+                cancel::check(&token)?;
+                let start_evt = emit::node_start(node_id.clone(), NodeKind::Ai);
+                graph::apply_event(&mut snap.write(), &start_evt);
+                bus.emit(start_evt);
 
-                    let started = super::id::now_ms();
-                    let out = cancel::run_cancellable(
-                        &token,
-                        tools::dispatch("ai", json!({ "prompt": prompt, "data": chunk })),
-                    )
-                    .await;
-                    let duration = super::id::now_ms().saturating_sub(started);
+                let started = super::id::now_ms();
+                let out = cancel::run_cancellable(
+                    &token,
+                    tools::dispatch("ai", json!({ "prompt": prompt, "data": chunk })),
+                )
+                .await;
+                let duration = super::id::now_ms().saturating_sub(started);
 
-                    match &out {
-                        Ok(_) => {
-                            let done = emit::node_done(node_id.clone(), duration);
-                            graph::apply_event(&mut snap.write(), &done);
-                            bus.emit(done);
-                        }
-                        Err(ResumaError::Cancelled) => return Err(ResumaError::Cancelled),
-                        Err(e) => {
-                            let fail = emit::node_failed(node_id.clone(), e.to_string());
-                            graph::apply_event(&mut snap.write(), &fail);
-                            bus.emit(fail);
-                        }
+                match &out {
+                    Ok(_) => {
+                        let done = emit::node_done(node_id.clone(), duration);
+                        graph::apply_event(&mut snap.write(), &done);
+                        bus.emit(done);
                     }
-                    out
+                    Err(ResumaError::Cancelled) => return Err(ResumaError::Cancelled),
+                    Err(e) => {
+                        let fail = emit::node_failed(node_id.clone(), e.to_string());
+                        graph::apply_event(&mut snap.write(), &fail);
+                        bus.emit(fail);
+                    }
                 }
-            }),
-    )
-    .buffer_unordered(parallel)
-    .try_collect()
-    .await?;
+                out
+            }
+        }))
+        .buffer_unordered(parallel)
+        .try_collect()
+        .await?;
 
     cancel::check(&cancel)?;
 
@@ -197,7 +193,7 @@ pub fn split_chunks(input: &Value, n: u32) -> Vec<Value> {
         return items;
     }
 
-    let chunk_size = (items.len() + n - 1) / n;
+    let chunk_size = items.len().div_ceil(n);
     items
         .chunks(chunk_size)
         .map(|slice| Value::Array(slice.to_vec()))

@@ -157,6 +157,16 @@ fn persist_targets(targets: &[WebhookTarget]) -> Result<()> {
 /// Register a webhook URL (SSRF-checked, persisted to disk).
 pub fn register(body: RegisterWebhookBody) -> Result<WebhookTarget> {
     ssrf::validate_fetch_url(&body.url)?;
+    register_inner(body)
+}
+
+/// Register with DNS resolution (use from HTTP handlers).
+pub async fn register_resolved(body: RegisterWebhookBody) -> Result<WebhookTarget> {
+    ssrf::validate_fetch_url_resolved(&body.url).await?;
+    register_inner(body)
+}
+
+fn register_inner(body: RegisterWebhookBody) -> Result<WebhookTarget> {
     let events = if body.events.is_empty() {
         default_events()
     } else {
@@ -180,6 +190,7 @@ pub fn register(body: RegisterWebhookBody) -> Result<WebhookTarget> {
 
 /// Remove webhook by id.
 pub fn remove(id: &str) -> Result<bool> {
+    super::security::validate_schedule_id(id)?;
     let mut targets = TARGETS.write();
     let before = targets.len();
     targets.retain(|t| t.id != id);
@@ -272,11 +283,12 @@ fn dispatch(payload: WebhookPayload) {
 }
 
 async fn deliver(url: &str, payload: &WebhookPayload) -> Result<()> {
-    ssrf::validate_fetch_url(url)?;
+    let (parsed, pinned_ip) = ssrf::validate_fetch_url_resolved(url).await?;
+    let client = ssrf::pinned_fetch_client(&parsed, pinned_ip)?;
     tools::init_http_client();
     let body = serde_json::to_string(payload).map_err(ResumaError::Serde)?;
-    let mut req = tools::http_client()
-        .post(url)
+    let mut req = client
+        .post(parsed.as_str())
         .header("content-type", "application/json")
         .header("user-agent", "resuma-webhooks/1.0")
         .timeout(Duration::from_secs(15))

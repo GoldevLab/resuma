@@ -11,7 +11,7 @@ use super::update::{
 };
 
 const LOADER_GZIP_BUDGET: usize = 1024;
-const CORE_GZIP_BUDGET: usize = 5700;
+const CORE_GZIP_BUDGET: usize = 6600;
 
 pub fn doctor_command() -> Result<()> {
     println!("[resuma] doctor\n");

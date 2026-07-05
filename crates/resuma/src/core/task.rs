@@ -40,7 +40,9 @@ where
 {
     let signal = signal.clone();
     use_effect(move || {
-        on_change(signal.peek());
+        // Use `get()` so the effect registers the signal as a dependency and
+        // re-runs on change (SSR); `peek()` would capture no dependency.
+        on_change(signal.get());
         let _ = ms;
     });
 }

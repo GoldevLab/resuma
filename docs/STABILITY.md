@@ -46,7 +46,8 @@ Documented in `runtime/scripts/measure.mjs` and enforced in CI:
 | Asset | Gzip budget |
 |-------|-------------|
 | `loader.js` | ≤ 1024 B |
-| `core.js` | ≤ 5700 B |
+| `core.js` | ≤ 6600 B |
+| `flow.js` | lazy (exec/Flow widgets only) |
 
 Benchmark methodology: `benchmark/README.md`.
 

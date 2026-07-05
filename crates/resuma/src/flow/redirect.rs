@@ -78,23 +78,85 @@ fn append_flash(path: &str, message: &str) -> String {
 /// Extract a same-origin redirect path from a serialized handler result.
 pub fn extract_redirect(value: &Value) -> Option<String> {
     let path = value.get("redirect")?.as_str()?;
-    validate_redirect_path(path).ok().map(str::to_string)
+    validate_redirect_path(path).ok()
 }
 
 /// Reject open redirects — only root-relative paths are allowed.
-pub fn validate_redirect_path(path: &str) -> Result<&str> {
+///
+/// Percent-decodes the path and rejects encoded slashes (`%2f`), backslashes,
+/// protocol-relative targets (`//`), and control characters.
+pub fn validate_redirect_path(path: &str) -> Result<String> {
+    if path.is_empty() {
+        return Err(ResumaError::Other("invalid redirect path (empty)".into()));
+    }
+    if path.contains('\\') || path.contains('\0') {
+        return Err(ResumaError::Other(
+            "invalid redirect path (backslash or null byte)".into(),
+        ));
+    }
+    let lower = path.to_ascii_lowercase();
+    if lower.contains("%2f") || lower.contains("%5c") {
+        return Err(ResumaError::Other(
+            "invalid redirect path (encoded slash or backslash)".into(),
+        ));
+    }
     if !path.starts_with('/') || path.starts_with("//") {
         return Err(ResumaError::Other(format!(
             "invalid redirect path `{path}` (must start with `/`, not `//`)"
         )));
     }
-    Ok(path)
+
+    let decoded = percent_decode_path(path)?;
+    if !decoded.starts_with('/') || decoded.starts_with("//") || decoded.contains("//") {
+        return Err(ResumaError::Other(format!(
+            "invalid redirect path `{path}` (open redirect after decode)"
+        )));
+    }
+    if decoded.chars().any(|c| c.is_control()) {
+        return Err(ResumaError::Other(
+            "invalid redirect path (control character)".into(),
+        ));
+    }
+    Ok(decoded)
+}
+
+fn percent_decode_path(path: &str) -> Result<String> {
+    let bytes = path.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' {
+            if i + 2 >= bytes.len() {
+                return Err(ResumaError::Other(
+                    "invalid redirect path (truncated percent-encoding)".into(),
+                ));
+            }
+            let h1 = bytes[i + 1];
+            let h2 = bytes[i + 2];
+            let hex = [h1, h2];
+            let s = std::str::from_utf8(&hex)
+                .map_err(|_| ResumaError::Other("invalid redirect path encoding".into()))?;
+            let byte = u8::from_str_radix(s, 16)
+                .map_err(|_| ResumaError::Other("invalid redirect path encoding".into()))?;
+            if byte == 0 {
+                return Err(ResumaError::Other(
+                    "invalid redirect path (null byte)".into(),
+                ));
+            }
+            out.push(byte);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).map_err(|_| ResumaError::Other("invalid redirect path utf-8".into()))
 }
 
 /// HTTP 303 See Other — standard PRG response for form submits without JavaScript.
 pub fn redirect_response(path: &str) -> Response {
     match validate_redirect_path(path) {
-        Ok(loc) => AxumRedirect::to(loc).into_response(),
+        Ok(loc) => AxumRedirect::to(&loc).into_response(),
         Err(err) => (StatusCode::BAD_REQUEST, err.to_string()).into_response(),
     }
 }
@@ -103,7 +165,7 @@ pub fn redirect_response(path: &str) -> Response {
 pub fn redirect_json_headers(path: &str) -> Option<[(header::HeaderName, String); 1]> {
     validate_redirect_path(path)
         .ok()
-        .map(|loc| [(header::LOCATION, loc.to_string())])
+        .map(|loc| [(header::LOCATION, loc)])
 }
 
 #[cfg(test)]
@@ -124,6 +186,9 @@ mod tests {
     fn rejects_open_redirects() {
         assert!(validate_redirect_path("https://evil.test").is_err());
         assert!(validate_redirect_path("//evil.test").is_err());
+        assert!(validate_redirect_path("/%2f%2fevil.com").is_err());
+        assert!(validate_redirect_path("/%2F%2Fevil.com").is_err());
+        assert!(validate_redirect_path("/foo\\@evil.com").is_err());
     }
 
     #[test]
@@ -147,7 +212,6 @@ mod tests {
     #[test]
     fn flash_roundtrips_through_request() {
         let redirect = redirect_with_flash("/items", "Item created");
-        // Same-origin path is preserved and validates.
         assert!(redirect.to.starts_with("/items?flash="));
         let query = crate::flow::request::parse_query(redirect.to.split_once('?').map(|x| x.1));
         let req = FlowRequest::from_parts(

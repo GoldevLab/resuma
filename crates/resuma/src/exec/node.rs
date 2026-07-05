@@ -24,10 +24,15 @@ pub async fn run_on_node(
     let work = cancel::run_cancellable(cancel, run(input, ctx));
     match timeout(Duration::from_secs(secs), work).await {
         Ok(r) => r,
-        Err(_) => Err(ResumaError::Other(format!(
-            "worker exceeded timeout ({}s)",
-            secs
-        ))),
+        Err(_) => {
+            // The timed-out future is dropped, but any tasks it spawned may
+            // still be running — signal the scope so they stop cooperatively.
+            cancel.cancel();
+            Err(ResumaError::Other(format!(
+                "worker exceeded timeout ({}s)",
+                secs
+            )))
+        }
     }
 }
 
@@ -39,9 +44,7 @@ pub struct NodePool {
 
 impl Default for NodePool {
     fn default() -> Self {
-        Self {
-            parallel_limit: 4,
-        }
+        Self { parallel_limit: 4 }
     }
 }
 
@@ -55,7 +58,9 @@ impl From<&ResourceProfile> for NodePool {
 
 /// Shared node pool config (process-wide).
 static POOL: once_cell::sync::Lazy<std::sync::Arc<parking_lot::RwLock<NodePool>>> =
-    once_cell::sync::Lazy::new(|| std::sync::Arc::new(parking_lot::RwLock::new(NodePool::default())));
+    once_cell::sync::Lazy::new(|| {
+        std::sync::Arc::new(parking_lot::RwLock::new(NodePool::default()))
+    });
 
 pub fn configure_pool(pool: NodePool) {
     *POOL.write() = pool;

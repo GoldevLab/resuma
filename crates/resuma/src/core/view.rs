@@ -204,6 +204,10 @@ impl View {
     pub fn text(s: impl Into<String>) -> Self {
         View::Text(s.into())
     }
+    /// Emit raw HTML without escaping.
+    ///
+    /// **Security:** never pass user-controlled strings here — use `view!` text
+    /// interpolation instead, which escapes HTML entities automatically.
     pub fn raw(html: impl Into<String>) -> Self {
         View::Raw(html.into())
     }

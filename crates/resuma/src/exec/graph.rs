@@ -7,7 +7,12 @@ use super::types::{
 };
 
 /// Build an executable graph snapshot from plan (templates).
-pub fn materialize(graph_id: GraphId, worker: &str, intent: &str, plan: &ExecutionPlan) -> GraphSnapshot {
+pub fn materialize(
+    graph_id: GraphId,
+    worker: &str,
+    intent: &str,
+    plan: &ExecutionPlan,
+) -> GraphSnapshot {
     let mut nodes = Vec::new();
     let mut edges = Vec::new();
 
@@ -119,20 +124,23 @@ pub fn materialize(graph_id: GraphId, worker: &str, intent: &str, plan: &Executi
 
 /// Apply a worker event to node statuses in the snapshot.
 pub fn apply_event(snapshot: &mut GraphSnapshot, event: &WorkerEvent) {
-    let update_node = |snap: &mut GraphSnapshot, id: &NodeId, status: NodeStatus, duration_ms: Option<u64>| {
-        if let Some(n) = snap.nodes.iter_mut().find(|n| n.id == *id) {
-            n.status = status;
-            if duration_ms.is_some() {
-                n.duration_ms = duration_ms;
+    let update_node =
+        |snap: &mut GraphSnapshot, id: &NodeId, status: NodeStatus, duration_ms: Option<u64>| {
+            if let Some(n) = snap.nodes.iter_mut().find(|n| n.id == *id) {
+                n.status = status;
+                if duration_ms.is_some() {
+                    n.duration_ms = duration_ms;
+                }
             }
-        }
-    };
+        };
 
     match event {
         WorkerEvent::NodeStart { node, .. } => {
             update_node(snapshot, node, NodeStatus::Running, None);
         }
-        WorkerEvent::NodeDone { node, duration_ms, .. } => {
+        WorkerEvent::NodeDone {
+            node, duration_ms, ..
+        } => {
             update_node(snapshot, node, NodeStatus::Done, Some(*duration_ms));
         }
         WorkerEvent::NodeFailed { node, .. } => {

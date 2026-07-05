@@ -26,7 +26,11 @@ pub fn set_action_middleware(f: ActionMiddlewareFn) {
 }
 
 pub fn register_server_action(name: &str, f: ActionFn) {
-    REGISTRY.write().insert(name.to_string(), f);
+    let mut reg = REGISTRY.write();
+    if reg.contains_key(name) {
+        panic!("server action `{name}` registered twice");
+    }
+    reg.insert(name.to_string(), f);
 }
 
 pub fn get_action(name: &str) -> Option<ActionFn> {

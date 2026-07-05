@@ -29,6 +29,23 @@ function buildEffectState(
   return local;
 }
 
+// Per-mount cleanups (signal unsubscribes + pending debounce timers). SPA
+// navigation re-runs initEffects against fresh signal cells, so the previous
+// mount's subscriptions and timers must be torn down or they leak and fire
+// against orphaned cells (mirrors the `flowCleanups` pattern in flow.ts).
+const effectCleanups: Array<() => void> = [];
+
+export function flushEffectCleanups(): void {
+  while (effectCleanups.length) {
+    const fn = effectCleanups.pop();
+    try {
+      fn?.();
+    } catch {
+      /* ignore cleanup errors */
+    }
+  }
+}
+
 export function initEffects(
   effects: ClientEffectSpec[],
   signals: Map<string, SignalCell<unknown>>,
@@ -71,9 +88,24 @@ export function initEffects(
 
       schedule();
 
+      effectCleanups.push(() => {
+        if (debounceTimer !== undefined) clearTimeout(debounceTimer);
+      });
+
+      const depKeys = new Set<string>();
       for (const dep of eff.deps) {
-        const cell = signals.get(signalId(dep));
-        cell?.subscribe(() => schedule());
+        depKeys.add(signalId(dep));
+      }
+      if (eff.captures) {
+        for (const idRaw of Object.values(eff.captures)) {
+          depKeys.add(signalId(idRaw));
+        }
+      }
+
+      for (const depKey of depKeys) {
+        const cell = signals.get(depKey);
+        const unsubscribe = cell?.subscribe(() => schedule());
+        if (unsubscribe) effectCleanups.push(unsubscribe);
       }
     } catch (err) {
       console.error("[resuma] effect init", eff.id, err);

@@ -170,6 +170,9 @@ async fn island_refresh_returns_cached_html() {
     use resuma::core::View;
     use resuma::server::island_cache;
 
+    // The island refresh endpoint (`/_resuma/island/{instance}`) is a dev-only
+    // HMR helper and is mounted only when `RESUMA_DEV` is set.
+    std::env::set_var("RESUMA_DEV", "1");
     island_cache::clear_island_cache();
 
     let ctx = RenderContext::new(RenderMode::Ssr);

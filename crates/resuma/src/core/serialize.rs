@@ -8,7 +8,13 @@ use super::context::ResumePayload;
 /// Escapes `<`, `>`, `&`, and Unicode line separators so user-controlled signal
 /// data cannot break out of the script block (XSS).
 pub fn encode_payload(payload: &ResumePayload) -> String {
-    let raw = serde_json::to_string(payload).unwrap_or_else(|_| "{}".into());
+    let raw = match serde_json::to_string(payload) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!(error = %e, "failed to serialize resumability payload");
+            "{}".into()
+        }
+    };
     sanitize_json_for_script(&raw)
 }
 

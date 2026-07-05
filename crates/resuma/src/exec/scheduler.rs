@@ -17,7 +17,7 @@ use crate::core::{Result, ResumaError};
 use super::cron;
 use super::id;
 use super::queue;
-use super::security::validate_resource_name;
+use super::security::{validate_resource_name, validate_schedule_id};
 
 static ROOT: RwLock<Option<PathBuf>> = RwLock::new(None);
 static STARTED: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
@@ -85,23 +85,25 @@ fn jobs_dir() -> PathBuf {
     root_dir().join("jobs")
 }
 
-fn job_path(id: &str) -> PathBuf {
-    jobs_dir().join(format!("{id}.json"))
+fn job_path(id: &str) -> Result<PathBuf> {
+    validate_schedule_id(id)?;
+    Ok(jobs_dir().join(format!("{id}.json")))
 }
 
-fn firing_path(id: &str) -> PathBuf {
-    jobs_dir().join("firing").join(format!("{id}.json"))
+fn firing_path(id: &str) -> Result<PathBuf> {
+    validate_schedule_id(id)?;
+    Ok(jobs_dir().join("firing").join(format!("{id}.json")))
 }
 
 /// Atomically claim a due job for firing (multi-process safe).
 fn try_claim_job(id: &str) -> Result<ScheduleJob> {
-    let src = job_path(id);
+    let src = job_path(id)?;
     if !src.exists() {
         return Err(ResumaError::validation("job not found"));
     }
     let firing_dir = jobs_dir().join("firing");
     fs::create_dir_all(&firing_dir).map_err(ResumaError::Io)?;
-    let dst = firing_path(id);
+    let dst = firing_path(id)?;
     if dst.exists() {
         return Err(ResumaError::validation("job already claimed"));
     }
@@ -111,9 +113,19 @@ fn try_claim_job(id: &str) -> Result<ScheduleJob> {
 }
 
 fn release_firing_claim(id: &str) -> Result<()> {
-    let dst = firing_path(id);
+    let dst = firing_path(id)?;
     if dst.exists() {
         fs::remove_file(dst).map_err(ResumaError::Io)?;
+    }
+    Ok(())
+}
+
+/// Move a claimed job from `firing/` back to `jobs/` after a failed fire attempt.
+fn restore_firing_claim(job: &ScheduleJob) -> Result<()> {
+    let dst = firing_path(&job.id)?;
+    let src = job_path(&job.id)?;
+    if dst.exists() {
+        fs::rename(&dst, &src).map_err(ResumaError::Io)?;
     }
     Ok(())
 }
@@ -162,12 +174,21 @@ pub async fn tick() -> Result<usize> {
             continue;
         };
         match fire_job(&mut claimed).await {
-            Ok(()) => fired += 1,
+            Ok(()) => {
+                fired += 1;
+                if let Err(e) = release_firing_claim(&claimed.id) {
+                    warn!(job = %claimed.id, error = %e, "failed to release firing claim");
+                }
+            }
             Err(e) => {
                 warn!(job = %claimed.id, error = %e, "scheduled job failed");
+                if let Err(re) = restore_firing_claim(&claimed) {
+                    warn!(job = %claimed.id, error = %re, "failed to restore firing job");
+                } else if let Err(pe) = persist_job(&claimed) {
+                    warn!(job = %claimed.id, error = %pe, "failed to persist restored job");
+                }
             }
         }
-        let _ = release_firing_claim(&claimed.id);
     }
     Ok(fired)
 }
@@ -202,6 +223,9 @@ async fn fire_job(job: &mut ScheduleJob) -> Result<()> {
 
 /// Create and persist a new scheduled job.
 pub fn create(body: CreateScheduleBody) -> Result<ScheduleJob> {
+    if body.name.is_empty() || body.name.len() > 128 {
+        return Err(ResumaError::validation("invalid schedule name length"));
+    }
     validate_resource_name(&body.worker)?;
     validate_resource_name(&body.queue)?;
     super::security::validate_input(&body.input)?;
@@ -226,7 +250,8 @@ pub fn create(body: CreateScheduleBody) -> Result<ScheduleJob> {
 
 /// Remove a scheduled job by id.
 pub fn remove(id: &str) -> Result<bool> {
-    let path = job_path(id);
+    validate_schedule_id(id)?;
+    let path = job_path(id)?;
     if path.exists() {
         fs::remove_file(path).map_err(ResumaError::Io)?;
         Ok(true)
@@ -237,7 +262,7 @@ pub fn remove(id: &str) -> Result<bool> {
 
 /// Get a job by id.
 pub fn get(id: &str) -> Option<ScheduleJob> {
-    let path = job_path(id);
+    let path = job_path(id).ok()?;
     let data = fs::read_to_string(path).ok()?;
     serde_json::from_str(&data).ok()
 }
@@ -295,7 +320,7 @@ pub struct SchedulerStats {
 fn persist_job(job: &ScheduleJob) -> Result<()> {
     let dir = jobs_dir();
     fs::create_dir_all(&dir).map_err(ResumaError::Io)?;
-    let path = job_path(&job.id);
+    let path = job_path(&job.id)?;
     let tmp = path.with_extension("json.tmp");
     let data = serde_json::to_string_pretty(job)?;
     {
@@ -318,8 +343,13 @@ fn recover_firing_jobs() {
             continue;
         }
         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-            let dest = job_path(stem);
-            if !dest.exists() {
+            let Ok(dest) = job_path(stem) else {
+                continue;
+            };
+            if dest.exists() {
+                // Stale firing claim after successful persist — drop orphan.
+                let _ = fs::remove_file(&path);
+            } else {
                 let _ = fs::rename(&path, &dest);
             }
         }
@@ -385,5 +415,12 @@ mod tests {
         .unwrap();
         assert!(remove(&job.id).unwrap());
         assert!(get(&job.id).is_none());
+    }
+
+    #[test]
+    fn remove_rejects_path_traversal() {
+        let _guard = super::super::queue_disk::test_queue_lock().lock();
+        let _root = temp_scheduler();
+        assert!(remove("../../etc/passwd").is_err());
     }
 }

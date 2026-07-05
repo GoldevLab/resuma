@@ -113,8 +113,13 @@ impl Translator {
 
         for input in &c.inputs {
             let (name, _ty) = pat_to_param(input)?;
-            self.locals.last_mut().unwrap().insert(name.clone());
-            params.push(name);
+            let js_name = if is_outer && matches!(name.as_str(), "state" | "__resuma") {
+                format!("_{name}")
+            } else {
+                name.clone()
+            };
+            self.locals.last_mut().unwrap().insert(name);
+            params.push(js_name);
         }
 
         // Block bodies handle their own implicit `return` via `stmts`; any
@@ -186,9 +191,13 @@ impl Translator {
             }
 
             Expr::Assign(ExprAssign { left, right, .. }) => {
-                let l = self.expr(left)?;
                 let r = self.expr(right)?;
-                Ok(format!("({} = {})", l, r))
+                if let Some(name) = self.capture_lhs(left) {
+                    Ok(format!("state.{}.set({})", name, r))
+                } else {
+                    let l = self.expr(left)?;
+                    Ok(format!("({} = {})", l, r))
+                }
             }
 
             Expr::MethodCall(call) => self.method_call(call),
@@ -208,11 +217,12 @@ impl Translator {
 
             Expr::Field(f) => {
                 let base = self.expr(&f.base)?;
-                let member = match &f.member {
-                    syn::Member::Named(id) => id.to_string(),
-                    syn::Member::Unnamed(idx) => idx.index.to_string(),
-                };
-                Ok(format!("{}.{}", base, member))
+                match &f.member {
+                    // Tuples/tuple-structs map to JS arrays, so `x.0` must use
+                    // bracket indexing (`x[0]`) — `x.0` is invalid JS.
+                    syn::Member::Named(id) => Ok(format!("{}.{}", base, id)),
+                    syn::Member::Unnamed(idx) => Ok(format!("{}[{}]", base, idx.index)),
+                }
             }
 
             Expr::Tuple(t) => {
@@ -275,16 +285,26 @@ impl Translator {
             Lit::Int(i) => Ok(i.base10_digits().to_string()),
             Lit::Float(f) => Ok(f.base10_digits().to_string()),
             Lit::Bool(b) => Ok(b.value.to_string()),
-            Lit::Str(s) => Ok(format!(
-                "\"{}\"",
-                s.value().replace('\\', "\\\\").replace('"', "\\\"")
-            )),
-            Lit::Char(c) => Ok(format!("\"{}\"", c.value())),
+            Lit::Str(s) => Ok(format!("\"{}\"", escape_js_string(&s.value()))),
+            Lit::Char(c) => Ok(format!("\"{}\"", escape_js_string(&c.value().to_string()))),
             other => Err(Rs2JsError::unsupported(
                 &format!("literal: {:?}", other),
                 Span::call_site(),
             )),
         }
+    }
+
+    /// If `left` is a simple captured signal identifier, return its name.
+    fn capture_lhs(&self, left: &Expr) -> Option<String> {
+        if let Expr::Path(ExprPath { path, .. }) = left {
+            let segments: Vec<String> = path.segments.iter().map(|s| s.ident.to_string()).collect();
+            if let [name] = segments.as_slice() {
+                if !self.is_local(name) {
+                    return Some(name.clone());
+                }
+            }
+        }
+        None
     }
 
     fn path(&mut self, path: &syn::Path) -> Result<String, Rs2JsError> {
@@ -384,51 +404,7 @@ impl Translator {
             .unwrap_or_default();
 
         match name.as_str() {
-            "format" => {
-                // format!("hello {}", x) → `hello ${state.x}`
-                let tokens = mac.tokens.clone();
-                let parsed = syn::parse::Parser::parse2(
-                    syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated,
-                    tokens,
-                )
-                .map_err(|e| Rs2JsError::unsupported(&format!("format!: {}", e), mac.span()))?;
-                let mut iter = parsed.into_iter();
-                let fmt_lit = iter
-                    .next()
-                    .ok_or_else(|| Rs2JsError::unsupported("empty format!", mac.span()))?;
-                let fmt = if let Expr::Lit(ExprLit {
-                    lit: Lit::Str(s), ..
-                }) = &fmt_lit
-                {
-                    s.value()
-                } else {
-                    return Err(Rs2JsError::unsupported("format! needs literal", mac.span()));
-                };
-
-                let mut args = Vec::new();
-                for a in iter {
-                    args.push(self.expr(&a)?);
-                }
-
-                let mut out = String::from("`");
-                let mut arg_iter = args.into_iter();
-                let mut chars = fmt.chars().peekable();
-                while let Some(c) = chars.next() {
-                    match c {
-                        '{' if chars.peek() == Some(&'}') => {
-                            chars.next();
-                            if let Some(a) = arg_iter.next() {
-                                out.push_str(&format!("${{{}}}", a));
-                            }
-                        }
-                        '`' => out.push_str("\\`"),
-                        '$' => out.push_str("\\$"),
-                        c => out.push(c),
-                    }
-                }
-                out.push('`');
-                Ok(out)
-            }
+            "format" => self.format_macro(mac),
 
             "vec" => {
                 let tokens = mac.tokens.clone();
@@ -441,9 +417,11 @@ impl Translator {
                 Ok(format!("[{}]", items?.join(", ")))
             }
 
-            "println" | "dbg" | "eprintln" => {
-                let tokens = mac.tokens.clone();
-                Ok(format!("console.log({})", tokens))
+            "println" | "print" | "eprintln" | "eprint" | "dbg" => {
+                // Translate the format string like `format!` so `{}` holes are
+                // interpolated instead of leaking raw Rust tokens into JS.
+                let template = self.format_macro(mac)?;
+                Ok(format!("console.log({})", template))
             }
 
             other => Err(Rs2JsError::unsupported(
@@ -453,24 +431,125 @@ impl Translator {
         }
     }
 
+    /// Translate a `format!`-style macro into a JS template literal, mapping
+    /// `{}` holes to `${arg}` and escaping backticks / `$` / newlines / `</`.
+    fn format_macro(&mut self, mac: &syn::Macro) -> Result<String, Rs2JsError> {
+        let tokens = mac.tokens.clone();
+        let parsed = syn::parse::Parser::parse2(
+            syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated,
+            tokens,
+        )
+        .map_err(|e| Rs2JsError::unsupported(&format!("format!: {}", e), mac.span()))?;
+        let mut iter = parsed.into_iter();
+        let fmt_lit = iter
+            .next()
+            .ok_or_else(|| Rs2JsError::unsupported("empty format!", mac.span()))?;
+        let fmt = if let Expr::Lit(ExprLit {
+            lit: Lit::Str(s), ..
+        }) = &fmt_lit
+        {
+            s.value()
+        } else {
+            return Err(Rs2JsError::unsupported("format! needs literal", mac.span()));
+        };
+
+        let mut args = Vec::new();
+        for a in iter {
+            args.push(self.expr(&a)?);
+        }
+
+        let mut out = String::from("`");
+        let mut arg_iter = args.into_iter();
+        let mut chars = fmt.chars().peekable();
+        while let Some(c) = chars.next() {
+            match c {
+                '{' if chars.peek() == Some(&'{') => {
+                    // `{{` is an escaped literal brace in Rust format strings.
+                    chars.next();
+                    out.push('{');
+                }
+                '}' if chars.peek() == Some(&'}') => {
+                    chars.next();
+                    out.push('}');
+                }
+                '{' => {
+                    // Consume an optional format spec up to the closing `}`
+                    // (e.g. `{}`, `{:?}`, `{:.2}`) — JS has no equivalent so we
+                    // just interpolate the argument's default stringification.
+                    for nc in chars.by_ref() {
+                        if nc == '}' {
+                            break;
+                        }
+                    }
+                    if let Some(a) = arg_iter.next() {
+                        out.push_str(&format!("${{{}}}", a));
+                    }
+                }
+                '`' => out.push_str("\\`"),
+                '$' => out.push_str("\\$"),
+                '\\' => out.push_str("\\\\"),
+                '<' => out.push_str("\\x3C"),
+                '\r' => out.push_str("\\r"),
+                c => out.push(c),
+            }
+        }
+        out.push('`');
+        Ok(out)
+    }
+
     fn if_expr(&mut self, if_expr: &ExprIf) -> Result<String, Rs2JsError> {
+        let inner = self.if_stmts(if_expr)?;
+        Ok(format!("(() => {{ {} }})()", inner))
+    }
+
+    /// Emit `if (...) {...} else {...}` where **both** branches `return` their
+    /// value. Previously the `else` branch was translated as a bare expression,
+    /// so its value was computed and silently discarded (`if x { return a } else
+    /// { b }` never returned `b`). Handles `else if` chains recursively.
+    fn if_stmts(&mut self, if_expr: &ExprIf) -> Result<String, Rs2JsError> {
         let cond = self.expr(&if_expr.cond)?;
         let then = self.stmts(&if_expr.then_branch.stmts)?;
-        let else_part = if let Some((_, else_b)) = &if_expr.else_branch {
-            let e = self.expr(else_b)?;
-            format!(" else {{ {} }}", e)
-        } else {
-            String::new()
+        let else_part = match &if_expr.else_branch {
+            Some((_, else_b)) => match &**else_b {
+                Expr::Block(b) => format!(" else {{ {} }}", self.stmts(&b.block.stmts)?),
+                Expr::If(nested) => format!(" else {}", self.if_stmts(nested)?),
+                other => format!(" else {{ return {}; }}", self.expr(other)?),
+            },
+            None => String::new(),
         };
-        Ok(format!(
-            "(() => {{ if ({}) {{ {} }}{} }})()",
-            cond, then, else_part
-        ))
+        Ok(format!("if ({}) {{ {} }}{}", cond, then, else_part))
     }
 
     fn is_local(&self, name: &str) -> bool {
         self.locals.iter().rev().any(|s| s.contains(name))
     }
+}
+
+/// Escape a Rust string value for embedding inside a double-quoted JS string.
+///
+/// Beyond `\` and `"`, this handles newlines/control characters, the Unicode
+/// line separators U+2028/U+2029 (which are literal line breaks in JS strings),
+/// and neutralises `</script` / `<!--` so the generated JS can't break out of a
+/// `<script>` block when inlined into HTML.
+fn escape_js_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\u{2028}' => out.push_str("\\u2028"),
+            '\u{2029}' => out.push_str("\\u2029"),
+            '<' => out.push_str("\\x3C"),
+            other if (other as u32) < 0x20 => {
+                out.push_str(&format!("\\u{:04x}", other as u32));
+            }
+            other => out.push(other),
+        }
+    }
+    out
 }
 
 fn pat_to_param(p: &Pat) -> Result<(String, Option<String>), Rs2JsError> {
@@ -519,4 +598,89 @@ fn bin_op_to_js(op: BinOp) -> Option<&'static str> {
         BinOp::ShrAssign(_) => ">>=",
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn expr_js(src: &str) -> String {
+        let e: Expr = syn::parse_str(src).expect("parse expr");
+        translate_expr(&e).expect("translate").js
+    }
+
+    fn handler_js(src: &str) -> String {
+        let c: ExprClosure = syn::parse_str(src).expect("parse closure");
+        translate_handler(&c).expect("translate").js
+    }
+
+    #[test]
+    fn tuple_index_uses_bracket_notation() {
+        // `x.0` is invalid JS; must become `x[0]`.
+        assert_eq!(expr_js("pair.0"), "state.pair[0]");
+        assert_eq!(expr_js("pair.1"), "state.pair[1]");
+    }
+
+    #[test]
+    fn if_else_returns_both_branches() {
+        let js = expr_js("if flag { 1 } else { 2 }");
+        // Both branches must `return` — the else value must not be discarded.
+        assert!(js.contains("return 1;"), "then branch returns: {js}");
+        assert!(js.contains("return 2;"), "else branch returns: {js}");
+    }
+
+    #[test]
+    fn else_if_chain_returns_values() {
+        let js = expr_js("if a { 1 } else if b { 2 } else { 3 }");
+        assert!(js.contains("return 1;"));
+        assert!(js.contains("return 2;"));
+        assert!(js.contains("return 3;"));
+        assert!(js.contains("else if"), "chained else-if preserved: {js}");
+    }
+
+    #[test]
+    fn format_macro_handles_debug_and_precision_specs() {
+        // `{:?}` / `{:.2}` specifiers must not break interpolation.
+        let js = expr_js(r#"format!("val={:?} pi={:.2}", x, y)"#);
+        assert!(js.contains("${state.x}"), "debug spec interpolated: {js}");
+        assert!(
+            js.contains("${state.y}"),
+            "precision spec interpolated: {js}"
+        );
+    }
+
+    #[test]
+    fn format_macro_escapes_script_close() {
+        let js = expr_js(r#"format!("</script>{}", x)"#);
+        assert!(!js.contains("</script"), "must neutralize </script: {js}");
+        assert!(js.contains("\\x3C"), "angle bracket escaped: {js}");
+    }
+
+    #[test]
+    fn format_literal_braces() {
+        let js = expr_js(r#"format!("{{literal}} {}", x)"#);
+        assert!(js.contains("{literal}"), "escaped braces preserved: {js}");
+        assert!(js.contains("${state.x}"));
+    }
+
+    #[test]
+    fn string_literal_escapes_script_close_and_newlines() {
+        let js = expr_js(r#""</script>\n""#);
+        assert!(!js.contains("</script"), "escaped breakout: {js}");
+        assert!(js.contains("\\n"), "newline escaped: {js}");
+    }
+
+    #[test]
+    fn println_interpolates_instead_of_raw_tokens() {
+        let js = expr_js(r#"println!("count={}", x)"#);
+        assert!(js.starts_with("console.log("), "maps to console.log: {js}");
+        assert!(js.contains("${state.x}"), "arg interpolated: {js}");
+    }
+
+    #[test]
+    fn handler_signal_update_roundtrip() {
+        let js = handler_js("move |_| count.update(|c| c + 1)");
+        assert!(js.contains("state.count.update"));
+        assert!(js.contains("async (_event, state, __resuma)"));
+    }
 }

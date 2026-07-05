@@ -17,6 +17,7 @@ export type Handler = (
 ) => unknown | Promise<unknown>;
 
 const inlineCache = new Map<string, Handler>();
+const inFlight = new Map<string, Promise<Record<string, Function>>>();
 
 export async function resolveHandler(ref: string, inline: string | null): Promise<Handler> {
   if (inline) {
@@ -39,11 +40,20 @@ export async function resolveHandler(ref: string, inline: string | null): Promis
   if (chunk === "__page__") {
     const src = r.handlers[chunk]?.[symbol];
     if (src) return compileInline(src);
+    throw new Error(`[resuma] inline handler ${symbol} not found in __page__ payload`);
   }
 
   let mod = r.loaded.get(chunk);
   if (!mod) {
-    mod = (await import(`/_resuma/handler/${chunk}.js`)) as Record<string, Function>;
+    let pending = inFlight.get(chunk);
+    if (!pending) {
+      pending = import(`/_resuma/handler/${chunk}.js`) as Promise<
+        Record<string, Function>
+      >;
+      inFlight.set(chunk, pending);
+      void pending.finally(() => inFlight.delete(chunk));
+    }
+    mod = await pending;
     r.loaded.set(chunk, mod);
   }
   const fn = mod[symbol] as Handler | undefined;

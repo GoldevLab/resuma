@@ -5,17 +5,12 @@ use serde::{Deserialize, Serialize};
 use super::types::RuntimeChoice;
 
 /// Per-dimension resource setting (`"auto"` or explicit).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ResourceLevel {
+    #[default]
     Auto,
     Named(String),
-}
-
-impl Default for ResourceLevel {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 /// Resource declaration on a worker (user never tunes CPU/RAM manually).
@@ -61,9 +56,7 @@ impl Default for ResourceProfile {
 
 /// Assign concrete resources from intent + plan heuristics.
 pub fn resolve(resources: &Resources, plan: &super::types::ExecutionPlan) -> ResourceProfile {
-    let mut profile = ResourceProfile::default();
-
-    profile.runtime = match plan.runtime {
+    let runtime = match plan.runtime {
         RuntimeChoice::Auto => {
             if plan.strategy == super::types::ExecutionStrategy::Hybrid {
                 RuntimeChoice::Hybrid
@@ -74,6 +67,11 @@ pub fn resolve(resources: &Resources, plan: &super::types::ExecutionPlan) -> Res
             }
         }
         other => other,
+    };
+
+    let mut profile = ResourceProfile {
+        runtime,
+        ..ResourceProfile::default()
     };
 
     if matches!(resources.timeout, ResourceLevel::Named(ref s) if s == "extended") {

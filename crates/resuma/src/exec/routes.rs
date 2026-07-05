@@ -17,16 +17,16 @@ use tokio::sync::broadcast::error::RecvError;
 
 use crate::core::ResumaError;
 use crate::exec::engine::FlowEngine;
-use crate::exec::queue::{self, EnqueueResponse};
 use crate::exec::metrics;
-use crate::exec::security::{
-    self, guard_admin, guard_admin_read, guard_graph_control, guard_graph_read, guard_metrics, validate_graph_id,
-    validate_input, validate_resource_name,
-};
+use crate::exec::queue::{self, EnqueueResponse};
 use crate::exec::scheduler::{self, CreateScheduleBody, ScheduleListResponse};
+use crate::exec::security::{
+    self, guard_admin, guard_admin_read, guard_graph_control, guard_graph_read, guard_metrics,
+    validate_graph_id, validate_input, validate_resource_name, validate_schedule_id,
+};
 use crate::exec::status;
-use crate::exec::webhooks::{self, RegisterWebhookBody, WebhookListResponse};
 use crate::exec::types::{GraphId, GraphSnapshot, StartWorkerResponse, WorkerEvent};
+use crate::exec::webhooks::{self, RegisterWebhookBody, WebhookListResponse};
 
 #[derive(Debug, Deserialize, Default)]
 pub struct StartWorkerBody {
@@ -67,7 +67,10 @@ where
             get(list_webhooks_handler).post(register_webhook_handler),
         )
         .route("/_resuma/webhooks/{id}", delete(delete_webhook_handler))
-        .route("/_resuma/scheduler", get(list_schedules_handler).post(create_schedule_handler))
+        .route(
+            "/_resuma/scheduler",
+            get(list_schedules_handler).post(create_schedule_handler),
+        )
         .route("/_resuma/scheduler/tick", post(scheduler_tick_handler))
         .route("/_resuma/scheduler/{id}", delete(delete_schedule_handler))
         .route("/_resuma/worker/{name}", post(start_worker))
@@ -93,7 +96,10 @@ async fn prometheus_metrics_handler(
     guard_metrics(&headers, &ip)?;
     let body = metrics::prometheus_text();
     Ok((
-        [(header::CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8")],
+        [(
+            header::CONTENT_TYPE,
+            "text/plain; version=0.0.4; charset=utf-8",
+        )],
         body,
     ))
 }
@@ -115,7 +121,7 @@ async fn register_webhook_handler(
     let host = request_host(&headers);
     let ip = client_ip(&headers, addr);
     guard_admin(&headers, &host, &ip, None)?;
-    Ok(Json(webhooks::register(body)?))
+    Ok(Json(webhooks::register_resolved(body).await?))
 }
 
 async fn delete_webhook_handler(
@@ -126,6 +132,7 @@ async fn delete_webhook_handler(
     let host = request_host(&headers);
     let ip = client_ip(&headers, addr);
     guard_admin(&headers, &host, &ip, None)?;
+    validate_schedule_id(&id)?;
     if webhooks::remove(&id)? {
         Ok(StatusCode::NO_CONTENT)
     } else {
@@ -171,6 +178,7 @@ async fn delete_schedule_handler(
     let host = request_host(&headers);
     let ip = client_ip(&headers, addr);
     guard_admin(&headers, &host, &ip, None)?;
+    validate_schedule_id(&id)?;
     if scheduler::remove(&id)? {
         Ok(StatusCode::NO_CONTENT)
     } else {
@@ -244,7 +252,7 @@ async fn get_graph(
     guard_graph_read(&headers, &host, &ip, &gid, query.token.as_deref())?;
     FlowEngine::snapshot(&gid)
         .map(Json)
-        .ok_or_else(|| ExecHttpError(ResumaError::UnknownGraph(gid.0)))
+        .ok_or(ExecHttpError(ResumaError::UnknownGraph(gid.0)))
 }
 
 async fn replay_graph(
@@ -260,7 +268,7 @@ async fn replay_graph(
     guard_graph_read(&headers, &host, &ip, &gid, query.token.as_deref())?;
     FlowEngine::replay(&gid)
         .map(Json)
-        .ok_or_else(|| ExecHttpError(ResumaError::UnknownGraph(gid.0)))
+        .ok_or(ExecHttpError(ResumaError::UnknownGraph(gid.0)))
 }
 
 async fn pause_graph(
@@ -319,7 +327,7 @@ async fn graph_events_sse(
     let gid = GraphId(id.clone());
     guard_graph_read(&headers, &host, &ip, &gid, query.token.as_deref())?;
 
-    let bus = FlowEngine::bus(&gid).ok_or_else(|| ExecHttpError(ResumaError::UnknownGraph(gid.0)))?;
+    let bus = FlowEngine::bus(&gid).ok_or(ExecHttpError(ResumaError::UnknownGraph(gid.0)))?;
 
     let history = bus.history();
     let mut rx = bus.subscribe();

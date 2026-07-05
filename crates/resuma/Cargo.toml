@@ -31,7 +31,7 @@ required-features = ["cli"]
 
 [features]
 default = ["cli"]
-cli = ["dep:clap", "dep:anyhow", "dep:notify", "dep:tracing-subscriber"]
+cli = ["dep:clap", "dep:anyhow", "dep:tracing-subscriber"]
 redis-rate-limit = ["dep:redis"]
 
 [dependencies]
@@ -59,13 +59,13 @@ walkdir           = { workspace = true }
 # CLI (optional)
 clap                = { workspace = true, optional = true }
 anyhow              = { workspace = true, optional = true }
-notify              = { workspace = true, optional = true }
 tracing-subscriber  = { workspace = true, optional = true }
 redis               = { version = "0.27", optional = true, default-features = false, features = ["connection-manager"] }
 reqwest             = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 url                 = "2"
 hmac                = "0.12"
 sha2                = "0.10"
+fs2                 = "0.4"
 
 [dev-dependencies]
 tower = { workspace = true, features = ["util"] }

@@ -17,6 +17,14 @@ use serde::Serialize;
 use super::context::{current_context, ClientEffectSpec};
 use super::signal::{Signal, SignalId};
 
+fn merge_capture_deps(deps: &mut Vec<SignalId>, captures: &BTreeMap<String, SignalId>) {
+    for id in captures.values() {
+        if !deps.contains(id) {
+            deps.push(*id);
+        }
+    }
+}
+
 /// Opaque effect id. Stable within a single render pass.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EffectId(pub u32);
@@ -73,7 +81,8 @@ pub fn attach_client_effect(
     debounce_ms: Option<u64>,
 ) {
     if let Some(ctx) = current_context() {
-        let deps = ctx.take_effect_deps(effect.id.0);
+        let mut deps = ctx.take_effect_deps(effect.id.0);
+        merge_capture_deps(&mut deps, &captures);
         ctx.register_client_effect(ClientEffectSpec {
             id: effect.id.0,
             deps,
@@ -99,7 +108,8 @@ pub fn register_client_effect(
         .unwrap_or(EffectId(0));
 
     if let Some(ctx) = current_context() {
-        let deps = ctx.take_effect_deps(id.0);
+        let mut deps = ctx.take_effect_deps(id.0);
+        merge_capture_deps(&mut deps, &captures);
         ctx.register_client_effect(ClientEffectSpec {
             id: id.0,
             deps,
@@ -194,7 +204,8 @@ where
     );
 
     if let Some(ctx) = current_context() {
-        let deps = ctx.take_effect_deps(effect_id.0);
+        let mut deps = ctx.take_effect_deps(effect_id.0);
+        merge_capture_deps(&mut deps, &captures);
         ctx.register_client_effect(ClientEffectSpec {
             id: effect_id.0,
             deps,

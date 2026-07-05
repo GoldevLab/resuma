@@ -162,8 +162,8 @@ fn utc_parts(secs: u64) -> (u32, u32, u32, u32, u32) {
     };
     let year = y + if month <= 2 { 1 } else { 0 };
 
-    let jan1_dow = ((days + 4) % 7) as u32;
-    let dow = (jan1_dow + (doy % 7) as u32) % 7;
+    // 1970-01-01 was a Thursday (dow 4, with 0 = Sunday).
+    let dow = ((days + 4) % 7) as u32;
 
     let _ = year;
     (minute, hour, dom, month, dow)
@@ -179,6 +179,20 @@ mod tests {
         let ts = utc_to_ms(2025, 6, 15, 14, 0);
         assert!(c.matches_ms(ts));
         assert!(!c.matches_ms(ts + 60_000));
+    }
+
+    #[test]
+    fn day_of_week_is_correct() {
+        // 2025-03-01 is a Saturday (dow = 6, 0 = Sunday).
+        let (_, _, _, _, dow) = utc_parts(utc_to_ms(2025, 3, 1, 0, 0) / 1000);
+        assert_eq!(dow, 6);
+        // 1970-01-01 was a Thursday.
+        let (_, _, _, _, dow) = utc_parts(0);
+        assert_eq!(dow, 4);
+        // @weekly fires on Sunday: 2025-03-02, not 2025-03-01.
+        let c = parse("@weekly").unwrap();
+        assert!(c.matches_ms(utc_to_ms(2025, 3, 2, 0, 0)));
+        assert!(!c.matches_ms(utc_to_ms(2025, 3, 1, 0, 0)));
     }
 
     #[test]
@@ -198,10 +212,7 @@ mod tests {
         }
         let era = y / 400;
         let yoe = y - era * 400;
-        let doy = (153 * (m - 3) + 2) / 5 + day as i64 - 1
-            + 365 * yoe
-            + yoe / 4
-            - yoe / 100;
+        let doy = (153 * (m - 3) + 2) / 5 + day as i64 - 1 + 365 * yoe + yoe / 4 - yoe / 100;
         let days = era * 146_097 + doy - 719_468;
         let secs = days * 86_400 + hour as i64 * 3600 + minute as i64 * 60;
         secs as u64 * 1000

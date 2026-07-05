@@ -14,6 +14,7 @@
 //! | `GET /ready` | Readiness probe (ready for traffic) |
 //! | `GET /_resuma/loader.js` | Tiny bootstrap (~884 B gzip) |
 //! | `GET /_resuma/core.js` | Lazy-loaded resumability core |
+//! | `GET /_resuma/flow.js` | Lazy-loaded Flow exec widgets |
 //! | `GET /_resuma/runtime.js` | Legacy monolithic runtime |
 //! | `GET /_resuma/handler/:chunk.js` | Lazy handler chunk (`#[component]` boundaries) |
 //! | `GET /_resuma/island-chunk/:chunk.js` | Optional `#[island]` chunk |
@@ -29,6 +30,7 @@ pub mod dev;
 pub mod handler_assets;
 pub mod handlers;
 pub mod island_cache;
+pub mod limits;
 pub mod listen;
 pub mod ops;
 pub mod page_cache;
@@ -56,6 +58,6 @@ pub use request_path::{stage_response_path, take_response_path};
 pub use security::{
     build_content_security_policy, client_ip, client_ip_from_parts,
     configure as configure_security, csrf_token, guard_mutation, http_status, random_token,
-    request_is_https, validate_csrf, validate_origin, CspConfig, CspNonce, SecurityConfig,
-    SecurityHeaderOptions, CSRF_COOKIE, CSRF_FIELD, CSRF_HEADER,
+    request_is_https, try_random_token, validate_csrf, validate_origin, CspConfig, CspNonce,
+    SecurityConfig, SecurityHeaderOptions, CSRF_COOKIE, CSRF_FIELD, CSRF_HEADER,
 };

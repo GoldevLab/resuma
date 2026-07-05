@@ -136,3 +136,58 @@ fn convert_segment(seg: &str) -> String {
     }
     seg.to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn route(rel: &str) -> DiscoveredRoute {
+        parse_route(PathBuf::from(rel), PathBuf::from(rel)).expect("route")
+    }
+
+    #[test]
+    fn index_maps_to_root() {
+        let r = route("index.rs");
+        assert_eq!(r.pattern, "/");
+        assert_eq!(r.module, "index");
+        assert!(!r.is_layout);
+    }
+
+    #[test]
+    fn static_and_nested_patterns() {
+        assert_eq!(route("about.rs").pattern, "/about");
+        assert_eq!(route("blog/index.rs").pattern, "/blog");
+        // `index.rs` collapses into its parent segment.
+        assert_eq!(route("blog/index.rs").module, "blog");
+        assert_eq!(route("blog/post.rs").module, "blog::post");
+    }
+
+    #[test]
+    fn dynamic_param_segment() {
+        let r = route("users/[id].rs");
+        assert_eq!(r.pattern, "/users/:id");
+        // Module segments must be valid Rust identifiers.
+        assert_eq!(r.module, "users::_id_");
+    }
+
+    #[test]
+    fn catch_all_segment() {
+        let r = route("docs/[...slug].rs");
+        assert_eq!(r.pattern, "/docs/*slug");
+        assert_eq!(r.module, "docs::_rest_slug_");
+    }
+
+    #[test]
+    fn mod_and_registry_files_are_skipped() {
+        assert!(parse_route(PathBuf::from("mod.rs"), PathBuf::from("mod.rs")).is_none());
+        assert!(
+            parse_route(PathBuf::from("_registry.rs"), PathBuf::from("_registry.rs")).is_none()
+        );
+    }
+
+    #[test]
+    fn layout_files_flagged() {
+        assert!(route("_layout.rs").is_layout);
+        assert!(route("blog/_layout.rs").is_layout);
+    }
+}

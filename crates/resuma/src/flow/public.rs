@@ -1,4 +1,8 @@
 //! Serve files from a project `public/` directory at URL paths.
+//!
+//! **Security:** `public/` is for trusted static assets only (icons, fonts, robots.txt).
+//! Do not place user-uploaded content here — `.html` and `.svg` files are served with
+//! executable Content-Types and can cause stored XSS when opened directly.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -41,13 +45,20 @@ pub fn collect_public_dir(dir: &Path) -> Vec<PublicAsset> {
     let mut out = Vec::new();
     for entry in WalkDir::new(&root)
         .min_depth(1)
+        .follow_links(false)
         .into_iter()
         .filter_map(|e| e.ok())
     {
-        if !entry.file_type().is_file() {
+        if entry.file_type().is_symlink() || !entry.file_type().is_file() {
             continue;
         }
         let path = entry.path();
+        // Defense in depth: never serve anything that resolves outside `public/`
+        // (e.g. a symlinked parent directory pointing at /etc).
+        match path.canonicalize() {
+            Ok(canonical) if canonical.starts_with(&root) => {}
+            _ => continue,
+        }
         let rel = match path.strip_prefix(&root) {
             Ok(r) => r,
             Err(_) => continue,
@@ -87,11 +98,11 @@ pub fn content_type_for_path(path: &Path) -> String {
         .to_ascii_lowercase()
         .as_str()
     {
-        "html" => "text/html; charset=utf-8",
+        "html" => "text/plain; charset=utf-8",
         "css" => "text/css; charset=utf-8",
         "js" => "application/javascript; charset=utf-8",
         "json" => "application/json; charset=utf-8",
-        "svg" => "image/svg+xml",
+        "svg" => "application/octet-stream",
         "png" => "image/png",
         "jpg" | "jpeg" => "image/jpeg",
         "webp" => "image/webp",
@@ -113,6 +124,18 @@ mod tests {
     #[test]
     fn collect_skips_missing_dir() {
         assert!(collect_public_dir(Path::new("/nonexistent-resuma-public-dir")).is_empty());
+    }
+
+    #[test]
+    fn svg_uses_non_executable_content_type() {
+        assert_eq!(
+            content_type_for_path(Path::new("icon.svg")),
+            "application/octet-stream"
+        );
+        assert_eq!(
+            content_type_for_path(Path::new("page.html")),
+            "text/plain; charset=utf-8"
+        );
     }
 
     #[test]

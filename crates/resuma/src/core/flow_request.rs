@@ -76,6 +76,27 @@ impl FlowRequest {
         self.roles().iter().any(|r| r == role)
     }
 
+    /// Fail closed when auth middleware did not mark the request authenticated.
+    pub fn require_authenticated(&self) -> crate::Result<()> {
+        if self.is_authenticated() {
+            Ok(())
+        } else {
+            Err(crate::ResumaError::Unauthorized)
+        }
+    }
+
+    /// Fail closed unless the caller has the given role (requires auth middleware).
+    pub fn require_role(&self, role: &str) -> crate::Result<()> {
+        self.require_authenticated()?;
+        if self.has_role(role) {
+            Ok(())
+        } else {
+            Err(crate::ResumaError::Forbidden(format!(
+                "role `{role}` required"
+            )))
+        }
+    }
+
     /// Build a request from plain HTTP parts (no framework-specific types).
     pub fn from_parts(
         method: impl Into<String>,

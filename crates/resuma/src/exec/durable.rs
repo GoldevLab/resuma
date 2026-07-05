@@ -34,7 +34,13 @@ fn key_path(namespace: &str, key: &str) -> PathBuf {
 
 fn sanitize(s: &str) -> String {
     s.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
@@ -45,14 +51,21 @@ pub fn get(namespace: &str, key: &str) -> Option<Value> {
     serde_json::from_str(&data).ok()
 }
 
-/// Set a JSON value in durable storage.
+/// Set a JSON value in durable storage (atomic: temp file + fsync + rename).
 pub fn set(namespace: &str, key: &str, value: &Value) -> Result<()> {
+    use std::io::Write;
     let path = key_path(namespace, key);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(ResumaError::Io)?;
     }
     let data = serde_json::to_string_pretty(value)?;
-    fs::write(path, data).map_err(ResumaError::Io)
+    let tmp = path.with_extension("json.tmp");
+    {
+        let mut f = fs::File::create(&tmp).map_err(ResumaError::Io)?;
+        f.write_all(data.as_bytes()).map_err(ResumaError::Io)?;
+        f.sync_all().map_err(ResumaError::Io)?;
+    }
+    fs::rename(&tmp, &path).map_err(ResumaError::Io)
 }
 
 /// Typed get/set helpers.
@@ -126,7 +139,11 @@ pub struct ExecutionRecord {
 }
 
 pub fn save_execution_record(record: &ExecutionRecord) -> Result<()> {
-    set(EXECUTIONS_NS, &record.graph_id.0, &serde_json::to_value(record)?)
+    set(
+        EXECUTIONS_NS,
+        &record.graph_id.0,
+        &serde_json::to_value(record)?,
+    )
 }
 
 pub fn load_execution_record(id: &GraphId) -> Option<ExecutionRecord> {
@@ -141,6 +158,5 @@ pub fn save_graph_token(id: &GraphId, token: &str) -> Result<()> {
 }
 
 pub fn load_graph_token(id: &GraphId) -> Option<String> {
-    get(TOKENS_NS, &id.0)
-        .and_then(|v| v.get("token").and_then(|t| t.as_str()).map(str::to_string))
+    get(TOKENS_NS, &id.0).and_then(|v| v.get("token").and_then(|t| t.as_str()).map(str::to_string))
 }

@@ -24,15 +24,16 @@ Resuma ships with **secure defaults** comparable to Express + Helmet + rate limi
 | `RESUMA_ADDR` | `127.0.0.1:3000` | Bind address (`host:port`) |
 | `HOST` / `PORT` | `127.0.0.1` / `3000` | Used when `RESUMA_ADDR` is unset |
 | `RESUMA_ENV=production` | off | Sanitized errors, hide benchmark endpoint |
-| `RESUMA_TRUST_PROXY=1` | off | Trust Fly/nginx `X-Forwarded-*` for HTTPS + client IP |
+| `RESUMA_TRUST_PROXY=1` | off | Trust Fly/nginx `X-Forwarded-*` for HTTPS + client IP (only behind a proxy that overwrites forwarding headers) |
 | `RESUMA_CSRF=0` | on | Disable CSRF (not recommended) |
 | `RESUMA_ORIGIN_CHECK=0` | on | Disable Origin/Referer validation |
 | `RESUMA_BODY_LIMIT` | `1048576` | Max POST body bytes |
 | `RESUMA_RATE_ACTIONS` | `120` | Action RPC calls per IP per minute |
 | `RESUMA_RATE_SUBMITS` | `60` | Form submits per IP per minute |
 | `RESUMA_RATE_BACKEND` | `memory` (dev), `disk` (prod) | `memory`, `disk`, or `redis` (feature) |
-| `RESUMA_EXEC_API_KEY` | — | **Required in production** for worker/queue admin routes |
-| `RESUMA_EXEC_PUBLIC` | off | Allow unauthenticated exec routes (dev only) |
+| `RESUMA_EXEC_API_KEY` | — | **Required** for exec admin routes unless `RESUMA_EXEC_PUBLIC=1` (dev only) |
+| `RESUMA_EXEC_PUBLIC` | off | Opt-in unauthenticated exec routes (dev only; ignored in production) |
+| `RESUMA_EXEC_ENABLED` | off | Mount `/_resuma/*` exec routes even without registered workers |
 | `RESUMA_RATE_EXEC_WORKERS` | `30` | Worker/queue POSTs per IP per minute |
 | `RESUMA_RATE_EXEC_GRAPH` | `180` | Graph read/SSE per IP per minute |
 | `RESUMA_RATE_EXEC_CONTROL` | `60` | Pause/resume/cancel per IP per minute |
@@ -127,17 +128,42 @@ By default, dev uses an **in-memory** sliding window per IP. In **production** (
 
 Override with `RESUMA_RATE_BACKEND=memory|disk|redis`. Tune exec limits with `RESUMA_RATE_EXEC_*`. For multi-region deploys, still add edge rate limiting (Fly proxy, nginx `limit_req`) in front of Resuma.
 
+## Static assets (`public/`)
+
+Files under `public/` are read at startup and served with Content-Types matching their
+extension (`.html` → `text/html`, `.svg` → `image/svg+xml`). **Do not store user uploads
+in `public/`** — malicious HTML/SVG served directly can execute scripts in the browser.
+Use a separate storage bucket or authenticated download route for untrusted content.
+
+## Dynamic route params
+
+Catch-all and named params from [`match_route`](../../crates/resuma/src/flow/match_route.rs)
+are passed **without percent-decoding**. Handlers that use params for filesystem or shell
+access must validate and sanitize them explicitly.
+
 ## Resuma OS / execution layer (`/_resuma/worker`, `/_resuma/queue`, `/_resuma/graph/*`)
 
-The execution layer is treated as an **admin API** in production:
+The execution layer is treated as an **admin API**. Routes are **fail-closed by default**:
+`RESUMA_EXEC_API_KEY` is required on all exec endpoints unless you explicitly set
+`RESUMA_EXEC_PUBLIC=1` for local development (ignored when `RESUMA_ENV=production`).
+
+Exec routes are only mounted when workers are registered (`.workers(...)`) or
+`RESUMA_EXEC_ENABLED=1` is set — purely static apps do not expose the ops surface.
+
+Dev-only endpoints (`/_resuma/island/*`, `/_resuma/benchmark.json`, `/_resuma/dev/ws`)
+require `RESUMA_DEV=1`.
 
 | Control | What it does |
 |---------|----------------|
-| **API key** | `RESUMA_EXEC_API_KEY` — required for `POST /_resuma/worker/*`, `POST /_resuma/queue/*`, queue stats |
+| **API key** | `RESUMA_EXEC_API_KEY` — required by default for worker/queue/scheduler/webhook admin routes |
 | **Graph token** | Per-execution scoped token returned in `StartWorkerResponse.access_token`; pass to `flow_graph_auth(..., Some(token))` for SSE/UI |
 | **Rate limits** | Separate buckets for workers, graph reads, and controls |
 | **Input limits** | Max JSON size + nesting depth on worker/queue bodies |
 | **SSRF guard** | `fetch` tool blocks private IPs, localhost, metadata hosts; optional `RESUMA_FETCH_ALLOWLIST` |
+| **DNS rebinding** | Outbound `fetch`/webhooks resolve DNS and pin connections to validated IPs |
+| **Redirect safety** | Root-relative only; rejects encoded `%2f`, `%5c`, and post-decode `//` open redirects |
+| **Chunk IDs** | Handler/island/client asset IDs restricted to `[A-Za-z0-9_-]` at register and serve time |
+| **Queue disk** | Job IDs validated before path construction (parity with scheduler) |
 | **Unguessable IDs** | Graph IDs are cryptographic (`g_<hex>`), not sequential |
 
 ```rust

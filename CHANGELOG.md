@@ -6,6 +6,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-05
+
+### Fixed
+
+- **`try_use_load` no longer panics** — returns `LoaderError` when called outside a Flow render scope; `ResumaApp` page renders now wrap in `with_request()` so `#[load]` works on simple apps too.
+- **Conditional effect/computed dependencies** — `run_effect` clears stale deps, re-tracks on each run, and client effects subscribe to all listed capture signals (fixes branch-switching reactivity bugs).
+- **CSRF validation timing** — short tokens no longer leak length via early-return before constant-time compare.
+- **Route params** — percent-decoded per segment in `match_route`.
+- **`provide_context`** — serialization failures log an error instead of panicking the request.
+
+### Added
+
+- **`try_use_context()`** — fallible context accessor returning `Option<T>`.
+
+### Changed
+
+- Runtime bundles rebuilt (`core.js`, `loader.js`, `flow.js`, `runtime.js`) with effect dependency fixes.
+- Security, exec, and server hardening across the workspace (limits, deny policy, rate-limit, SSRF guards).
+
 ## [1.0.2] - 2026-06-16
 
 ### Fixed

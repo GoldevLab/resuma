@@ -82,12 +82,12 @@ pub use crate::core::view::AttrValue;
 pub use crate::core::{
     combine_js, error_boundary, for_signal, match_signal, nav_link, no_serialize, portal,
     provide_context, provide_theme, push_slots, resolve_slot, show, show_signal, signal,
-    stream_chunk, stream_slot, theme_css_vars, use_computed, use_computed_with_js, use_context,
-    use_debounce, use_effect, use_signal, use_store, use_task, use_theme, use_visible_task,
-    visible_task_js, with_default_slot, with_view_transition, Child, Component, Computed,
-    ContextId, Effect, FlowRequest, IntoView, NoSerialize, ReadSignal, RenderContext, RenderMode,
-    Result, ResumaError, ResumePayload, Signal, SlotGuard, SlottedChild, Store, Theme, View,
-    WriteSignal,
+    stream_chunk, stream_slot, theme_css_vars, try_use_context, use_computed, use_computed_with_js,
+    use_context, use_debounce, use_effect, use_signal, use_store, use_task, use_theme,
+    use_visible_task, visible_task_js, with_default_slot, with_view_transition, Child, Component,
+    Computed, ContextId, Effect, FlowRequest, IntoView, NoSerialize, ReadSignal, RenderContext,
+    RenderMode, Result, ResumaError, ResumePayload, Signal, SlotGuard, SlottedChild, Store, Theme,
+    View, WriteSignal,
 };
 
 pub use crate::server::{
@@ -114,9 +114,9 @@ pub use crate::flow::{
 pub use crate::exec::{
     attach_exec_routes, dispatch_tool, durable_get, durable_set, enqueue, init_exec,
     plan as plan_execution, queue_stats, register_tool, register_worker, resolve_resources,
-    ExecutionRecord, FlowEngine, GraphId, GraphSnapshot, PlannerHints, QueueMessage,
-    QueueStats, ResourceProfile, Resources, RuntimeChoice, RuntimeTarget, StartWorkerResponse,
-    WorkerContext, WorkerEvent, WorkerMeta, WorkerRegistry,
+    ExecutionRecord, FlowEngine, GraphId, GraphSnapshot, PlannerHints, QueueMessage, QueueStats,
+    ResourceProfile, Resources, RuntimeChoice, RuntimeTarget, StartWorkerResponse, WorkerContext,
+    WorkerEvent, WorkerMeta, WorkerRegistry,
 };
 
 /// CLI entry point (`cargo install resuma`).
@@ -155,13 +155,13 @@ pub mod prelude {
         loader_refresh_input, match_signal, middleware, nav_link, not_found_page, portal,
         provide_context, provide_theme, push_slots, query_nav_link, redirect, redirect_with_flash,
         render_to_string, render_view, resolve_slot, server, set_action_middleware, show, signal,
-        stream_slot, submit, theme_css_vars, try_use_load, try_use_load_value, use_computed,
-        use_computed_with_js, use_context, use_debounce, use_effect, use_load, use_signal,
-        use_store, use_task, use_theme, use_visible_task, view, with_view_transition, AttrValue,
-        Child, ClientComponent, Component, Computed, CspConfig, Effect, FlowApp, FlowError,
-        FlowPageRegistry, FlowPwaConfig, FlowRequest, FlowServeOptions, FromFlowRequest, IntoView,
-        LoadValue, LoaderError, PageOptions, Path, PublicAsset, PwaShortcut, Query, ReadSignal,
-        Redirect, Result, ResumaApp, ResumaError, SecurityConfig, ServeOptions, Signal,
+        stream_slot, submit, theme_css_vars, try_use_context, try_use_load, try_use_load_value,
+        use_computed, use_computed_with_js, use_context, use_debounce, use_effect, use_load,
+        use_signal, use_store, use_task, use_theme, use_visible_task, view, with_view_transition,
+        AttrValue, Child, ClientComponent, Component, Computed, CspConfig, Effect, FlowApp,
+        FlowError, FlowPageRegistry, FlowPwaConfig, FlowRequest, FlowServeOptions, FromFlowRequest,
+        IntoView, LoadValue, LoaderError, PageOptions, Path, PublicAsset, PwaShortcut, Query,
+        ReadSignal, Redirect, Result, ResumaApp, ResumaError, SecurityConfig, ServeOptions, Signal,
         SlottedChild, Store, SubmitError, Theme, View, WriteSignal, CLIENT_SCRIPT_PREFIX,
         CSRF_FIELD, CSRF_HEADER,
     };

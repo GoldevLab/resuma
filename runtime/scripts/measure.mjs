@@ -13,9 +13,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const dist = join(__dirname, "..", "dist");
 
 const LOADER_GZIP_BUDGET = 1024;
-const CORE_GZIP_BUDGET = 5700;
+// Post-1.0 reactive For/Match/Show + SPA nav; Flow widgets lazy-load from flow.js.
+const CORE_GZIP_BUDGET = 6600;
 
-const defaults = ["loader.js", "core.js", "runtime.js"].map((f) => join(dist, f));
+const defaults = ["loader.js", "core.js", "flow.js", "runtime.js"].map((f) => join(dist, f));
 
 function fmt(bytes) {
   if (bytes < 1024) return `${bytes} B`;

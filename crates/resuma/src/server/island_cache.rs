@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 
+use crate::ssr::escape_attr;
+
 #[derive(Clone)]
 struct IslandEntry {
     inner_html: String,
@@ -15,9 +17,17 @@ struct IslandEntry {
 static CACHE: Lazy<RwLock<HashMap<String, IslandEntry>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 
+const MAX_ISLAND_CACHE_ENTRIES: usize = 256;
+
 /// Store island inner HTML during SSR (called from the SSR layer).
 pub fn cache_island_html(instance_id: &str, inner_html: &str, chunk_id: &str, load: &str) {
-    CACHE.write().insert(
+    let mut cache = CACHE.write();
+    if cache.len() >= MAX_ISLAND_CACHE_ENTRIES && !cache.contains_key(instance_id) {
+        if let Some(key) = cache.keys().next().cloned() {
+            cache.remove(&key);
+        }
+    }
+    cache.insert(
         instance_id.to_string(),
         IslandEntry {
             inner_html: inner_html.to_string(),
@@ -32,9 +42,9 @@ pub fn island_refresh_html(instance_id: &str) -> Option<String> {
     CACHE.read().get(instance_id).map(|entry| {
         format!(
             r#"<resuma-island data-r-chunk="{chunk}" data-r-instance="{inst}" data-r-load="{load}">{inner}</resuma-island>"#,
-            chunk = entry.chunk_id,
-            inst = instance_id,
-            load = entry.load,
+            chunk = escape_attr(&entry.chunk_id),
+            inst = escape_attr(instance_id),
+            load = escape_attr(&entry.load),
             inner = entry.inner_html,
         )
     })
