@@ -60,7 +60,7 @@ walkdir           = { workspace = true }
 clap                = { workspace = true, optional = true }
 anyhow              = { workspace = true, optional = true }
 tracing-subscriber  = { workspace = true, optional = true }
-redis               = { version = "0.27", optional = true, default-features = false, features = ["connection-manager"] }
+redis               = { version = "1.3", optional = true, default-features = false, features = ["connection-manager"] }
 reqwest             = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 url                 = "2"
 hmac                = "0.12"
