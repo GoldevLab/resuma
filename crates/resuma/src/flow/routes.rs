@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::core::view::View;
 use crate::core::ResumaError;
+use crate::ssr::escape_text;
 use crate::ssr::seo_kit::SeoKit;
 use crate::ssr::{render_to_string, PageOptions};
 use axum::extract::{ConnectInfo, Form, Path};
@@ -16,7 +17,9 @@ use super::middleware::run_middleware;
 use super::redirect::{extract_redirect, redirect_response};
 use super::registry::dispatch_submit;
 use super::submit::SubmitError;
-use crate::server::{guard_mutation, http_status, security::config, CSRF_FIELD};
+use crate::server::{
+    guard_mutation, http_status, security::config, security::validate_action_name, CSRF_FIELD,
+};
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct SubmitResponse {
@@ -35,6 +38,8 @@ pub struct FlowSeoConfig {
     pub paths: Vec<String>,
     /// When set, `/robots.txt` and `/llms.txt` use [`SeoKit`] generators (GEO + AI crawlers).
     pub seo_kit: Option<SeoKit>,
+    /// Which auto SEO kit routes to mount (skip paths already registered as pages).
+    pub seo_kit_opts: SeoKitRouteOpts,
 }
 
 /// Which auto-generated SEO text routes to mount (skip paths already registered as pages).
@@ -105,6 +110,10 @@ pub async fn handle_submit(
         return submit_error(err, wants_json);
     }
 
+    if let Err(err) = validate_action_name(&name) {
+        return submit_error(err, wants_json);
+    }
+
     let data = serde_json::to_value(&form).unwrap_or(serde_json::Value::Null);
     // Same input bounds as server actions (payload size / nesting depth) —
     // see `serve_action` in server/app.rs.
@@ -118,6 +127,7 @@ pub async fn handle_submit(
         BTreeMap::new(),
         BTreeMap::new(),
     );
+    super::extensions::global_extensions().merge_into(&mut req);
 
     match run_middleware(req.clone()).await {
         Ok(r) => req = r,
@@ -156,17 +166,40 @@ pub async fn handle_submit(
             } else {
                 StatusCode::UNPROCESSABLE_ENTITY
             };
-            (
-                status,
-                axum::Json(SubmitResponse {
-                    ok: false,
-                    value: None,
-                    error: Some(message),
-                    field_errors,
-                    redirect: None,
-                }),
-            )
-                .into_response()
+            if wants_json {
+                (
+                    status,
+                    axum::Json(SubmitResponse {
+                        ok: false,
+                        value: None,
+                        error: Some(message),
+                        field_errors,
+                        redirect: None,
+                    }),
+                )
+                    .into_response()
+            } else {
+                let mut body = format!("<p>{}</p>", escape_text(&message));
+                if !field_errors.is_empty() {
+                    body.push_str("<ul>");
+                    for (field, msg) in &field_errors {
+                        body.push_str(&format!(
+                            "<li><strong>{}</strong>: {}</li>",
+                            escape_text(field),
+                            escape_text(msg)
+                        ));
+                    }
+                    body.push_str("</ul>");
+                }
+                let html = render_to_string(
+                    &PageOptions {
+                        title: "Submission failed".into(),
+                        ..Default::default()
+                    },
+                    || View::raw(body),
+                );
+                (status, axum::response::Html(html)).into_response()
+            }
         }
     }
 }
@@ -260,7 +293,12 @@ fn escape_xml_text(s: &str) -> String {
 
 fn sitemap_xml(seo: &FlowSeoConfig) -> String {
     let base = seo.site_url.trim_end_matches('/');
-    let mut paths = seo.paths.clone();
+    let mut paths: Vec<String> = seo
+        .paths
+        .iter()
+        .filter(|p| !p.contains(':') && !p.contains('*'))
+        .cloned()
+        .collect();
     if !paths.iter().any(|p| p == "/") {
         paths.push("/".into());
     }
@@ -304,8 +342,8 @@ async fn serve_favicon() -> impl IntoResponse {
 }
 
 pub fn attach_flow_routes(router: Router, seo: FlowSeoConfig) -> Router {
-    let router = if seo.seo_kit.is_some() {
-        attach_seo_kit_routes(router, seo.seo_kit.clone().unwrap(), SeoKitRouteOpts::all())
+    let router = if let Some(kit) = seo.seo_kit.clone() {
+        attach_seo_kit_routes(router, kit, seo.seo_kit_opts)
     } else {
         let robots_seo = seo.clone();
         router.route(

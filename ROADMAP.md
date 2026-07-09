@@ -55,7 +55,7 @@
 
 ### Security
 - [ ] External audit / OWASP checklist
-- [x] Distributed rate limiting (Redis backend)
+- [x] Multi-process rate limiting (disk backend; Redis removed)
 - [ ] Per-action rate limit buckets
 
 ---

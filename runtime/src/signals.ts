@@ -4,6 +4,14 @@
  * is called, every subscriber is invoked.
  */
 
+import {
+  clearPortalSlot,
+  findPortalTarget,
+  mountShowPortals,
+  portalOwnerId,
+} from "./portals.js";
+import { registerMountCleanup } from "./mount-cleanups.js";
+
 export interface SignalCell<T> {
   readonly id: string;
   value: T;
@@ -73,7 +81,7 @@ export function bindReactiveText(root: HTMLElement, signals: Map<string, SignalC
     const cell = signals.get(sigId);
     if (!cell) return;
     node.textContent = formatValue(cell.value);
-    cell.subscribe((v) => { node.textContent = formatValue(v); });
+    registerMountCleanup(cell.subscribe((v) => { node.textContent = formatValue(v); }));
     boundTextNodes.add(node);
   });
 }
@@ -146,7 +154,7 @@ function bindElementAttrs(el: HTMLElement, signals: Map<string, SignalCell<unkno
       el.setAttribute(target, formatted);
     };
     apply(cell.value);
-    cell.subscribe(apply);
+    registerMountCleanup(cell.subscribe(apply));
     boundAny = true;
   }
   if (boundAny) boundAttrEls.add(el);
@@ -157,6 +165,24 @@ function formatValue(v: unknown): string {
   if (typeof v === "string") return v;
   if (typeof v === "number" || typeof v === "boolean") return String(v);
   try { return JSON.stringify(v); } catch { return String(v); }
+}
+
+/**
+ * Mirror Rust `match_value_string` — keep SSR and client branch keys aligned.
+ * Rust uses `serde_json::Value::to_string()` (JSON text for non-string scalars).
+ */
+export function matchValueString(v: unknown): string {
+  if (v === undefined) return "";
+  if (typeof v === "string") return v;
+  try {
+    const json = JSON.stringify(v);
+    if (json === undefined) return "";
+    const parsed: unknown = JSON.parse(json);
+    if (typeof parsed === "string") return parsed;
+    return json;
+  } catch {
+    return formatValue(v);
+  }
 }
 
 /** Toggle `<Show>` branches bound to bool signals. */
@@ -181,35 +207,22 @@ export function bindShows(root: HTMLElement, signals: Map<string, SignalCell<unk
         if (portalTargetId) el.dataset.rPortalTarget = portalTargetId;
       }
       if (portalTargetId) {
-        const target =
-          document.getElementById(portalTargetId) ??
-          document.querySelector<HTMLElement>(`[data-r-portal-target="${portalTargetId}"]`);
+        const target = findPortalTarget(portalTargetId);
         if (target) {
+          const ownerId = portalOwnerId(el);
           if (!on) {
-            target.replaceChildren();
+            clearPortalSlot(target, ownerId);
           } else if (portalTpl) {
-            mountPortals(ifBranch);
+            mountShowPortals(ifBranch, target, ownerId);
           }
         }
       }
     };
     apply(cell.value);
-    cell.subscribe(apply);
+    // Register the unsubscribe so SPA remount (new signal map) does not leave
+    // stale closures pinned to the previous cell forever.
+    registerMountCleanup(cell.subscribe(apply));
     boundShowEls.add(el);
-  });
-}
-
-function mountPortals(scope: HTMLElement): void {
-  scope.querySelectorAll("template[data-r-portal]").forEach((tpl) => {
-    const showBranch = tpl.closest<HTMLElement>("[data-r-show-if]");
-    if (showBranch?.hidden) return;
-    const targetId = tpl.getAttribute("data-r-portal");
-    if (!targetId) return;
-    const target =
-      document.getElementById(targetId) ??
-      document.querySelector(`[data-r-portal-target="${targetId}"]`);
-    if (!target) return;
-    target.replaceChildren(tpl.content.cloneNode(true));
   });
 }
 
@@ -283,6 +296,17 @@ function listKey(item: unknown, keyField: string | null, index: number): string 
   return String(index);
 }
 
+/** Match SSR `for_list` duplicate-key disambiguation (`{key}:{index}` suffix). */
+function listKeys(list: unknown[], keyField: string | null): string[] {
+  const seen = new Set<string>();
+  return list.map((item, index) => {
+    let key = listKey(item, keyField, index);
+    if (seen.has(key)) key = `${key}:${index}`;
+    seen.add(key);
+    return key;
+  });
+}
+
 /** Keyed list reconciliation for `<For each={signal}>`. */
 export function bindFor(root: HTMLElement, signals: Map<string, SignalCell<unknown>>): void {
   root.querySelectorAll<HTMLElement>("resuma-for").forEach((el) => {
@@ -302,14 +326,13 @@ export function bindFor(root: HTMLElement, signals: Map<string, SignalCell<unkno
         if (key) existing.set(key, node);
       });
 
-      const nextKeys: string[] = [];
       const frag = document.createDocumentFragment();
 
       const sample = listEl.querySelector<HTMLElement>("[data-r-for-item]:not([data-r-for-new])") ?? undefined;
 
+      const keys = listKeys(list, keyField);
       list.forEach((item, index) => {
-        const key = listKey(item, keyField, index);
-        nextKeys.push(key);
+        const key = keys[index]!;
         let node = existing.get(key);
         if (node) {
           existing.delete(key);
@@ -330,7 +353,7 @@ export function bindFor(root: HTMLElement, signals: Map<string, SignalCell<unkno
     };
 
     apply(cell.value);
-    cell.subscribe(apply);
+    registerMountCleanup(cell.subscribe(apply));
     boundForEls.add(el);
   });
 }
@@ -347,8 +370,7 @@ export function bindMatch(root: HTMLElement, signals: Map<string, SignalCell<unk
     const defaultBranch = el.querySelector<HTMLElement>("[data-r-match-default]");
 
     const apply = (v: unknown) => {
-      const current =
-        typeof v === "string" ? v : v === null || v === undefined ? "" : formatValue(v);
+      const current = matchValueString(v);
       let matched = false;
       cases.forEach((branch) => {
         const when = branch.getAttribute("data-r-match-when") ?? "";
@@ -362,7 +384,7 @@ export function bindMatch(root: HTMLElement, signals: Map<string, SignalCell<unk
     };
 
     apply(cell.value);
-    cell.subscribe(apply);
+    registerMountCleanup(cell.subscribe(apply));
     boundMatchEls.add(el);
   });
 }

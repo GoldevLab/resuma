@@ -13,7 +13,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 rust-version = "1.91"
 authors = ["Resuma Contributors"]
@@ -27,9 +27,9 @@ categories = ["web-programming", "asynchronous"]
 readme = "README.md"
 
 [workspace.dependencies]
-resuma-macros = { path = "crates/resuma-macros", version = "1.1.0" }
-resuma = { path = "crates/resuma", version = "1.1.0" }
-resuma-flow = { path = "crates/resuma-flow", version = "1.1.0" }
+resuma-macros = { path = "crates/resuma-macros", version = "1.2.0" }
+resuma = { path = "crates/resuma", version = "1.2.0" }
+resuma-flow = { path = "crates/resuma-flow", version = "1.2.0" }
 
 # 3rd-party
 serde       = { version = "1", features = ["derive"] }
@@ -40,7 +40,7 @@ tower       = { version = "0.5", features = ["util", "limit"] }
 tower-http  = { version = "0.7", features = ["fs", "trace", "timeout"] }
 tracing     = "0.1"
 tracing-subscriber = "0.3"
-syn         = { version = "2", features = ["full", "extra-traits"] }
+syn         = { version = "2", features = ["full", "extra-traits", "visit"] }
 quote       = "1"
 proc-macro2 = "1"
 anyhow      = "1"

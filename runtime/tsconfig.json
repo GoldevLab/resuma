@@ -11,9 +11,12 @@
     "skipLibCheck": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "outDir": "dist",
+    "paths": {
+      "/_resuma/flow.js": ["./src/shims/flow.js.ts"]
+    },
     "declaration": true,
     "noEmit": false,
     "removeComments": false
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.d.ts"]
 }

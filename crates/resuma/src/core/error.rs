@@ -44,6 +44,9 @@ pub enum ResumaError {
     #[error("rate limit exceeded")]
     RateLimited,
 
+    #[error("service unavailable: {0}")]
+    ServiceUnavailable(String),
+
     #[error("request payload too large")]
     PayloadTooLarge,
 
@@ -64,6 +67,7 @@ impl ResumaError {
             Self::Unauthorized => 401,
             Self::Forbidden(_) | Self::InvalidCsrf => 403,
             Self::RateLimited => 429,
+            Self::ServiceUnavailable(_) => 503,
             Self::Cancelled => 409,
             Self::UnknownAction(_)
             | Self::UnknownLoader(_)
@@ -86,6 +90,7 @@ impl ResumaError {
                 Self::Unauthorized => "Unauthorized".into(),
                 Self::Forbidden(_) | Self::InvalidCsrf => "Forbidden".into(),
                 Self::RateLimited => "Too many requests".into(),
+                Self::ServiceUnavailable(_) => "Service temporarily unavailable".into(),
                 Self::Cancelled => "Execution cancelled".into(),
                 Self::UnknownAction(_)
                 | Self::UnknownLoader(_)

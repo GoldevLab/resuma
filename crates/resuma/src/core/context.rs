@@ -5,9 +5,9 @@
 //! embedded into the HTML payload so the client runtime can pick up where
 //! the server left off — the very definition of resumability.
 
-use std::any::TypeId;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
+use std::future::Future;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -20,9 +20,18 @@ use super::signal::SignalId;
 /// Max handler JS source bytes kept inline in the HTML payload (`__page__` only).
 pub const INLINE_HANDLER_MAX_BYTES: usize = 256;
 
-thread_local! {
-    static CURRENT: RefCell<Option<Rc<RenderContext>>> = const { RefCell::new(None) };
+tokio::task_local! {
+    /// Active render-context handles for this async task (innermost last).
+    static RENDER_HANDLES: RefCell<Vec<usize>>;
 }
+
+thread_local! {
+    static RENDER_CONTEXTS: RefCell<BTreeMap<usize, Rc<RenderContext>>> =
+        const { RefCell::new(BTreeMap::new()) };
+    static FALLBACK_RENDER_HANDLES: RefCell<Vec<usize>> = const { RefCell::new(Vec::new()) };
+}
+
+static NEXT_RENDER_HANDLE: AtomicU32 = AtomicU32::new(1);
 
 /// What we are rendering for. Mostly used to tweak hydration markers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,8 +73,8 @@ pub struct RenderContext {
     actions: RefCell<Vec<String>>,
     /// Serializable component contexts (type key → JSON value).
     contexts: RefCell<BTreeMap<String, Value>>,
-    /// Client-only visible tasks (id → JS source).
-    visible_tasks: RefCell<BTreeMap<u32, String>>,
+    /// Client-only visible tasks (id → spec).
+    visible_tasks: RefCell<BTreeMap<u32, VisibleTaskSpec>>,
     next_visible_task: AtomicU32,
     /// Effect id → signal dependencies collected during SSR.
     effect_deps: RefCell<BTreeMap<u32, Vec<SignalId>>>,
@@ -165,20 +174,42 @@ impl RenderContext {
             return;
         }
         if self.running_effects.borrow().contains(&id) {
-            tracing::warn!(
-                effect_id = id,
-                "effect cycle detected — skipped re-entrant run (derived state may be stale)"
+            let msg = format!(
+                "effect cycle detected — effect {id} re-entered while running (derived state may be stale)"
             );
+            if effect_cycle_panic_enabled() {
+                panic!("{msg}");
+            }
+            tracing::error!(effect_id = id, "{msg}");
             return;
         }
         let cb = self.effects.borrow().get(&id).cloned();
         if let Some(cb) = cb {
             self.clear_effect_deps(id);
             self.running_effects.borrow_mut().insert(id);
+            // Save/restore the previously-tracking effect so nested effect runs
+            // don't leave `current_effect` as `None` for the remainder of the
+            // parent's execution (which would drop dependency tracking).
+            let prev = *self.current_effect.borrow();
             self.set_current_effect(Some(EffectId(id)));
             (cb.borrow_mut())();
-            self.set_current_effect(None);
+            *self.current_effect.borrow_mut() = prev;
             self.running_effects.borrow_mut().remove(&id);
+            self.sync_client_effect_deps(id);
+        }
+    }
+
+    /// Keep client-replay effect deps aligned with the latest SSR dependency pass.
+    pub fn sync_client_effect_deps(&self, effect_id: u32) {
+        let deps = self
+            .effect_deps
+            .borrow()
+            .get(&effect_id)
+            .cloned()
+            .unwrap_or_default();
+        let mut effects = self.client_effects.borrow_mut();
+        if let Some(spec) = effects.iter_mut().find(|e| e.id == effect_id) {
+            spec.deps = deps;
         }
     }
 
@@ -198,21 +229,27 @@ impl RenderContext {
         self.actions.borrow_mut().push(name.to_string());
     }
 
-    pub fn register_context(&self, id: TypeId, value: Value) {
-        let key = format!("{:?}", id);
-        self.contexts.borrow_mut().insert(key, value);
+    pub fn register_context(&self, key: &str, value: Value) {
+        self.contexts.borrow_mut().insert(key.to_string(), value);
     }
 
-    pub fn get_context(&self, id: TypeId) -> Option<Value> {
-        let key = format!("{:?}", id);
-        self.contexts.borrow().get(&key).cloned()
+    pub fn get_context(&self, key: &str) -> Option<Value> {
+        self.contexts.borrow().get(key).cloned()
     }
 
-    pub fn register_visible_task(&self, source: &str) -> u32 {
+    pub fn register_visible_task(
+        &self,
+        source: &str,
+        captures: BTreeMap<String, super::signal::SignalId>,
+    ) -> u32 {
         let id = self.next_visible_task.fetch_add(1, Ordering::Relaxed);
-        self.visible_tasks
-            .borrow_mut()
-            .insert(id, source.to_string());
+        self.visible_tasks.borrow_mut().insert(
+            id,
+            VisibleTaskSpec {
+                body: source.to_string(),
+                captures,
+            },
+        );
         id
     }
 
@@ -262,7 +299,31 @@ impl RenderContext {
     }
 
     pub fn register_client_effect(&self, spec: ClientEffectSpec) {
-        self.client_effects.borrow_mut().push(spec);
+        let mut effects = self.client_effects.borrow_mut();
+        if let Some(existing) = effects.iter_mut().find(|e| e.id == spec.id) {
+            for dep in spec.deps {
+                if !existing.deps.contains(&dep) {
+                    existing.deps.push(dep);
+                }
+            }
+            for (k, v) in spec.captures {
+                existing.captures.entry(k).or_insert(v);
+            }
+            if !spec.body.is_empty() {
+                existing.body = spec.body;
+            }
+            if !spec.kind.is_empty() {
+                existing.kind = spec.kind;
+            }
+            if spec.target.is_some() {
+                existing.target = spec.target;
+            }
+            if spec.debounce_ms.is_some() {
+                existing.debounce_ms = spec.debounce_ms;
+            }
+        } else {
+            effects.push(spec);
+        }
     }
 
     /// Snapshot for embedding in HTML (strips external handler sources).
@@ -300,6 +361,7 @@ impl RenderContext {
                 .cloned()
                 .collect(),
             csrf_token: None,
+            serialization_error: None,
         }
     }
 }
@@ -351,6 +413,14 @@ pub struct ClientEffectSpec {
     pub debounce_ms: Option<u64>,
 }
 
+/// Client-only task registered during SSR (`use_visible_task` / `visible_task!`).
+#[derive(Debug, Clone, Serialize)]
+pub struct VisibleTaskSpec {
+    pub body: String,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
+    pub captures: BTreeMap<String, super::signal::SignalId>,
+}
+
 /// The JSON blob embedded in `<script type="resuma/state">…</script>`.
 ///
 /// Built by [`RenderContext::snapshot`] during SSR. The client-facing version
@@ -374,7 +444,7 @@ pub struct ResumePayload {
     #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
     pub contexts: BTreeMap<String, Value>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
-    pub visible_tasks: BTreeMap<u32, String>,
+    pub visible_tasks: BTreeMap<u32, VisibleTaskSpec>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub effects: Vec<ClientEffectSpec>,
     /// Handler chunk ids fetched lazily from `/_resuma/handler/:chunk.js`.
@@ -383,6 +453,9 @@ pub struct ResumePayload {
     /// Double-submit CSRF token (sent as `X-Resuma-CSRF` on POST requests).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub csrf_token: Option<String>,
+    /// Set when the resumability payload failed to serialize (page interactivity broken).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub serialization_error: Option<bool>,
 }
 
 impl ResumePayload {
@@ -421,13 +494,55 @@ pub fn page_needs_client(payload: &ResumePayload, body_html: &str) -> bool {
     MARKERS.iter().any(|marker| body_html.contains(marker))
 }
 
+/// Run `fut` with a fresh, task-isolated render-context handle stack (one scope per HTTP request).
+pub async fn scope_render_context<F: Future>(fut: F) -> F::Output {
+    RENDER_HANDLES
+        .scope(RefCell::new(Vec::new()), fut)
+        .await
+}
+
+fn with_render_handles<R>(f: impl FnOnce(&RefCell<Vec<usize>>) -> R) -> R {
+    let mut f = Some(f);
+    match RENDER_HANDLES.try_with(|cell| (f.take().expect("render handles fn"))(cell)) {
+        Ok(out) => out,
+        Err(_) => FALLBACK_RENDER_HANDLES.with(|cell| (f.take().expect("render handles fn"))(cell)),
+    }
+}
+
+fn insert_render_context(ctx: Rc<RenderContext>) -> usize {
+    let handle = NEXT_RENDER_HANDLE.fetch_add(1, Ordering::Relaxed) as usize;
+    RENDER_CONTEXTS.with(|map| {
+        map.borrow_mut().insert(handle, ctx);
+    });
+    handle
+}
+
+fn remove_render_context(handle: usize) {
+    RENDER_CONTEXTS.with(|map| {
+        map.borrow_mut().remove(&handle);
+    });
+}
+
+struct ContextRestore {
+    handle: usize,
+}
+
+impl Drop for ContextRestore {
+    fn drop(&mut self) {
+        with_render_handles(|stack| {
+            if stack.borrow().last() == Some(&self.handle) {
+                stack.borrow_mut().pop();
+            }
+        });
+        remove_render_context(self.handle);
+    }
+}
+
 pub fn with_context<R>(ctx: Rc<RenderContext>, f: impl FnOnce() -> R) -> R {
-    CURRENT.with(|cell| {
-        let prev = cell.borrow_mut().replace(ctx);
-        let result = f();
-        *cell.borrow_mut() = prev;
-        result
-    })
+    let handle = insert_render_context(ctx);
+    with_render_handles(|stack| stack.borrow_mut().push(handle));
+    let _guard = ContextRestore { handle };
+    f()
 }
 
 /// Run `f` while handlers register under `chunk` (component / island boundary).
@@ -443,12 +558,70 @@ pub fn with_handler_chunk<R>(chunk: impl Into<String>, f: impl FnOnce() -> R) ->
 }
 
 pub fn current_context() -> Option<Rc<RenderContext>> {
-    CURRENT.with(|cell| cell.borrow().clone())
+    with_render_handles(|stack| {
+        let handle = stack.borrow().last().copied()?;
+        RENDER_CONTEXTS.with(|map| map.borrow().get(&handle).cloned())
+    })
+}
+
+fn effect_cycle_panic_enabled() -> bool {
+    matches!(
+        std::env::var("RESUMA_DEV").as_deref(),
+        Ok("1") | Ok("true") | Ok("TRUE")
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::signal;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn render_context_isolated_per_scoped_task() {
+        let mut handles = Vec::new();
+        for i in 0..32u32 {
+            handles.push(tokio::spawn(async move {
+                scope_render_context(async {
+                    let ctx = RenderContext::new(RenderMode::Ssr);
+                    let value = with_context(ctx.clone(), || {
+                        let _s = signal(i);
+                        tokio::task::block_in_place(|| {
+                            std::thread::sleep(std::time::Duration::from_millis(1));
+                        });
+                        ctx.snapshot().signals[0].value.clone()
+                    });
+                    assert_eq!(value, serde_json::json!(i));
+                })
+                .await
+            }));
+        }
+        for h in handles {
+            h.await.unwrap();
+        }
+    }
+
+    #[test]
+    fn with_context_restores_after_panic() {
+        let outer = RenderContext::new(RenderMode::Ssr);
+        with_context(outer.clone(), || {
+            let inner = RenderContext::new(RenderMode::Ssr);
+            let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                with_context(inner, || {
+                    panic!("simulated render failure");
+                });
+            }));
+            assert!(caught.is_err());
+            assert!(
+                current_context().is_some(),
+                "outer render context must be restored after inner panic"
+            );
+            assert!(
+                Rc::ptr_eq(&current_context().unwrap(), &outer),
+                "outer render context must be the active context"
+            );
+        });
+        assert!(current_context().is_none());
+    }
 
     #[test]
     fn page_needs_client_detects_resuma_for_marker() {
@@ -462,6 +635,7 @@ mod tests {
             effects: vec![],
             lazy_chunks: vec![],
             csrf_token: None,
+            serialization_error: None,
         };
         let body = r#"<resuma-for data-r-for="s1"><div data-r-for-list></div></resuma-for>"#;
         assert!(page_needs_client(&payload, body));
@@ -479,6 +653,7 @@ mod tests {
             effects: vec![],
             lazy_chunks: vec![],
             csrf_token: None,
+            serialization_error: None,
         };
         let body = r#"<resuma-match data-r-match="s1"></resuma-match>"#;
         assert!(page_needs_client(&payload, body));

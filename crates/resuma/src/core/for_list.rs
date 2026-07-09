@@ -1,5 +1,7 @@
 //! Reactive keyed `<For each={signal}>` — client diffing via `<resuma-for>`.
 
+use std::collections::HashSet;
+
 use serde::Serialize;
 use serde_json::Value;
 
@@ -39,12 +41,24 @@ where
     F: FnMut(&T) -> Vec<Child>,
 {
     let list = each.list_peek();
+    let mut seen_keys = HashSet::new();
     let items = list
         .iter()
         .enumerate()
-        .map(|(idx, item)| ForItemView {
-            key: item_key(item, key_field, idx),
-            children: render(item),
+        .map(|(idx, item)| {
+            let mut key = item_key(item, key_field, idx);
+            if !seen_keys.insert(key.clone()) {
+                tracing::warn!(
+                    key = %key,
+                    index = idx,
+                    "duplicate <For> key — appending index suffix"
+                );
+                key = format!("{key}:{idx}");
+            }
+            ForItemView {
+                key,
+                children: render(item),
+            }
         })
         .collect();
 
@@ -100,5 +114,26 @@ mod tests {
         });
         assert!(html.contains("<resuma-for"));
         assert!(html.contains("data-r-for-key=\"1\""));
+    }
+
+    #[test]
+    fn for_signal_disambiguates_duplicate_keys() {
+        let ctx = RenderContext::new(RenderMode::Ssr);
+        let html = with_context(ctx, || {
+            let rows = Signal::new(vec![
+                Row {
+                    id: 1,
+                    title: "a".into(),
+                },
+                Row {
+                    id: 1,
+                    title: "b".into(),
+                },
+            ]);
+            let v = for_signal(&rows, Some("id"), |r| vec![Child::Text(r.title.clone())]);
+            render_view(&v)
+        });
+        assert!(html.contains("data-r-for-key=\"1\""));
+        assert!(html.contains("data-r-for-key=\"1:1\""));
     }
 }

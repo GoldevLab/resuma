@@ -1,11 +1,11 @@
-//! Pluggable rate-limit backends (in-memory default, optional Redis).
+//! Pluggable rate-limit backends — in-memory (dev) and disk (production).
 
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
-use std::collections::HashMap;
 
 use crate::core::{Result, ResumaError};
 
@@ -21,101 +21,83 @@ impl RateLimitBackend for MemoryBackend {
     }
 }
 
-static MEMORY_BUCKETS: Lazy<RwLock<HashMap<String, Vec<Instant>>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+struct MemoryState {
+    buckets: HashMap<String, Vec<Instant>>,
+    /// LRU order — front is oldest, back is most recently used.
+    order: VecDeque<String>,
+}
+
+static MEMORY_STATE: Lazy<RwLock<MemoryState>> = Lazy::new(|| {
+    RwLock::new(MemoryState {
+        buckets: HashMap::new(),
+        order: VecDeque::new(),
+    })
+});
 
 /// Cap in-memory rate-limit keys to avoid unbounded growth from IP rotation attacks.
 const MEMORY_BUCKET_KEY_CAP: usize = 10_000;
+
+fn touch_lru(state: &mut MemoryState, key: &str) {
+    state.order.retain(|k| k != key);
+    state.order.push_back(key.to_string());
+}
 
 fn memory_check(key: &str, limit_per_minute: u32, window: Duration) -> Result<()> {
     if limit_per_minute == 0 {
         return Ok(());
     }
     let now = Instant::now();
-    let mut map = MEMORY_BUCKETS.write();
-    map.retain(|_, entries| {
+    let mut state = MEMORY_STATE.write();
+    state.buckets.retain(|_, entries| {
         entries.retain(|t| now.duration_since(*t) < window);
         !entries.is_empty()
     });
-    if !map.contains_key(key) && map.len() >= MEMORY_BUCKET_KEY_CAP {
-        return Err(ResumaError::RateLimited);
+    let live_keys: std::collections::HashSet<String> = state.buckets.keys().cloned().collect();
+    state.order.retain(|k| live_keys.contains(k));
+
+    let key_string = key.to_string();
+    if !state.buckets.contains_key(key) {
+        while state.order.len() >= MEMORY_BUCKET_KEY_CAP {
+            if let Some(evict_key) = state.order.pop_front() {
+                state.buckets.remove(&evict_key);
+            } else {
+                break;
+            }
+        }
     }
-    let entries = map.entry(key.to_string()).or_default();
+
+    let entries = state.buckets.entry(key_string).or_default();
     entries.retain(|t| now.duration_since(*t) < window);
     if entries.len() as u32 >= limit_per_minute {
         return Err(ResumaError::RateLimited);
     }
     entries.push(now);
+    touch_lru(&mut state, key);
     Ok(())
-}
-
-#[cfg(feature = "redis-rate-limit")]
-mod redis_backend {
-    use super::*;
-    use std::env;
-
-    pub struct RedisBackend {
-        client: redis::Client,
-    }
-
-    impl RedisBackend {
-        pub fn from_env() -> Option<Self> {
-            let url = env::var("RESUMA_REDIS_URL").ok()?;
-            redis::Client::open(url).ok().map(|client| Self { client })
-        }
-    }
-
-    impl RateLimitBackend for RedisBackend {
-        fn check(&self, key: &str, limit_per_minute: u32, window: Duration) -> Result<()> {
-            if limit_per_minute == 0 {
-                return Ok(());
-            }
-            let mut conn = self
-                .client
-                .get_connection()
-                .map_err(|e| ResumaError::Internal(format!("redis rate limit: {e}")))?;
-            let redis_key = format!("resuma:rl:{key}");
-            let count: u32 = redis::cmd("INCR")
-                .arg(&redis_key)
-                .query(&mut conn)
-                .map_err(|e| ResumaError::Internal(format!("redis INCR: {e}")))?;
-            if count == 1 {
-                let _: () = redis::cmd("EXPIRE")
-                    .arg(&redis_key)
-                    .arg(window.as_secs().max(1))
-                    .query(&mut conn)
-                    .map_err(|e| ResumaError::Internal(format!("redis EXPIRE: {e}")))?;
-            }
-            if count > limit_per_minute {
-                return Err(ResumaError::RateLimited);
-            }
-            Ok(())
-        }
-    }
-
-    pub fn try_default() -> Option<Arc<dyn RateLimitBackend>> {
-        RedisBackend::from_env().map(|b| Arc::new(b) as Arc<dyn RateLimitBackend>)
-    }
 }
 
 static BACKEND: Lazy<RwLock<Arc<dyn RateLimitBackend>>> =
     Lazy::new(|| RwLock::new(Arc::new(MemoryBackend)));
 
-/// Replace the global rate-limit backend (e.g. Redis in multi-instance deploys).
+/// Replace the global rate-limit backend (e.g. custom store in tests).
 pub fn configure_rate_limit_backend(backend: Arc<dyn RateLimitBackend>) {
     *BACKEND.write() = backend;
 }
 
 pub fn install_default_backend() {
     let backend = std::env::var("RESUMA_RATE_BACKEND").unwrap_or_default();
-    #[cfg(feature = "redis-rate-limit")]
     if backend.eq_ignore_ascii_case("redis") {
-        if let Some(redis) = redis_backend::try_default() {
-            configure_rate_limit_backend(redis);
-            return;
-        }
+        tracing::warn!(
+            "RESUMA_RATE_BACKEND=redis is no longer supported — using disk backend \
+             ({}/rate-limit). For multi-region deploys, add edge rate limiting \
+             (nginx limit_req, Fly proxy, etc.).",
+            std::env::var("RESUMA_DATA_DIR").unwrap_or_else(|_| ".resuma".into())
+        );
     }
-    if backend.eq_ignore_ascii_case("disk") || disk_backend_enabled() {
+    if backend.eq_ignore_ascii_case("disk")
+        || backend.eq_ignore_ascii_case("redis")
+        || disk_backend_enabled()
+    {
         let root = std::env::var("RESUMA_DATA_DIR").unwrap_or_else(|_| ".resuma".into());
         super::rate_limit_disk::configure(format!("{root}/rate-limit"));
         configure_rate_limit_backend(Arc::new(super::rate_limit_disk::DiskBackend));
@@ -137,4 +119,22 @@ pub fn check_rate_limit_key(key: &str, limit_per_minute: u32) -> Result<()> {
     BACKEND
         .read()
         .check(key, limit_per_minute, Duration::from_secs(60))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lru_evicts_oldest_key_not_hottest_bucket() {
+        configure_rate_limit_backend(Arc::new(MemoryBackend));
+        let window = Duration::from_secs(60);
+        for i in 0..MEMORY_BUCKET_KEY_CAP {
+            let key = format!("probe:{i}");
+            memory_check(&key, 100, window).expect("check");
+        }
+        assert!(memory_check("probe:0", 100, window).is_ok());
+        assert!(memory_check("probe:9999", 100, window).is_ok());
+        assert!(memory_check("new-attacker-key", 100, window).is_ok());
+    }
 }

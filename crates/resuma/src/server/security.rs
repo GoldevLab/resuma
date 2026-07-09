@@ -144,14 +144,8 @@ impl SecurityConfig {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(1024 * 1024),
-            actions_per_minute: std::env::var("RESUMA_RATE_ACTIONS")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(120),
-            submits_per_minute: std::env::var("RESUMA_RATE_SUBMITS")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(60),
+            actions_per_minute: parse_rate_limit("RESUMA_RATE_ACTIONS", 120),
+            submits_per_minute: parse_rate_limit("RESUMA_RATE_SUBMITS", 60),
             hide_benchmark: production,
             production,
             csp: CspConfig::from_env(),
@@ -185,6 +179,21 @@ fn env_flag_off(name: &str) -> bool {
     )
 }
 
+fn parse_rate_limit(name: &str, default: u32) -> u32 {
+    match std::env::var(name).ok().and_then(|v| v.parse().ok()) {
+        Some(0) => {
+            tracing::warn!(
+                env = name,
+                default,
+                "rate limit of 0 disables limiting — using default"
+            );
+            default
+        }
+        Some(n) => n,
+        None => default,
+    }
+}
+
 /// Install global security config (call before `serve()` to override env defaults).
 pub fn configure(config: SecurityConfig) {
     *CONFIG.write() = config;
@@ -196,40 +205,89 @@ pub fn config() -> SecurityConfig {
 
 /// Cryptographically random token (32 hex chars).
 pub fn try_random_token() -> Result<String> {
+    #[cfg(test)]
+    if RNG_FORCE_FAIL.with(|cell| cell.get()) {
+        return Err(ResumaError::ServiceUnavailable(
+            "random number generator unavailable (test override)".into(),
+        ));
+    }
     let mut bytes = [0u8; 16];
     getrandom::fill(&mut bytes)
-        .map_err(|e| ResumaError::Other(format!("random number generator unavailable: {e}")))?;
+        .map_err(|e| ResumaError::ServiceUnavailable(format!("random number generator unavailable: {e}")))?;
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
 /// Cryptographically random token (32 hex chars).
 ///
-/// Falls back to a time-based token when the OS RNG is unavailable (logged as error).
+/// Non-security identifiers (request ids). Uses a monotonic counter fallback when
+/// the OS RNG is unavailable — never use for CSRF, CSP nonces, or secrets.
 /// Prefer [`try_random_token`] for security-sensitive paths that must fail closed.
 pub fn random_token() -> String {
     try_random_token().unwrap_or_else(|e| {
-        tracing::error!(error = %e, "OS random number generator failed");
-        fallback_token()
+        tracing::error!(error = %e, "OS random number generator failed — using counter fallback");
+        counter_fallback_token("req")
     })
 }
 
-fn fallback_token() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let t = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    format!("{t:032x}")
+fn counter_fallback_token(prefix: &str) -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(1);
+    format!("{prefix}-{:016x}", COUNTER.fetch_add(1, Ordering::Relaxed))
 }
 
-pub fn csrf_token() -> String {
-    random_token()
+/// Issue a fresh CSRF token. Fails closed when the OS RNG is unavailable.
+pub fn csrf_token() -> Result<String> {
+    try_random_token()
+}
+
+/// Resolve CSRF for a page render: reuse session cookie or mint a new token.
+pub fn resolve_page_csrf(headers: &HeaderMap, csrf_enabled: bool) -> Result<(String, bool)> {
+    if let Some(token) = csrf_from_cookie(headers) {
+        return Ok((token, false));
+    }
+    if csrf_enabled {
+        Ok((try_random_token()?, true))
+    } else {
+        Ok((String::new(), false))
+    }
+}
+
+/// Resolve CSP nonce for a page render. Required when CSP is enabled.
+pub fn resolve_page_csp_nonce(csp_enabled: bool) -> Result<String> {
+    if csp_enabled {
+        try_random_token()
+    } else {
+        Ok(String::new())
+    }
+}
+
+/// Validate security config before `serve()`. Fails closed when
+/// `RESUMA_TRUST_PROXY=1` is set without explicit `RESUMA_TRUSTED_PROXY_CIDRS`.
+pub fn validate_config(cfg: &SecurityConfig) -> Result<()> {
+    if cfg.trust_proxy && TRUSTED_PROXY_CIDRS.is_empty() {
+        return Err(ResumaError::Other(
+            "RESUMA_TRUSTED_PROXY_CIDRS is required when RESUMA_TRUST_PROXY=1 \
+             (comma-separated CIDRs for proxies that overwrite X-Forwarded-For)"
+                .into(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+pub(crate) fn set_rng_force_fail(fail: bool) {
+    RNG_FORCE_FAIL.with(|cell| cell.set(fail));
+}
+
+#[cfg(test)]
+thread_local! {
+    static RNG_FORCE_FAIL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Reuse an existing CSRF double-submit cookie when present and well-formed.
 pub fn csrf_from_cookie(headers: &HeaderMap) -> Option<String> {
     let token = cookie_value(headers, CSRF_COOKIE)?;
-    (token.len() >= 16).then_some(token)
+    (token.len() == 32 && token.chars().all(|c| c.is_ascii_hexdigit())).then_some(token)
 }
 
 /// True when the request arrived over HTTPS (direct TLS or `X-Forwarded-Proto`).
@@ -349,13 +407,6 @@ fn ip_in_cidr(ip: IpAddr, network: IpAddr, prefix: u8) -> bool {
     }
 }
 
-fn is_private_or_loopback(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local(),
-        IpAddr::V6(v6) => v6.is_loopback() || (v6.segments()[0] & 0xffc0) == 0xfe80,
-    }
-}
-
 /// Only honor `X-Forwarded-For` when the direct TCP peer is a trusted proxy.
 fn peer_is_trusted_proxy(connect: Option<SocketAddr>) -> bool {
     let Some(addr) = connect else {
@@ -363,7 +414,7 @@ fn peer_is_trusted_proxy(connect: Option<SocketAddr>) -> bool {
     };
     let ip = addr.ip();
     if TRUSTED_PROXY_CIDRS.is_empty() {
-        return is_private_or_loopback(ip);
+        return false;
     }
     TRUSTED_PROXY_CIDRS
         .iter()
@@ -373,11 +424,16 @@ fn peer_is_trusted_proxy(connect: Option<SocketAddr>) -> bool {
 /// Sliding-window rate limit. Returns `Err(RateLimited)` when exceeded.
 pub fn check_rate_limit(ip: &str, bucket: &str, limit_per_minute: u32) -> Result<()> {
     Lazy::force(&RATE_INIT);
+    let effective_limit = if ip == "unknown" {
+        (limit_per_minute / 4).max(1)
+    } else {
+        limit_per_minute
+    };
     let key = format!("{bucket}:{ip}");
-    rate_limit::check_rate_limit_key(&key, limit_per_minute)
+    rate_limit::check_rate_limit_key(&key, effective_limit)
 }
 
-/// Install a distributed rate-limit backend (Redis when `redis-rate-limit` + `RESUMA_REDIS_URL`).
+/// Replace the global rate-limit backend (memory or disk by default).
 pub fn configure_rate_limit_backend(backend: Arc<dyn RateLimitBackend>) {
     rate_limit::configure_rate_limit_backend(backend);
 }
@@ -431,13 +487,18 @@ pub fn verify_secret(expected: &str, provided: &str) -> bool {
 }
 
 /// Length-independent, constant-time byte comparison for secrets/tokens.
-/// Avoids leaking match position via early-return timing.
+/// Avoids leaking match position or expected length via early-return timing.
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
+    let len_a = a.len();
+    let len_b = b.len();
+    let max_len = len_a.max(len_b);
+    if max_len == 0 {
+        return len_a == len_b;
     }
-    let mut diff: u8 = 0;
-    for (x, y) in a.iter().zip(b.iter()) {
+    let mut diff: u8 = u8::from(len_a != len_b);
+    for i in 0..max_len {
+        let x = a.get(i).copied().unwrap_or(0);
+        let y = b.get(i).copied().unwrap_or(0);
         diff |= x ^ y;
     }
     diff == 0
@@ -635,23 +696,42 @@ pub fn apply_security_headers(mut response: Response, opts: &SecurityHeaderOptio
 }
 
 fn insert_header(headers: &mut axum::http::HeaderMap, name: header::HeaderName, value: &str) {
-    if let Ok(v) = HeaderValue::from_str(value) {
-        headers.insert(name, v);
+    match HeaderValue::from_str(value) {
+        Ok(v) => {
+            headers.insert(name, v);
+        }
+        Err(e) => {
+            tracing::error!(header = ?name, error = %e, "invalid header value — skipped");
+        }
     }
 }
 
 /// Validate handler/island chunk identifiers used in URLs and dynamic imports.
 pub fn validate_chunk_id(id: &str) -> Result<()> {
-    if id.is_empty() || id.len() > 64 {
-        return Err(ResumaError::validation("invalid chunk id length"));
+    validate_identifier(id, 64, "chunk id")
+}
+
+/// Validate server action names used in `POST /_resuma/action/{name}`.
+pub fn validate_action_name(name: &str) -> Result<()> {
+    validate_identifier(name, 128, "action name")
+}
+
+/// Validate form submit handler names used in `POST /_resuma/submit/{name}`.
+pub fn validate_submit_name(name: &str) -> Result<()> {
+    validate_action_name(name)
+}
+
+fn validate_identifier(id: &str, max_len: usize, label: &str) -> Result<()> {
+    if id.is_empty() || id.len() > max_len {
+        return Err(ResumaError::validation(format!("invalid {label} length")));
     }
     if !id
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
     {
-        return Err(ResumaError::validation(
-            "chunk id must be alphanumeric, dash, or underscore",
-        ));
+        return Err(ResumaError::validation(format!(
+            "{label} must be alphanumeric, dash, or underscore"
+        )));
     }
     Ok(())
 }
@@ -667,13 +747,58 @@ pub fn guard_mutation(
 ) -> Result<()> {
     check_rate_limit(ip, bucket, limit)?;
     let cfg = config();
-    if cfg.production && cfg.origin_check {
-        validate_origin_strict(headers, host)?;
-    } else {
-        validate_origin(headers, host)?;
+    if cfg.origin_check {
+        if cfg.production || cfg.csrf {
+            validate_origin_strict(headers, host)?;
+        } else {
+            validate_origin(headers, host)?;
+        }
     }
     validate_csrf(headers, form_csrf)?;
     Ok(())
+}
+
+/// Emit warnings for insecure runtime configuration (non-fatal).
+pub fn warn_insecure_config(cfg: &SecurityConfig) {
+    if !cfg.csrf {
+        tracing::warn!(
+            "RESUMA_CSRF=0 — mutating requests are not CSRF-protected; \
+             use only for local development"
+        );
+        eprintln!("[resuma] WARNING: CSRF protection is disabled (RESUMA_CSRF=0)");
+    }
+    if !cfg.origin_check {
+        tracing::warn!(
+            "RESUMA_ORIGIN_CHECK=0 — cross-origin POSTs are not rejected by origin check"
+        );
+        eprintln!("[resuma] WARNING: origin checks are disabled (RESUMA_ORIGIN_CHECK=0)");
+    }
+    if !cfg.csrf && !cfg.origin_check {
+        tracing::warn!(
+            "both CSRF and origin checks are disabled — mutating endpoints are wide open"
+        );
+        eprintln!(
+            "[resuma] WARNING: CSRF and origin checks are both disabled — \
+             do not expose this server to untrusted networks"
+        );
+    }
+    if !cfg.production {
+        tracing::warn!(
+            "RESUMA_ENV is not production — error messages are not sanitized and \
+             origin checks are relaxed when CSRF is off"
+        );
+    }
+    let exec = crate::exec::security::config();
+    if exec.public && !crate::server::dev::dev_mode_enabled() {
+        tracing::warn!(
+            "RESUMA_EXEC_PUBLIC=1 without RESUMA_DEV=1 — exec admin routes and \
+             exec_status are exposed; set RESUMA_DEV=1 for local dev only"
+        );
+        eprintln!(
+            "[resuma] WARNING: RESUMA_EXEC_PUBLIC=1 without RESUMA_DEV=1 — \
+             restrict exec routes or enable authentication"
+        );
+    }
 }
 
 /// Map [`ResumaError`] to an HTTP status code.
@@ -704,7 +829,10 @@ impl SecurityState {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+    use std::sync::Mutex;
     use std::time::Duration;
+
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn origin_matches_ignoring_port() {
@@ -845,6 +973,7 @@ mod tests {
 
     #[test]
     fn csp_omitted_when_disabled() {
+        let _guard = TEST_LOCK.lock().unwrap();
         configure(SecurityConfig {
             csp: CspConfig::disabled(),
             ..SecurityConfig::from_env()
@@ -858,5 +987,110 @@ mod tests {
             },
         );
         assert!(res.headers().get(header::CONTENT_SECURITY_POLICY).is_none());
+    }
+
+    #[test]
+    fn validate_config_rejects_trust_proxy_without_cidrs() {
+        let cfg = SecurityConfig {
+            production: true,
+            trust_proxy: true,
+            ..SecurityConfig::from_env()
+        };
+        assert!(validate_config(&cfg).is_err());
+    }
+
+    #[test]
+    fn validate_config_rejects_trust_proxy_in_dev_without_cidrs() {
+        let cfg = SecurityConfig {
+            production: false,
+            trust_proxy: true,
+            ..SecurityConfig::from_env()
+        };
+        assert!(validate_config(&cfg).is_err());
+    }
+
+    #[test]
+    fn guard_mutation_strict_origin_when_csrf_enabled() {
+        configure(SecurityConfig {
+            csrf: true,
+            origin_check: true,
+            production: false,
+            actions_per_minute: 10_000,
+            submits_per_minute: 10_000,
+            ..SecurityConfig::from_env()
+        });
+        let token = "0123456789abcdef0123456789abcdef";
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_str(&format!("__resuma-csrf={token}")).unwrap(),
+        );
+        headers.insert("x-resuma-csrf", HeaderValue::from_str(token).unwrap());
+        assert!(matches!(
+            guard_mutation(&headers, "localhost", "127.0.0.1", "test", 100, None),
+            Err(ResumaError::Forbidden(_))
+        ));
+    }
+
+    #[test]
+    fn validate_action_name_rejects_empty() {
+        assert!(validate_action_name("").is_err());
+        assert!(validate_action_name("echo").is_ok());
+    }
+
+    #[test]
+    fn csrf_cookie_rejects_short_or_non_hex_tokens() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_static("__resuma-csrf=0123456789abcdef"),
+        );
+        assert!(csrf_from_cookie(&headers).is_none());
+    }
+
+    #[test]
+    fn validate_submit_name_matches_action_rules() {
+        assert!(validate_submit_name("login").is_ok());
+        assert!(validate_submit_name("../evil").is_err());
+    }
+
+    #[test]
+    fn resolve_page_csrf_fails_closed_when_rng_unavailable() {
+        set_rng_force_fail(true);
+        let headers = HeaderMap::new();
+        configure(SecurityConfig {
+            csrf: true,
+            ..SecurityConfig::from_env()
+        });
+        let err = resolve_page_csrf(&headers, true).unwrap_err();
+        assert!(matches!(err, ResumaError::ServiceUnavailable(_)));
+        set_rng_force_fail(false);
+    }
+
+    #[test]
+    fn resolve_page_csrf_reuses_session_cookie_when_rng_unavailable() {
+        set_rng_force_fail(true);
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_static("__resuma-csrf=0123456789abcdef0123456789abcdef"),
+        );
+        configure(SecurityConfig {
+            csrf: true,
+            ..SecurityConfig::from_env()
+        });
+        let (token, is_new) = resolve_page_csrf(&headers, true).expect("reuse cookie");
+        assert_eq!(token, "0123456789abcdef0123456789abcdef");
+        assert!(!is_new);
+        set_rng_force_fail(false);
+    }
+
+    #[test]
+    fn resolve_page_csp_nonce_fails_when_csp_enabled_and_rng_unavailable() {
+        set_rng_force_fail(true);
+        let err = resolve_page_csp_nonce(true).unwrap_err();
+        assert!(matches!(err, ResumaError::ServiceUnavailable(_)));
+        set_rng_force_fail(false);
+        assert!(resolve_page_csp_nonce(false).unwrap().is_empty());
     }
 }

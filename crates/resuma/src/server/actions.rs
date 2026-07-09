@@ -48,19 +48,22 @@ pub async fn dispatch(name: &str, args: Vec<Value>, mut req: FlowRequest) -> Res
     }
 }
 
-/// Parse query string into a map.
+/// Parse query string into a map (URL-decoded).
 pub fn parse_query(query: &str) -> BTreeMap<String, String> {
-    query
-        .split('&')
-        .filter_map(|pair| {
-            let mut parts = pair.splitn(2, '=');
-            let key = parts.next()?.to_string();
-            let value = parts.next().unwrap_or("").to_string();
-            if key.is_empty() {
-                None
-            } else {
-                Some((key, value))
-            }
-        })
-        .collect()
+    crate::flow::request::parse_query(if query.is_empty() {
+        None
+    } else {
+        Some(query)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_query_decodes_percent_encoding() {
+        let q = parse_query("msg=hello%20world");
+        assert_eq!(q.get("msg").map(String::as_str), Some("hello world"));
+    }
 }

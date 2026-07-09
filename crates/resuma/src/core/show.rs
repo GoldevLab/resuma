@@ -1,7 +1,32 @@
 //! Conditional rendering — Leptos-style `Show` without a separate macro system.
 
-use super::signal::Signal;
+use super::effect::Computed;
+use super::signal::{Signal, SignalId};
 use super::view::{Child, Fragment, ShowView, View};
+
+/// Bool reactive source for [`show_signal`] (`Signal<bool>` or `Computed<bool>`).
+pub trait ReactiveBool {
+    fn reactive_id(&self) -> SignalId;
+    fn reactive_bool(&self) -> bool;
+}
+
+impl ReactiveBool for Signal<bool> {
+    fn reactive_id(&self) -> SignalId {
+        self.id()
+    }
+    fn reactive_bool(&self) -> bool {
+        self.peek()
+    }
+}
+
+impl ReactiveBool for Computed<bool> {
+    fn reactive_id(&self) -> SignalId {
+        self.id()
+    }
+    fn reactive_bool(&self) -> bool {
+        self.peek()
+    }
+}
 
 /// Render `children` when `when` is true, otherwise `fallback` or nothing.
 ///
@@ -17,18 +42,18 @@ pub fn show(when: bool, children: Vec<Child>, fallback: Option<View>) -> View {
     }
 }
 
-/// Reactive show bound to a bool signal. Both branches are rendered in the DOM;
+/// Reactive show bound to a bool signal or computed. Both branches are rendered in the DOM;
 /// the client runtime toggles `hidden` on each branch.
-pub fn show_signal(
-    when: &Signal<bool>,
+pub fn show_signal<R: ReactiveBool>(
+    when: &R,
     inverted: bool,
     children: Vec<Child>,
     fallback: Option<View>,
 ) -> View {
-    let raw = when.peek();
+    let raw = when.reactive_bool();
     let initial = if inverted { !raw } else { raw };
     View::Show(ShowView {
-        signal: when.id(),
+        signal: when.reactive_id(),
         inverted,
         initial,
         children,

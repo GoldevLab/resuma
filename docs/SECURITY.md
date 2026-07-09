@@ -30,7 +30,7 @@ Resuma ships with **secure defaults** comparable to Express + Helmet + rate limi
 | `RESUMA_BODY_LIMIT` | `1048576` | Max POST body bytes |
 | `RESUMA_RATE_ACTIONS` | `120` | Action RPC calls per IP per minute |
 | `RESUMA_RATE_SUBMITS` | `60` | Form submits per IP per minute |
-| `RESUMA_RATE_BACKEND` | `memory` (dev), `disk` (prod) | `memory`, `disk`, or `redis` (feature) |
+| `RESUMA_RATE_BACKEND` | `memory` (dev), `disk` (prod) | `memory` or `disk` |
 | `RESUMA_EXEC_API_KEY` | — | **Required** for exec admin routes unless `RESUMA_EXEC_PUBLIC=1` (dev only) |
 | `RESUMA_EXEC_PUBLIC` | off | Opt-in unauthenticated exec routes (dev only; ignored in production) |
 | `RESUMA_EXEC_ENABLED` | off | Mount `/_resuma/*` exec routes even without registered workers |
@@ -126,7 +126,7 @@ All patterns are live in **`examples/todo`**: Controller/Service split, Guards, 
 
 By default, dev uses an **in-memory** sliding window per IP. In **production** (`RESUMA_ENV=production`), Resuma uses a **disk-backed** rate limiter under `{RESUMA_DATA_DIR}/rate-limit/` so limits survive restarts and are shared across processes on the same volume (no Redis required).
 
-Override with `RESUMA_RATE_BACKEND=memory|disk|redis`. Tune exec limits with `RESUMA_RATE_EXEC_*`. For multi-region deploys, still add edge rate limiting (Fly proxy, nginx `limit_req`) in front of Resuma.
+Override with `RESUMA_RATE_BACKEND=memory|disk`. Tune exec limits with `RESUMA_RATE_EXEC_*`. For multi-region or multi-machine deploys, add edge rate limiting (Fly proxy, nginx `limit_req`) in front of Resuma — no external datastore required.
 
 ## Static assets (`public/`)
 

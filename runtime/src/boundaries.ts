@@ -2,6 +2,10 @@
  * Prefetch lazy handler chunks when resumable component boundaries enter the viewport.
  */
 
+import { registerMountCleanup } from "./mount-cleanups.js";
+
+const MARKER_ATTR = "data-r-lazy-chunk-marker";
+
 export function prefetchHandlerChunk(chunk: string): void {
   const r = window.__resuma;
   if (!r) return;
@@ -16,6 +20,8 @@ export function prefetchHandlerChunk(chunk: string): void {
 }
 
 export function prefetchLazyChunks(chunks: string[], root: HTMLElement): void {
+  root.querySelectorAll(`[${MARKER_ATTR}]`).forEach((n) => n.remove());
+
   const unique = [...new Set(chunks.filter((c) => c && c !== "__page__"))];
   if (!unique.length) return;
 
@@ -35,6 +41,7 @@ export function prefetchLazyChunks(chunks: string[], root: HTMLElement): void {
     },
     { rootMargin: "120px" },
   );
+  registerMountCleanup(() => io.disconnect());
 
   for (const el of root.querySelectorAll<HTMLElement>("resuma-boundary[data-r-chunk]")) {
     io.observe(el);
@@ -44,6 +51,7 @@ export function prefetchLazyChunks(chunks: string[], root: HTMLElement): void {
     const marker = document.createElement("resuma-boundary");
     marker.hidden = true;
     marker.dataset.rChunk = chunk;
+    marker.setAttribute(MARKER_ATTR, "true");
     root.appendChild(marker);
     io.observe(marker);
   }

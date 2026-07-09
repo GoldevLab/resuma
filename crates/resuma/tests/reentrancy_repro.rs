@@ -1,5 +1,5 @@
 use resuma::core::context::{RenderContext, RenderMode};
-use resuma::core::{signal, use_computed, with_context};
+use resuma::core::{signal, use_computed, use_effect, with_context};
 
 #[test]
 fn chained_computed_cascade_does_not_panic() {
@@ -43,4 +43,57 @@ fn conditional_computed_tracks_active_branch_only() {
         a.set(999);
         assert_eq!(c.peek(), 20, "should ignore a when cond is false");
     });
+}
+
+#[test]
+fn mutual_effect_cycle_breaks_without_panic_or_deadlock() {
+    // Two effects that write the signal the other reads form an A→B→A cycle.
+    // The `running_effects` guard must break re-entry deterministically instead
+    // of deadlocking on the RefCell or recursing forever. (Panic-on-cycle only
+    // triggers when RESUMA_DEV is set, which it is not in tests.)
+    let ctx = RenderContext::new(RenderMode::Ssr);
+    with_context(ctx, || {
+        let a = signal(0_i32);
+        let b = signal(0_i32);
+
+        let a1 = a.clone();
+        let b1 = b.clone();
+        let _e1 = use_effect(move || {
+            b1.set(a1.get() + 1);
+        });
+
+        let a2 = a.clone();
+        let b2 = b.clone();
+        let _e2 = use_effect(move || {
+            a2.set(b2.get() + 1);
+        });
+
+        // Must return (no hang / stack overflow / RefCell double-borrow panic).
+        a.set(10);
+
+        // State remains readable and finite after the cycle is broken.
+        assert!(a.peek() >= 10);
+        assert!(b.peek() >= 1);
+    });
+}
+
+#[test]
+fn computed_runs_closure_once_on_init() {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::Arc;
+
+    let ctx = RenderContext::new(RenderMode::Ssr);
+    let runs = Arc::new(AtomicU32::new(0));
+    with_context(ctx, || {
+        let runs = runs.clone();
+        let _c = use_computed(move || {
+            runs.fetch_add(1, Ordering::Relaxed);
+            42_i32
+        });
+    });
+    assert_eq!(
+        runs.load(Ordering::Relaxed),
+        1,
+        "compute closure must run exactly once during init"
+    );
 }

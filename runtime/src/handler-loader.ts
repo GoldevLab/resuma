@@ -19,6 +19,33 @@ export type Handler = (
 const inlineCache = new Map<string, Handler>();
 const inFlight = new Map<string, Promise<Record<string, Function>>>();
 
+type ResumaHandlerState = {
+  handlers: Record<string, Record<string, string>>;
+  loaded: Map<string, Record<string, Function>>;
+};
+
+function resumaHandlers(): ResumaHandlerState {
+  return (window as unknown as { __resuma: ResumaHandlerState }).__resuma;
+}
+
+async function loadChunkModule(chunk: string): Promise<Record<string, Function>> {
+  const r = resumaHandlers();
+  let mod = r.loaded.get(chunk);
+  if (mod) return mod;
+
+  let pending = inFlight.get(chunk);
+  if (!pending) {
+    pending = import(`/_resuma/handler/${chunk}.js`) as Promise<
+      Record<string, Function>
+    >;
+    inFlight.set(chunk, pending);
+    void pending.finally(() => inFlight.delete(chunk));
+  }
+  mod = await pending;
+  r.loaded.set(chunk, mod);
+  return mod;
+}
+
 export async function resolveHandler(ref: string, inline: string | null): Promise<Handler> {
   if (inline) {
     let h = inlineCache.get(inline);
@@ -29,35 +56,19 @@ export async function resolveHandler(ref: string, inline: string | null): Promis
     return h;
   }
 
-  const [chunk, symbol] = ref.split("#");
-  const r = (window as unknown as {
-    __resuma: {
-      handlers: Record<string, Record<string, string>>;
-      loaded: Map<string, Record<string, Function>>;
-    };
-  }).__resuma;
+  const hash = ref.indexOf("#");
+  const chunk = hash === -1 ? ref : ref.slice(0, hash);
+  const symbol = hash === -1 ? ref : ref.slice(hash + 1);
+  const r = resumaHandlers();
 
   if (chunk === "__page__") {
     const src = r.handlers[chunk]?.[symbol];
     if (src) return compileInline(src);
-    throw new Error(`[resuma] inline handler ${symbol} not found in __page__ payload`);
   }
 
-  let mod = r.loaded.get(chunk);
-  if (!mod) {
-    let pending = inFlight.get(chunk);
-    if (!pending) {
-      pending = import(`/_resuma/handler/${chunk}.js`) as Promise<
-        Record<string, Function>
-      >;
-      inFlight.set(chunk, pending);
-      void pending.finally(() => inFlight.delete(chunk));
-    }
-    mod = await pending;
-    r.loaded.set(chunk, mod);
-  }
+  const mod = await loadChunkModule(chunk);
   const fn = mod[symbol] as Handler | undefined;
-  if (!fn) throw new Error(`[resuma] handler ${symbol} not found in chunk ${chunk}`);
+  if (!fn) throw new Error(`handler ${symbol} missing in ${chunk}`);
   return fn;
 }
 

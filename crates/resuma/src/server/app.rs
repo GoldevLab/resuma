@@ -33,8 +33,9 @@ use super::deferred_stream::try_deferred_stream;
 use super::page_cache::take_response_cache_control;
 use super::runtime_asset::{CORE_JS, FLOW_JS, LOADER_JS, RUNTIME_JS};
 use super::security::{
-    self, client_ip_from_parts, csrf_set_cookie, csrf_token, guard_mutation, http_status,
-    random_token, request_is_https, CspNonce, SecurityConfig, SecurityHeaderOptions,
+    self, client_ip_from_parts, csrf_set_cookie, guard_mutation, http_status,
+    resolve_page_csp_nonce, resolve_page_csrf, validate_config,
+    request_is_https, CspNonce, SecurityConfig, SecurityHeaderOptions,
 };
 
 /// HTTP application builder for single-page and manual-route apps.
@@ -246,7 +247,11 @@ impl ResumaApp {
 
     pub async fn serve(self, opts: ServeOptions) -> std::io::Result<()> {
         crate::exec::init_exec().await;
+        validate_config(&opts.security).map_err(|e| {
+            std::io::Error::other(e.to_string())
+        })?;
         security::configure(opts.security.clone());
+        security::warn_insecure_config(&opts.security);
         let router = super::limits::apply_server_limits(
             self.into_router()
                 .layer(DefaultBodyLimit::max(opts.security.body_limit_bytes))
@@ -281,9 +286,13 @@ impl ResumaApp {
         });
 
         let mut router = Router::new();
+        let mut registered = std::collections::HashSet::new();
         for path in state.pages.keys() {
-            let p = path.clone();
-            router = router.route(&p, get(serve_page));
+            for route_path in page_route_variants(path) {
+                if registered.insert(route_path.clone()) {
+                    router = router.route(&route_path, get(serve_page));
+                }
+            }
         }
 
         // Liveness / readiness probes (skipped if the app defines its own).
@@ -367,17 +376,33 @@ struct AppState {
     hide_benchmark: bool,
 }
 
-fn page_security_opts(base: &PageOptions, headers: &HeaderMap) -> (PageOptions, bool) {
+fn page_security_opts(
+    base: &PageOptions,
+    headers: &HeaderMap,
+) -> std::result::Result<(PageOptions, bool), crate::core::ResumaError> {
+    let cfg = security::config();
     let mut opts = base.clone();
-    opts.csp_nonce = random_token();
-    // Reuse the session CSRF cookie when present so multi-tab browsing keeps a
-    // valid double-submit token instead of overwriting the cookie on every render.
-    let (token, is_new) = match security::csrf_from_cookie(headers) {
-        Some(t) => (t, false),
-        None => (csrf_token(), true),
-    };
+    opts.csp_nonce = resolve_page_csp_nonce(cfg.csp.enabled)?;
+    let (token, is_new) = resolve_page_csrf(headers, cfg.csrf)?;
     opts.csrf_token = token;
-    (opts, is_new)
+    Ok((opts, is_new))
+}
+
+fn page_security_unavailable(_err: crate::core::ResumaError) -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Service temporarily unavailable — security token generation failed",
+    )
+        .into_response()
+}
+
+fn page_route_variants(pattern: &str) -> Vec<String> {
+    let norm = crate::flow::match_route::normalize_lookup_path(pattern);
+    if norm == "/" {
+        vec![norm]
+    } else {
+        vec![norm.clone(), format!("{norm}/")]
+    }
 }
 
 fn attach_page_security(
@@ -404,7 +429,10 @@ fn render_page_response(
     https: bool,
     set_csrf_cookie: bool,
 ) -> Response {
-    let cache = take_response_cache_control();
+    let cache = super::page_cache::sanitize_cache_for_session(
+        take_response_cache_control(),
+        set_csrf_cookie,
+    );
     let status_code = super::page_cache::take_response_status()
         .and_then(|s| StatusCode::from_u16(s).ok())
         .unwrap_or(StatusCode::OK);
@@ -426,7 +454,7 @@ fn render_page_response(
             &payload,
         );
 
-        let stream = if let Some(deferred) = try_deferred_stream(view.clone(), &opts, path) {
+        let stream = if let Some(deferred) = try_deferred_stream(view.clone(), &opts, path, &payload) {
             deferred
         } else {
             crate::ssr::build_page_stream(opts.clone(), path, body.clone(), payload, vec![body])
@@ -477,7 +505,7 @@ fn render_page_response(
 }
 
 async fn serve_page(uri: Uri, State(state): State<Arc<AppState>>, req: Request<Body>) -> Response {
-    let path = uri.path().to_string();
+    let path = crate::flow::match_route::normalize_lookup_path(uri.path());
     let factory = match state.pages.get(&path) {
         Some(f) => f.clone(),
         None => return (StatusCode::NOT_FOUND, "not found").into_response(),
@@ -485,7 +513,10 @@ async fn serve_page(uri: Uri, State(state): State<Arc<AppState>>, req: Request<B
 
     let flow_req = crate::flow::request::from_http_request(&req, &path, Default::default());
     let https = request_is_https(&req);
-    let (opts, new_csrf) = page_security_opts(&state.page_options, req.headers());
+    let (opts, new_csrf) = match page_security_opts(&state.page_options, req.headers()) {
+        Ok(v) => v,
+        Err(e) => return page_security_unavailable(e),
+    };
     super::page_cache::stage_page_csrf(opts.csrf_token.clone());
     super::page_cache::stage_page_csp_nonce(opts.csp_nonce.clone());
     let ctx = RenderContext::new(RenderMode::Ssr);
@@ -504,7 +535,10 @@ async fn serve_fallback(
     let flow_req = crate::flow::request::from_http_request(&req, path, Default::default());
     if let Some(fb) = &state.fallback {
         let https = request_is_https(&req);
-        let (opts, new_csrf) = page_security_opts(&state.page_options, req.headers());
+        let (opts, new_csrf) = match page_security_opts(&state.page_options, req.headers()) {
+            Ok(v) => v,
+            Err(e) => return page_security_unavailable(e),
+        };
         super::page_cache::stage_page_csrf(opts.csrf_token.clone());
         super::page_cache::stage_page_csp_nonce(opts.csp_nonce.clone());
         let ctx = RenderContext::new(RenderMode::Ssr);
@@ -600,6 +634,10 @@ async fn serve_action(
         return action_error(err);
     }
 
+    if let Err(err) = security::validate_action_name(&name) {
+        return action_error(err);
+    }
+
     // Bound argument size and JSON nesting before dispatch (defense against
     // deeply-nested / oversized payloads that survive the byte body limit).
     if let Err(err) =
@@ -608,7 +646,7 @@ async fn serve_action(
         return action_error(err);
     }
 
-    let flow_req = FlowRequest::from_parts(
+    let mut flow_req = FlowRequest::from_parts(
         "POST",
         format!("/_resuma/action/{name}"),
         headers
@@ -622,6 +660,7 @@ async fn serve_action(
         std::collections::BTreeMap::from([(String::from("name"), name.clone())]),
         std::collections::BTreeMap::new(),
     );
+    crate::flow::extensions::global_extensions().merge_into(&mut flow_req);
 
     match dispatch_action(&name, body.args, flow_req).await {
         Ok(value) => {

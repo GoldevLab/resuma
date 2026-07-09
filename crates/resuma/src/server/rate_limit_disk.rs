@@ -15,6 +15,9 @@ use super::rate_limit::RateLimitBackend;
 static ROOT: once_cell::sync::Lazy<Mutex<Option<PathBuf>>> =
     once_cell::sync::Lazy::new(|| Mutex::new(None));
 
+/// Max on-disk rate-limit bucket files before evicting oldest by mtime.
+const DISK_BUCKET_FILE_CAP: usize = 50_000;
+
 /// Configure disk rate-limit root (e.g. `.resuma/rate-limit`).
 pub fn configure(root: impl AsRef<Path>) {
     let p = root.as_ref().to_path_buf();
@@ -62,11 +65,37 @@ impl RateLimitBackend for DiskBackend {
     }
 }
 
+fn maybe_evict_oldest_bucket_files() {
+    let dir = root_dir();
+    let Ok(read_dir) = fs::read_dir(&dir) else {
+        return;
+    };
+    let mut files: Vec<(PathBuf, SystemTime)> = read_dir
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .filter_map(|e| {
+            let modified = e.metadata().ok()?.modified().ok()?;
+            Some((e.path(), modified))
+        })
+        .collect();
+    if files.len() < DISK_BUCKET_FILE_CAP {
+        return;
+    }
+    files.sort_by_key(|(_, modified)| *modified);
+    let to_remove = files.len().saturating_sub(DISK_BUCKET_FILE_CAP / 2);
+    for (path, _) in files.into_iter().take(to_remove) {
+        let _ = fs::remove_file(path);
+    }
+}
+
 fn disk_check(key: &str, limit_per_minute: u32, window: Duration) -> Result<()> {
     if limit_per_minute == 0 {
         return Ok(());
     }
     let path = key_path(key);
+    if !path.exists() {
+        maybe_evict_oldest_bucket_files();
+    }
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }

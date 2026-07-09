@@ -173,7 +173,7 @@ fn register_inner(body: RegisterWebhookBody) -> Result<WebhookTarget> {
         body.events
     };
     let target = WebhookTarget {
-        id: format!("wh_{}", crate::server::security::random_token()),
+        id: format!("wh_{}", crate::server::security::try_random_token()?),
         url: body.url,
         enabled: body.enabled,
         events,

@@ -20,7 +20,7 @@ use super::middleware::run_middleware;
 use super::pages::{discover_pages, DiscoveredPage, FlowPageRegistry};
 use super::request::FlowRequest;
 use super::routes::attach_flow_routes;
-use super::runtime::{first_load_error, stage_deferred_stream_plan, with_request_deferred};
+use super::runtime::{first_load_error, prefetch_deferred_loaders, stage_deferred_stream_plan, with_request_deferred};
 
 type PageFn = Arc<dyn Fn(FlowRequest) -> View + Send + Sync>;
 
@@ -286,7 +286,14 @@ impl FlowApp {
                         .iter()
                         .find(|p| p.pattern == *pattern)
                         .map(|p| p.layouts.clone())
-                        .unwrap_or_default();
+                        .filter(|v| !v.is_empty())
+                        .unwrap_or_else(|| {
+                            registry
+                                .layout_for(pattern)
+                                .iter()
+                                .map(|s| (*s).to_string())
+                                .collect()
+                        });
                     let is_dynamic = pattern.contains(':') || pattern.contains('*');
                     DiscoveredPage {
                         pattern: (*pattern).to_string(),
@@ -311,7 +318,7 @@ impl FlowApp {
             let reg = registry.clone();
             let handler: PageFn = Arc::new(move |req| {
                 reg.render(&module, req)
-                    .unwrap_or_else(|| View::text(format!("missing page module `{module}`")))
+                    .unwrap_or_else(|| super::errors::registry_miss_page(&module))
             });
             if self
                 .pages
@@ -335,7 +342,11 @@ impl FlowApp {
 
     pub async fn serve(self, opts: FlowServeOptions) -> std::io::Result<()> {
         crate::exec::init_exec().await;
+        crate::server::security::validate_config(&opts.security).map_err(|e| {
+            std::io::Error::other(e.to_string())
+        })?;
         crate::server::configure_security(opts.security.clone());
+        crate::server::security::warn_insecure_config(&opts.security);
         let production = opts.security.production;
         let router = crate::server::limits::apply_server_limits(self.into_router(opts.clone()));
         let (listener, bound) = crate::server::listen::bind_listener(opts.addr).await?;
@@ -384,6 +395,7 @@ impl FlowApp {
         let deferred_streaming = self.streaming;
         let not_found = self.not_found.clone();
         let global_extensions = self.extensions.clone();
+        super::extensions::set_global_extensions(global_extensions.clone());
         let pwa = self.pwa.clone();
 
         let static_pages: Vec<(String, PageEntry)> = self
@@ -394,12 +406,16 @@ impl FlowApp {
             .collect();
 
         for (pattern, entry) in static_pages {
+            let norm = super::match_route::normalize_lookup_path(&pattern);
             let ext = global_extensions.clone();
-            app = app.page_with_request(&pattern, move |req| {
-                render_with_flow(req, entry.clone(), deferred_streaming, ext.clone())
+            let entry_main = entry.clone();
+            app = app.page_with_request(&norm, move |req| {
+                render_with_flow(req, entry_main.clone(), deferred_streaming, ext.clone())
             });
         }
 
+        let skip_robots = self.pages.contains_key("/robots.txt");
+        let skip_llms = self.pages.contains_key("/llms.txt");
         let site_url = std::env::var("SITE_URL")
             .ok()
             .filter(|s| !s.is_empty())
@@ -441,6 +457,10 @@ impl FlowApp {
                 site_url,
                 paths,
                 seo_kit,
+                seo_kit_opts: super::routes::SeoKitRouteOpts {
+                    robots: !skip_robots,
+                    llms: !skip_llms,
+                },
             },
         );
 
@@ -578,9 +598,10 @@ fn dispatch_dynamic(
     deferred_streaming: bool,
     extensions: super::extensions::FlowExtensions,
 ) -> Option<View> {
+    let norm_path = super::match_route::normalize_lookup_path(path);
     for (pattern, entry) in pages {
-        if let Some(m) = match_route(pattern, path) {
-            req.path = path.to_string();
+        if let Some(m) = match_route(pattern, &norm_path) {
+            req.path = norm_path.to_string();
             req.params = m.params;
             return Some(render_with_flow(
                 req,
@@ -600,16 +621,24 @@ fn render_with_flow(
     extensions: super::extensions::FlowExtensions,
 ) -> View {
     extensions.merge_into(&mut req);
-    if let Ok(h) = tokio::runtime::Handle::try_current() {
-        let updated = tokio::task::block_in_place(|| h.block_on(run_middleware(req.clone())));
-        match updated {
-            Ok(r) => req = r,
-            Err(e) => return error_page(&FlowError::from_resuma(e)),
-        }
-    }
 
     let (view, final_req, deferred) =
         with_request_deferred(req.clone(), deferred_streaming, || {
+            let mut req = req.clone();
+            if let Ok(h) = tokio::runtime::Handle::try_current() {
+                let updated =
+                    tokio::task::block_in_place(|| h.block_on(run_middleware(req.clone())));
+                match updated {
+                    Ok(r) => req = r,
+                    Err(e) => return error_page(&FlowError::from_resuma(e)),
+                }
+            } else {
+                tracing::error!("Flow middleware requires a Tokio runtime");
+                return error_page(&FlowError::Render(
+                    "middleware requires async runtime".into(),
+                ));
+            }
+
             let rendered = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 (entry.handler)(req.clone())
             }));
@@ -628,8 +657,13 @@ fn render_with_flow(
         });
 
     if deferred_streaming && !deferred.is_empty() {
-        stage_deferred_stream_plan(deferred.clone(), final_req.clone());
-        let mut hints = final_req.cache_control.clone();
+        let (prefetched, prefetched_req, failed) =
+            prefetch_deferred_loaders(&deferred, final_req.clone());
+        if failed {
+            crate::server::page_cache::stage_response_status(500);
+        }
+        stage_deferred_stream_plan(deferred.clone(), prefetched_req.clone(), prefetched);
+        let mut hints = prefetched_req.cache_control.clone();
         for name in &deferred {
             if let Some(c) = loader_cache(name) {
                 hints.insert(name.clone(), c);

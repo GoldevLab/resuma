@@ -3,12 +3,19 @@
  * Signals, islands, forms, streaming slots, portals, and server actions.
  */
 
-import { initSignals, type SignalCell, applyDom, bindReactiveText, bindReactiveAttrs, bindShows, bindFor, bindMatch, type RawSignalId } from "./signals.js";
+import { initSignals, signalId, type SignalCell, bindReactiveText, bindReactiveAttrs, bindShows, bindFor, bindMatch, type RawSignalId } from "./signals.js";
 import { initIslands } from "./islands.js";
 import { initEffects, flushEffectCleanups, type ClientEffectSpec } from "./effects.js";
 import { prefetchLazyChunks } from "./boundaries.js";
 import { resolveHandler, type Handler } from "./handler-loader.js";
 import { initNavLinks, followRedirect, navigate, buildUrl, invalidate, setPageMounter } from "./navigation.js";
+import { runVisibleTasks, type VisibleTaskEntry } from "./visible-tasks.js";
+import { flushMountCleanups } from "./mount-cleanups.js";
+import { beginPortalMount, mountStaticPortals } from "./portals.js";
+import type { ResumaGlobal } from "./types.js";
+import "./types.js";
+
+export type { ResumaGlobal } from "./types.js";
 
 const FLOW_WIDGET_SELECTOR =
   "[data-r-flow-dashboard], [data-r-flow-graph], [data-r-event-stream], [data-r-worker-panel]";
@@ -29,7 +36,7 @@ async function maybeInitFlowWidgets(scope: ParentNode): Promise<void> {
     const mod = await import("/_resuma/flow.js");
     mod.initFlowWidgets(scope);
   } catch (err) {
-    console.error("[resuma] flow widgets failed to load", err);
+    console.error("[r] flow load", err);
   }
 }
 
@@ -44,35 +51,11 @@ interface ResumePayload {
   islands: string[];
   actions: string[];
   contexts?: Record<string, unknown>;
-  visible_tasks?: Record<string, string>;
+  visible_tasks?: Record<string, VisibleTaskEntry>;
   effects?: ClientEffectSpec[];
   lazy_chunks?: string[];
   csrf_token?: string;
-}
-
-export interface ResumaGlobal {
-  state: Record<string, SignalCell<unknown>>;
-  signals: Map<string, SignalCell<unknown>>;
-  handlers: Record<string, Record<string, string>>;
-  contexts: Record<string, unknown>;
-  action: (name: string, args: unknown[]) => Promise<unknown>;
-  safeAction: (
-    name: string,
-    args: unknown[],
-  ) => Promise<{ ok: true; value: unknown } | { ok: false; error: string }>;
-  loaded: Map<string, Record<string, Function>>;
-  refreshIsland: (id: string) => Promise<void>;
-  context: (key: string) => unknown;
-  navigate: (href: string, pushState?: boolean) => Promise<void>;
-  buildUrl: (path: string, query?: Record<string, string | null | undefined>) => string;
-  invalidate: (path?: string, query?: Record<string, string | null | undefined>) => Promise<void>;
-}
-
-declare global {
-  interface Window {
-    __resuma?: ResumaGlobal;
-    __resumaCoreReady?: Promise<void>;
-  }
+  serialization_error?: boolean;
 }
 
 const STATE_SCRIPT_ID = "resuma-state";
@@ -104,9 +87,15 @@ function readPayload(): ResumePayload {
     return { signals: [], handlers: {}, islands: [], actions: [] };
   }
   try {
-    return JSON.parse(node.textContent) as ResumePayload;
+    const payload = JSON.parse(node.textContent) as ResumePayload;
+    if (payload.serialization_error) {
+      console.error(
+        "[r] resumability payload failed to serialize on the server — page interactivity is broken",
+      );
+    }
+    return payload;
   } catch (e) {
-    console.error("[resuma] failed to parse state payload", e);
+    console.error("[r] state", e);
     return { signals: [], handlers: {}, islands: [], actions: [] };
   }
 }
@@ -123,9 +112,11 @@ let bootstrapped = false;
  * [`bootstrap`], not here.
  */
 export function mountPage(): void {
-  // Tear down the previous mount's effect subscriptions and debounce timers
-  // before re-initializing against fresh signal cells.
+  // Tear down the previous mount's effect subscriptions, debounce timers, and
+  // viewport observers before re-initializing against fresh signal cells.
   flushEffectCleanups();
+  flushMountCleanups();
+  beginPortalMount();
 
   const payload = readPayload();
   const signals = initSignals(payload.signals);
@@ -158,10 +149,10 @@ export function mountPage(): void {
   bindMatch(scope, signals);
   initIslands(scope, signals);
   applyStreamSlots(scope);
-  initPortals(scope);
+  mountStaticPortals(scope);
   initViewTransitions(scope);
   void maybeInitFlowWidgets(scope);
-  runVisibleTasks(payload.visible_tasks ?? {}, state);
+  runVisibleTasks(payload.visible_tasks ?? {}, signals, state, root);
   initEffects(payload.effects ?? [], signals, __resuma);
   prefetchLazyChunks(payload.lazy_chunks ?? [], scope);
 }
@@ -191,7 +182,7 @@ export function buildLocalState(captures: string[]): Record<string, SignalCell<u
     const sep = pair.indexOf(":");
     const name = sep === -1 ? pair : pair.slice(0, sep);
     const id = sep === -1 ? undefined : pair.slice(sep + 1);
-    const key = id ?? name;
+    const key = id != null ? signalId(id) : name;
     const cell = r.signals.get(key);
     if (cell) local[name] = cell;
   }
@@ -238,14 +229,14 @@ function attachFormEnhancement(): void {
         if (!res.ok || data.ok === false) {
           showFieldErrors(form, data.field_errors ?? {});
           if (res.status >= 500 || !data.field_errors) {
-            console.error("[resuma] submit error", data.error ?? `submit ${name} failed`);
+            console.error("[r] submit", data.error ?? name);
           }
           return;
         }
         clearFieldErrors(form);
         if (data.redirect) followRedirect(data.redirect);
       } catch (err) {
-        console.error("[resuma] submit error", err);
+        console.error("[r] submit", err);
       }
     },
     true,
@@ -305,22 +296,21 @@ function applyStreamSlots(scope: HTMLElement): void {
   });
 }
 
-function initPortals(scope: HTMLElement): void {
-  scope.querySelectorAll("template[data-r-portal]").forEach((tpl) => {
-    const showBranch = tpl.closest<HTMLElement>("[data-r-show-if]");
-    // Portals inside a reactive <Show> if-branch are owned by bindShows (which
-    // runs first and stamps data-r-portal-target on the show element) —
-    // mounting them here too would duplicate the portal content.
-    if (showBranch?.closest<HTMLElement>("resuma-show")?.dataset.rPortalTarget) return;
-    if (showBranch?.hidden) return;
-    const targetId = tpl.getAttribute("data-r-portal");
-    if (!targetId) return;
-    const target =
-      document.getElementById(targetId) ??
-      document.querySelector(`[data-r-portal-target="${targetId}"]`);
-    if (!target) return;
-    target.replaceChildren(tpl.content.cloneNode(true));
-  });
+function navigateForViewTransition(href: string): void {
+  if (href.startsWith("/") && !href.startsWith("//")) {
+    void navigate(href);
+    return;
+  }
+  try {
+    const url = new URL(href, location.origin);
+    if (url.origin === location.origin && (url.protocol === "http:" || url.protocol === "https:")) {
+      void navigate(url.pathname + url.search + url.hash);
+      return;
+    }
+  } catch {
+    /* fall through */
+  }
+  window.location.assign(href);
 }
 
 function initViewTransitions(scope: HTMLElement): void {
@@ -332,78 +322,11 @@ function initViewTransitions(scope: HTMLElement): void {
       const href = anchor.getAttribute("href");
       if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
       ev.preventDefault();
-      const run = () => {
-        window.location.href = href;
-      };
-      (document as Document & { startViewTransition?: (cb: () => void) => void }).startViewTransition?.(
-        run,
-      );
+      const go = () => navigateForViewTransition(href);
+      (document as Document & { startViewTransition?: (cb: () => void | Promise<void>) => void })
+        .startViewTransition?.(go) ?? go();
     });
   });
-}
-
-function runVisibleTasks(
-  tasks: Record<string, string>,
-  state: Record<string, SignalCell<unknown>>,
-): void {
-  const entries = Object.entries(tasks);
-  if (!entries.length) return;
-
-  const run = (id: string, source: string) => {
-    try {
-      let trimmed = source.trim();
-      // Legacy `(async () => { ... })()` — strip trailing invocation.
-      if (trimmed.endsWith(")()")) trimmed = trimmed.slice(0, -2);
-      const fn = new Function(
-        "state",
-        "__resuma",
-        `return (${trimmed})(state, __resuma);`,
-      ) as (
-        state: Record<string, SignalCell<unknown>>,
-        resuma: ResumaGlobal,
-      ) => Promise<void> | void;
-      void Promise.resolve(fn(state, window.__resuma!));
-    } catch (err) {
-      console.error("[resuma] visible task", id, err);
-    }
-  };
-
-  const pending = new Set(entries.map(([id]) => id));
-
-  const runOnce = (id: string, source: string) => {
-    if (!pending.has(id)) return;
-    pending.delete(id);
-    run(id, source);
-  };
-
-  // Run eagerly so islands/tasks work in headless tests and above-the-fold UI.
-  // This covers every task, so the no-IntersectionObserver case needs nothing more.
-  for (const [id, source] of entries) runOnce(id, source);
-
-  if ("IntersectionObserver" in window) {
-    const io = new IntersectionObserver(
-      (entries, obs) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          const id = (entry.target as HTMLElement).dataset.rVisibleTask;
-          const source = id ? tasks[id] : undefined;
-          if (id && source) runOnce(id, source);
-          obs.unobserve(entry.target);
-        }
-      },
-      { rootMargin: "50px" },
-    );
-    // Drop markers left over from the previous mount (SPA navigation).
-    root().querySelectorAll("[data-r-visible-task]").forEach((n) => n.remove());
-    for (const [id] of entries) {
-      const marker = document.createElement("span");
-      marker.dataset.rVisibleTask = id;
-      marker.style.cssText =
-        "position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden";
-      root().appendChild(marker);
-      io.observe(marker);
-    }
-  }
 }
 
 async function callServerAction(name: string, args: unknown[]): Promise<unknown> {
@@ -413,7 +336,7 @@ async function callServerAction(name: string, args: unknown[]): Promise<unknown>
     headers: mutationHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({ args }),
   });
-  if (!res.ok) throw new Error(`[resuma] action ${name} failed: ${res.status}`);
+  if (!res.ok) throw new Error(`action ${name}: ${res.status}`);
   const data = await res.json();
   if (data.ok === false) throw new Error(data.error ?? "action failed");
   if (data.redirect) followRedirect(data.redirect);
@@ -438,12 +361,25 @@ async function refreshIsland(instance: string): Promise<void> {
   if (!res.ok) return;
   const html = await res.text();
   const target = document.querySelector(`resuma-island[data-r-instance="${instance}"]`);
-  if (target) target.outerHTML = html;
-  applyDom();
-  // outerHTML replaced the island element, so it lost its hydration — re-run
-  // island init (mirrors mountPage) to wire up the fresh node.
+  if (!target) return;
+  target.outerHTML = html;
+
+  const fresh = document.querySelector<HTMLElement>(
+    `resuma-island[data-r-instance="${CSS.escape(instance)}"]`,
+  );
   const signals = window.__resuma?.signals;
-  if (signals) initIslands(root(), signals);
+  if (!fresh || !signals) return;
+
+  // Re-bind the swapped subtree against the EXISTING signal cells so live
+  // client state is preserved (a full `mountPage()` would rebuild every signal
+  // from the stale SSR payload and drop user interactions). Event handlers are
+  // delegated at the document level by the loader, so they need no rewiring.
+  bindReactiveText(fresh, signals);
+  bindReactiveAttrs(fresh, signals);
+  bindShows(fresh, signals);
+  bindFor(fresh, signals);
+  bindMatch(fresh, signals);
+  initIslands(fresh, signals);
 }
 
 function connectDevBridge(): void {

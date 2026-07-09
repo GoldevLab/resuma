@@ -26,11 +26,11 @@ use crate::core::{
 
 mod escape;
 pub(crate) use escape::escape_attr;
+pub use escape::escape_text;
 pub mod pwa;
 pub mod seo;
 pub mod seo_kit;
 pub mod stream;
-use escape::escape_text;
 
 pub use stream::{
     build_page_stream, render_stream_parts, render_to_stream, stream_head, stream_placeholder,
@@ -81,10 +81,11 @@ pub struct PageOptions {
     pub seo_kit: Option<seo_kit::SeoKit>,
 }
 
-/// Render a complete HTML document for an already-built view (merges payload handlers server-side).
-pub fn render_document(opts: &PageOptions, path: &str, view: &View) -> (String, ResumePayload) {
-    let (body, payload) = render_body_and_payload(view);
-    (wrap_document(opts, &body, &payload, path), payload)
+/// Render a complete HTML document for an already-built view and its resumability payload.
+///
+/// `payload` must come from the same [`RenderContext`] that built `view`.
+pub fn render_document(opts: &PageOptions, path: &str, view: &View, payload: &ResumePayload) -> String {
+    render_prebuilt_document(opts, path, view, payload)
 }
 
 /// Render a view that was already built inside an external [`RenderContext`].
@@ -154,20 +155,26 @@ pub(crate) fn client_scripts(
         r#"<script type="resuma/state" id="resuma-state"{nonce_attr}>{payload}</script>
 <script type="module" src="{loader}"{nonce_attr}></script>"#,
         payload = payload_json,
-        loader = loader_src(opts),
+        loader = escape_attr(loader_src(opts)),
         nonce_attr = nonce_attr,
     )
 }
 
 /// Render a `View` body and capture the resumability payload in one pass.
-pub fn render_body_and_payload(view: &View) -> (String, ResumePayload) {
+///
+/// The view must be constructed inside the same `with_context` closure — signals
+/// and handlers register during view construction, not during `write_view`.
+pub fn render_body_and_payload<F>(build_view: F) -> (String, ResumePayload)
+where
+    F: FnOnce() -> View,
+{
     let ctx = RenderContext::new(RenderMode::Ssr);
-    let body = with_context(ctx.clone(), || {
+    with_context(ctx.clone(), || {
+        let view = build_view();
         let mut buf = String::new();
-        write_view(&mut buf, view);
-        buf
-    });
-    (body, ctx.snapshot_full())
+        write_view(&mut buf, &view);
+        (buf, ctx.snapshot_full())
+    })
 }
 
 /// Render only the body of a `View`, no document scaffolding.
@@ -472,7 +479,7 @@ fn write_handler_attr(buf: &mut String, h: &HandlerRef) {
                 format!(
                     "{}:{}",
                     escape_attr(&c.name),
-                    escape_attr(&c.id.0.to_string())
+                    escape_attr(&c.id.to_string())
                 )
             })
             .collect::<Vec<_>>()

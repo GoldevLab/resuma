@@ -5,11 +5,14 @@
  */
 
 import type { SignalCell } from "./signals.js";
+import { registerMountCleanup } from "./mount-cleanups.js";
 
 const ISLAND_TAG = "resuma-island";
 
 export function initIslands(root: HTMLElement, signals: Map<string, SignalCell<unknown>>): void {
   const islands = root.querySelectorAll<HTMLElement>(ISLAND_TAG);
+  const observers: IntersectionObserver[] = [];
+
   islands.forEach((el) => {
     const chunk = el.getAttribute("data-r-chunk");
     if (!chunk) return;
@@ -25,11 +28,18 @@ export function initIslands(root: HTMLElement, signals: Map<string, SignalCell<u
         },
         { rootMargin: "100px" },
       );
+      observers.push(io);
       io.observe(el);
       return;
     }
     void mountIsland(el, chunk, signals);
   });
+
+  if (observers.length) {
+    registerMountCleanup(() => {
+      for (const io of observers) io.disconnect();
+    });
+  }
 }
 
 async function mountIsland(
@@ -63,7 +73,7 @@ async function hydrateIsland(
       el.dataset.rHydrated = "true";
     }
   } catch (err) {
-    console.debug("[resuma] island chunk unavailable, staying static", chunk, err);
+    console.debug("[r] island static", chunk, err);
   }
 }
 

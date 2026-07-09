@@ -40,6 +40,9 @@ pub struct ExecSecurityConfig {
     pub strict_origin: bool,
     /// Allow unauthenticated `GET /_resuma/metrics` (scrape behind VPC only).
     pub metrics_public: bool,
+    /// Allow unauthenticated `exec_status` server action (dev dashboard polling).
+    /// Snapshotted from `RESUMA_EXEC_PUBLIC=1` + `RESUMA_DEV=1` at configure time.
+    pub allow_anonymous_exec_status: bool,
 }
 
 impl ExecSecurityConfig {
@@ -55,9 +58,10 @@ impl ExecSecurityConfig {
             std::env::var("RESUMA_EXEC_PUBLIC").as_deref(),
             Ok("1") | Ok("true") | Ok("TRUE")
         );
+        let public = public && !production;
         Self {
             api_key,
-            public: public && !production,
+            public,
             workers_per_minute: env_u32("RESUMA_RATE_EXEC_WORKERS", 30),
             graph_reads_per_minute: env_u32("RESUMA_RATE_EXEC_GRAPH", 180),
             graph_controls_per_minute: env_u32("RESUMA_RATE_EXEC_CONTROL", 60),
@@ -78,6 +82,7 @@ impl ExecSecurityConfig {
                 std::env::var("RESUMA_METRICS_PUBLIC").as_deref(),
                 Ok("1") | Ok("true") | Ok("TRUE")
             ),
+            allow_anonymous_exec_status: public && crate::server::dev::dev_mode_enabled(),
         }
     }
 
@@ -95,10 +100,18 @@ impl ExecSecurityConfig {
 }
 
 fn env_u32(name: &str, default: u32) -> u32 {
-    std::env::var(name)
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(default)
+    match std::env::var(name).ok().and_then(|v| v.parse().ok()) {
+        Some(0) => {
+            tracing::warn!(
+                env = name,
+                default,
+                "rate limit of 0 disables limiting — using default"
+            );
+            default
+        }
+        Some(n) => n,
+        None => default,
+    }
 }
 
 /// Override exec security config (call before `init_exec()`).
@@ -112,7 +125,7 @@ pub fn config() -> ExecSecurityConfig {
 
 /// Issue and persist a graph-scoped access token.
 pub fn issue_graph_token(graph_id: &GraphId) -> Result<String> {
-    let token = security::random_token();
+    let token = security::try_random_token()?;
     durable::save_graph_token(graph_id, &token)?;
     Ok(token)
 }
@@ -180,14 +193,17 @@ fn api_key_valid_strict(headers: &HeaderMap) -> bool {
 
 /// Guard `exec_status` server action — same trust as admin HTTP routes.
 pub fn guard_exec_status_action(req: &FlowRequest) -> Result<()> {
-    let cfg = config();
-    if !cfg.requires_api_key() {
-        return Ok(());
-    }
     if req.is_authenticated() || req.has_role("admin") {
         return Ok(());
     }
-    if api_key_valid_from_request(req) {
+    let cfg = config();
+    if cfg.api_key().is_some() {
+        if api_key_valid_from_request(req) {
+            return Ok(());
+        }
+        return Err(ResumaError::Unauthorized);
+    }
+    if cfg.allow_anonymous_exec_status {
         return Ok(());
     }
     Err(ResumaError::Unauthorized)
@@ -196,7 +212,7 @@ pub fn guard_exec_status_action(req: &FlowRequest) -> Result<()> {
 fn api_key_valid_from_request(req: &FlowRequest) -> bool {
     let cfg = config();
     let Some(expected) = cfg.api_key() else {
-        return !cfg.requires_api_key();
+        return false;
     };
     let provided = req
         .header("authorization")
@@ -289,8 +305,11 @@ pub fn guard_graph_control(
     form_csrf: Option<&str>,
 ) -> Result<()> {
     let cfg = config();
+    let _ = query_token;
     check_rate_limit(ip, "exec:control", cfg.graph_controls_per_minute)?;
-    if !graph_access_granted(headers, graph_id, query_token) {
+    // Mutations must not accept query tokens — they leak via Referer/logs and
+    // enable CSRF when RESUMA_CSRF=0. Use x-resuma-graph-token header or API key.
+    if !graph_access_granted(headers, graph_id, None) {
         return Err(ResumaError::Unauthorized);
     }
     if cfg.strict_origin {
@@ -442,6 +461,44 @@ mod tests {
             ..ExecSecurityConfig::from_env()
         });
         assert!(!config().requires_api_key());
+    }
+
+    #[test]
+    fn guard_exec_status_action_security_matrix() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        configure(ExecSecurityConfig {
+            api_key: Some("super-secret-key-for-tests-only".into()),
+            public: false,
+            allow_anonymous_exec_status: false,
+            ..ExecSecurityConfig::from_env()
+        });
+        assert!(matches!(
+            guard_exec_status_action(&FlowRequest::default()),
+            Err(ResumaError::Unauthorized)
+        ));
+
+        let mut req = FlowRequest::default();
+        req.set_extension("authenticated", serde_json::json!(true));
+        assert!(guard_exec_status_action(&req).is_ok());
+
+        configure(ExecSecurityConfig {
+            public: true,
+            api_key: None,
+            allow_anonymous_exec_status: false,
+            ..ExecSecurityConfig::from_env()
+        });
+        assert!(matches!(
+            guard_exec_status_action(&FlowRequest::default()),
+            Err(ResumaError::Unauthorized)
+        ));
+
+        configure(ExecSecurityConfig {
+            public: true,
+            api_key: None,
+            allow_anonymous_exec_status: true,
+            ..ExecSecurityConfig::from_env()
+        });
+        assert!(guard_exec_status_action(&FlowRequest::default()).is_ok());
     }
 
     #[test]

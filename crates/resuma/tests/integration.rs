@@ -84,6 +84,16 @@ async fn flow_serves_component_page_without_render_path_syntax() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn flow_nav_only_pages_ship_client_loader() {
+    use resuma::server::{configure_security, CspConfig, SecurityConfig};
+
+    configure_security(SecurityConfig {
+        csp: CspConfig {
+            enabled: true,
+            ..CspConfig::from_env()
+        },
+        ..SecurityConfig::from_env()
+    });
+
     #[component]
     fn Home() {
         view! {
@@ -109,11 +119,15 @@ async fn flow_nav_only_pages_ship_client_loader() {
     assert!(html.contains("data-r-nav"));
     assert!(
         html.contains(r#"id="resuma-state" nonce=""#),
-        "state payload script needs a CSP nonce"
+        "state payload script needs a CSP nonce when CSP is enabled"
     );
     assert!(
         html.contains(r#"src="/_resuma/loader.js" nonce=""#),
         "loader script must carry the same CSP nonce as strict-dynamic requires"
+    );
+    assert!(
+        !html.contains(r#"nonce="""#),
+        "CSP nonce must not be empty when enabled"
     );
 }
 
@@ -145,6 +159,10 @@ async fn flow_component_state_and_handlers_are_registered_during_render() {
     let html = String::from_utf8_lossy(&body);
     assert!(html.contains(r#""signals":[{"id":1,"value":0}]"#));
     assert!(html.contains(r#"data-r-on:click="Counter#"#));
+    assert!(
+        html.contains(r#"data-r-cap:click="count:s1"#),
+        "handler captures must use SignalId display form (s1)"
+    );
 
     let handler = app
         .oneshot(

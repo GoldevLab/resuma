@@ -66,6 +66,25 @@ pub fn stage_response_cache_control(value: impl Into<String>) {
     with_staging(|s| s.cache_control = Some(value));
 }
 
+/// When a response sets a session CSRF cookie, shared caches must not store it.
+pub fn sanitize_cache_for_session(
+    cache: Option<String>,
+    sets_session_cookie: bool,
+) -> Option<String> {
+    if !sets_session_cookie {
+        return cache;
+    }
+    if cache.as_deref().is_some_and(|c| {
+        let lower = c.to_ascii_lowercase();
+        lower.contains("public") || lower.contains("max-age")
+    }) {
+        tracing::warn!(
+            "overriding Cache-Control to private, no-store — page sets CSRF cookie"
+        );
+    }
+    Some("private, no-store".to_string())
+}
+
 /// Take a staged cache header (consumed once per response).
 pub fn take_response_cache_control() -> Option<String> {
     with_staging(|s| s.cache_control.take())
@@ -96,6 +115,19 @@ pub fn page_csp_nonce() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sanitize_cache_for_session_overrides_public() {
+        let out = sanitize_cache_for_session(Some("public, max-age=3600".into()), true);
+        assert_eq!(out.as_deref(), Some("private, no-store"));
+    }
+
+    #[test]
+    fn sanitize_cache_for_session_keeps_when_no_cookie() {
+        let cache = "public, max-age=60".to_string();
+        let out = sanitize_cache_for_session(Some(cache.clone()), false);
+        assert_eq!(out, Some(cache));
+    }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn page_staging_isolated_per_scoped_task() {

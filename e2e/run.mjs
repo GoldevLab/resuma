@@ -140,9 +140,33 @@ async function runBrowserChecks() {
     await clickUnique(page.getByTestId("increment"), "increment button");
     await expectText(page.getByTestId("count"), "Count: 1", "counter after click");
 
+    log("testing compound assign persists across clicks");
+    await clickUnique(page.getByTestId("increment"), "increment button again");
+    await expectText(page.getByTestId("count"), "Count: 2", "counter after second click");
+
+    log("testing <Show> hide/show");
+    await expectText(page.getByTestId("show-panel"), "Panel visible", "show panel initial");
+    await clickUnique(page.getByTestId("toggle-show"), "toggle show");
+    await page.getByTestId("show-panel").waitFor({ state: "hidden", timeout: 5_000 });
+    await clickUnique(page.getByTestId("toggle-show"), "toggle show again");
+    await expectText(page.getByTestId("show-panel"), "Panel visible", "show panel restored");
+
+    log("testing <For> list reconciliation");
+    const initialItems = await page.getByTestId("list-item").count();
+    assert(initialItems === 2, `expected 2 list items, got ${initialItems}`);
+    await clickUnique(page.getByTestId("add-item"), "add list item");
+    const deadline = Date.now() + 5_000;
+    let itemCount = initialItems;
+    while (Date.now() < deadline) {
+      itemCount = await page.getByTestId("list-item").count();
+      if (itemCount === 3) break;
+      await delay(100);
+    }
+    assert(itemCount === 3, `expected 3 list items after add, got ${itemCount}`);
+
     log("testing server action");
     await clickUnique(page.getByTestId("save-count"), "save count button");
-    await expectText(page.getByTestId("save-status"), "Saved 1", "server action status");
+    await expectText(page.getByTestId("save-status"), "Saved 2", "server action status");
 
     log("testing enhanced form validation");
     await clickUnique(page.getByRole("button", { name: "Send" }), "send button");

@@ -16,12 +16,20 @@ pub fn stream_slot(name: impl Into<String>) -> View {
 }
 
 /// Resolved chunk emitted after a streamed loader completes.
+///
+/// `html` must be produced by [`crate::ssr::render_view`] (escaped `view!` output).
+/// Never pass raw user input — the client injects this via `createContextualFragment`.
 pub fn stream_chunk(name: impl Into<String>, html: impl Into<String>) -> View {
+    let name = name.into();
+    if let Err(e) = crate::server::security::validate_chunk_id(&name) {
+        tracing::warn!(stream = %name, error = %e, "invalid stream chunk name");
+        return View::empty();
+    }
     View::Element(Element {
         tag: "template".into(),
         attrs: vec![Attr {
             name: "data-r-stream-chunk".into(),
-            value: AttrValue::Static(name.into()),
+            value: AttrValue::Static(name),
         }],
         children: vec![Child::View(View::Raw(html.into()))],
         dom_id: None,

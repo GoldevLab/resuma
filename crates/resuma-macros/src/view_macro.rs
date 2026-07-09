@@ -9,6 +9,7 @@ use proc_macro2::{Delimiter, Literal, Span, TokenStream, TokenTree};
 use quote::{quote, quote_spanned};
 use std::iter::Peekable;
 use std::vec::IntoIter;
+use syn::visit::Visit;
 
 use crate::rs2js;
 
@@ -489,6 +490,21 @@ fn emit_show(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
         };
     }
 
+    if show_when_needs_reactive_signal(&when) {
+        return compile_err(
+            "Show `when={…}` must use a bare signal or `signal.get()` for client reactivity \
+             (e.g. `when={logged_in}` or `when={logged_in.get()}`). Plain bool expressions \
+             are SSR-only.",
+        );
+    }
+
+    if show_when_contains_bare_path(&when) {
+        return compile_err(
+            "Show `when={…}` must use a single bare signal (e.g. `when={logged_in}` or \
+             `when={!logged_in}`), not compound expressions that mix multiple signals.",
+        );
+    }
+
     quote! {
         ::resuma::__private::show(
             #when,
@@ -647,6 +663,42 @@ fn emit_match(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
     }
 }
 
+fn show_when_contains_bare_path(when: &TokenStream) -> bool {
+    let Ok(expr) = syn::parse2::<syn::Expr>(when.clone()) else {
+        return false;
+    };
+    fn walk(e: &syn::Expr) -> bool {
+        match e {
+            syn::Expr::Path(_) => true,
+            syn::Expr::Unary(u) if matches!(u.op, syn::UnOp::Not(_)) => walk(&u.expr),
+            syn::Expr::Binary(b) => walk(&b.left) || walk(&b.right),
+            syn::Expr::Group(g) => walk(&g.expr),
+            syn::Expr::Paren(p) => walk(&p.expr),
+            _ => false,
+        }
+    }
+    walk(&expr)
+}
+
+fn show_when_needs_reactive_signal(when: &TokenStream) -> bool {
+    let Ok(expr) = syn::parse2::<syn::Expr>(when.clone()) else {
+        return false;
+    };
+    fn walk(e: &syn::Expr) -> bool {
+        match e {
+            syn::Expr::MethodCall(m) if m.method == "get" => true,
+            syn::Expr::Unary(u) if matches!(u.op, syn::UnOp::Not(_)) => {
+                matches!(*u.expr, syn::Expr::Path(_))
+            }
+            syn::Expr::Binary(b) => walk(&b.left) || walk(&b.right),
+            syn::Expr::Group(g) => walk(&g.expr),
+            syn::Expr::Paren(p) => walk(&p.expr),
+            _ => false,
+        }
+    }
+    walk(&expr)
+}
+
 /// When `when={signal}` or `when={signal.get()}` (or `!signal.get()`), return
 /// the signal expression and whether the condition is inverted.
 fn parse_signal_when(ts: TokenStream) -> Option<(TokenStream, bool)> {
@@ -657,13 +709,14 @@ fn parse_signal_when(ts: TokenStream) -> Option<(TokenStream, bool)> {
             Some((quote! { #recv }, false))
         }
         syn::Expr::Unary(u) if matches!(u.op, syn::UnOp::Not(_)) => {
-            if let syn::Expr::MethodCall(m) = *u.expr {
-                if m.method == "get" {
+            match *u.expr {
+                syn::Expr::MethodCall(m) if m.method == "get" => {
                     let recv = &m.receiver;
-                    return Some((quote! { #recv }, true));
+                    Some((quote! { #recv }, true))
                 }
+                syn::Expr::Path(p) => Some((quote! { #p }, true)),
+                _ => None,
             }
-            None
         }
         syn::Expr::Path(_) => Some((quote! { #expr }, false)),
         _ => None,
@@ -816,9 +869,20 @@ fn emit_attr(attr: Attr) -> TokenStream {
         AttrVal::Bool => quote! {
             (#name.to_string(), ::resuma::__private::AttrValue::Bool(true))
         },
-        AttrVal::Expr(ts) => quote! {
-            (#name.to_string(), ::resuma::__private::resolve_attr_value({ #ts }))
-        },
+        AttrVal::Expr(ts) => {
+            // Reject bare `attr={signal.get()}` (SSR snapshot, not reactive).
+            // Nested uses like `style={theme_css_vars(&theme.get())}` stay allowed —
+            // those are intentional one-shot SSR values, not failed reactive binds.
+            if is_bare_signal_get(&ts) {
+                let span = signal_get_span(&ts).unwrap_or_else(Span::call_site);
+                return quote_spanned! {span=>
+                    compile_error!(#SIGNAL_GET_LINT)
+                };
+            }
+            quote! {
+                (#name.to_string(), ::resuma::__private::resolve_attr_value({ #ts }))
+            }
+        }
     }
 }
 
@@ -1041,29 +1105,43 @@ const SIGNAL_GET_LINT: &str = "Do not use `.get()` in view! — use `{signal}` o
     directly for client reactivity. `.get()` is an SSR-only snapshot and the UI will not update \
     after interaction. For conditional UI use `<Show when={signal}>` (not `{if signal.get()}`).";
 
-/// Detect bare `{signal.get()}` / `{!signal.get()}` in text interpolations.
+/// Detect any `.get()` call inside a text interpolation (SSR-only snapshot).
 fn signal_get_span(ts: &TokenStream) -> Option<Span> {
     let expr = syn::parse2::<syn::Expr>(ts.clone()).ok()?;
-    match unwrap_expr(&expr) {
-        syn::Expr::MethodCall(m) if m.method == "get" && m.args.is_empty() => Some(m.method.span()),
+    let mut visitor = SignalGetVisitor::default();
+    visitor.visit_expr(&expr);
+    visitor.span
+}
+
+/// True only when the whole expression is `signal.get()` / `!signal.get()`,
+/// not when `.get()` appears nested inside a larger call.
+fn is_bare_signal_get(ts: &TokenStream) -> bool {
+    let Ok(expr) = syn::parse2::<syn::Expr>(ts.clone()) else {
+        return false;
+    };
+    match expr {
+        syn::Expr::MethodCall(m) if m.method == "get" && m.args.is_empty() => true,
         syn::Expr::Unary(u) if matches!(u.op, syn::UnOp::Not(_)) => {
-            if let syn::Expr::MethodCall(m) = unwrap_expr(&u.expr) {
-                if m.method == "get" && m.args.is_empty() {
-                    return Some(m.method.span());
-                }
-            }
-            None
+            matches!(
+                *u.expr,
+                syn::Expr::MethodCall(ref m) if m.method == "get" && m.args.is_empty()
+            )
         }
-        _ => None,
+        _ => false,
     }
 }
 
-fn unwrap_expr(expr: &syn::Expr) -> &syn::Expr {
-    match expr {
-        syn::Expr::Group(g) => unwrap_expr(&g.expr),
-        syn::Expr::Paren(p) => unwrap_expr(&p.expr),
-        syn::Expr::Reference(r) => unwrap_expr(&r.expr),
-        other => other,
+#[derive(Default)]
+struct SignalGetVisitor {
+    span: Option<Span>,
+}
+
+impl<'ast> syn::visit::Visit<'ast> for SignalGetVisitor {
+    fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
+        if self.span.is_none() && node.method == "get" && node.args.is_empty() {
+            self.span = Some(node.method.span());
+        }
+        syn::visit::visit_expr_method_call(self, node);
     }
 }
 
@@ -1090,9 +1168,29 @@ mod tests {
     }
 
     #[test]
-    fn allows_chained_get_in_interpolation() {
+    fn rejects_chained_get_in_interpolation() {
         let ts: TokenStream = quote::quote! { visible.get().into_iter().map(|t| t) };
-        assert!(signal_get_span(&ts).is_none());
+        assert!(signal_get_span(&ts).is_some());
+    }
+
+    #[test]
+    fn show_when_negated_signal_is_reactive() {
+        let (signal, inverted) = parse_signal_when(quote::quote! { !logged_in }).unwrap();
+        assert_eq!(signal.to_string(), "logged_in");
+        assert!(inverted);
+    }
+
+    #[test]
+    fn bare_attr_signal_get_is_rejected() {
+        assert!(is_bare_signal_get(&quote::quote! { count.get() }));
+        assert!(is_bare_signal_get(&quote::quote! { !logged_in.get() }));
+    }
+
+    #[test]
+    fn nested_attr_signal_get_is_allowed() {
+        assert!(!is_bare_signal_get(
+            &quote::quote! { theme_css_vars(&theme.get()) }
+        ));
     }
 
     #[test]

@@ -120,6 +120,7 @@ async fn pre_registered_island_chunk_keeps_custom_resume() {
         effects: vec![],
         lazy_chunks: vec![],
         csrf_token: None,
+        serialization_error: None,
     };
 
     resuma::server::handler_assets::merge_payload_handlers(&handlers, &islands, &payload);
@@ -149,6 +150,7 @@ async fn handler_chunks_merge_new_symbols_for_existing_chunk() {
         effects: vec![],
         lazy_chunks: vec![],
         csrf_token: None,
+        serialization_error: None,
     };
     let second = ResumePayload {
         signals: vec![],
@@ -168,6 +170,7 @@ async fn handler_chunks_merge_new_symbols_for_existing_chunk() {
         effects: vec![],
         lazy_chunks: vec![],
         csrf_token: None,
+        serialization_error: None,
     };
 
     resuma::server::handler_assets::merge_payload_handlers(&handlers, &islands, &first);

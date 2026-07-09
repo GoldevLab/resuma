@@ -6,6 +6,53 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-09
+
+### Fixed
+
+- **Effect deadlock on cyclic dependencies** — `Effect::run()` now routes through `run_effect` so mutual A→B→A effect cycles break cleanly instead of deadlocking on the shared callback `RwLock`.
+- **`rs2js` compound assignments** — `count += 1` on signals translates to `.update()` instead of corrupting the cell in JS.
+- **`rs2js` `Signal::update` closures** — block-bodied `|c| { *c += 1; }` now return the mutated param so client updates are not silently dropped.
+- **`use_computed` double execution** — initializer runs the compute closure exactly once on first effect run.
+- **Serialization failures** — `ResumePayload` sets `serialization_error: true` when encoding fails; client logs a clear error instead of mounting a broken page.
+- **`register_client_effect` re-registration** — updates `body`, `kind`, `target`, and `debounce_ms` when the same effect id is registered again.
+- **Context keys** — serialized contexts use stable `type_name::<T>()` keys instead of opaque `TypeId` debug strings.
+- **`refreshIsland`** — re-binds only the swapped island subtree against existing signal cells (preserves live client state).
+- **`values_equal` floats** — NaN/`-0` handling aligned with client `Object.is`.
+- **`EffectId(0)` collision** — atomic fallback ids when no `RenderContext` is active (tests/direct calls).
+- **SPA binding leaks** — `registerMountCleanup` unsubscribes text/attr/Show/For/Match listeners on remount.
+- **`run_effect` nested tracking** — restores `current_effect` after nested runs so parent dependency tracking is not lost.
+- **`<Match>` client parity** — `matchValueString()` now mirrors Rust `match_value_string` (JSON text for objects/arrays/null).
+- **`visible_task!` / captures** — visible tasks register signal name→id captures; runtime builds `state.todos`-style locals. New `visible_task!` macro; `use_visible_task_with_captures` API.
+- **Todo scaffold** — `templates/todo/` synced with `examples/todo` (`<For>`, `visible_task!`, reactive patterns).
+- **SPA mount cleanup** — `flushMountCleanups()` tears down IntersectionObservers (visible tasks, islands, lazy chunks) and visible-task teardown callbacks on navigation.
+- **Deferred stream loaders** — prefetch continues after a loader failure; remaining slots emit error chunks instead of staying pending.
+- **Shared portal targets** — each portal owner mounts into a scoped `[data-r-portal-slot]` wrapper; hiding one `<Show>` no longer clears siblings in the same target.
+- **Deferred stream loaders** — `#[load(stream)]` handlers now run once per request: results are prefetched before the HTTP stream starts and reused for chunks (fixes double `dispatch_load` and ensures loader failures return HTTP 500 before headers are sent).
+- **`use_visible_task`** — tasks now defer until viewport (`IntersectionObserver`); eager run only when IO is unavailable.
+- **View Transitions (`data-r-vt`)** — same-origin links use SPA `navigate()` instead of full page reload.
+- **NavLink prefetch** — re-fetches on every hover (dedupes in-flight only); `invalidate()` clears the prefetch cache.
+- **SPA remount fallback** — uses full `mountPage()` pipeline when no mounter is registered.
+- **Legacy `runtime.js`** — exposes `navigate`, `buildUrl`, and `invalidate` on `__resuma`; handles `serialization_error` in payload.
+- **Handler refs** — split on first `#` only (chunk ids may contain `#`).
+- **`provide_context`** — returns `bool`; serialization failure no longer silently registers nothing.
+- **`<Show when={…}>`** — compile error for compound expressions mixing multiple signal paths.
+- **`view!` attrs** — compile error for bare `attr={signal.get()}` (SSR snapshot); nested one-shot uses like `theme_css_vars(&theme.get())` remain allowed.
+
+### Added
+
+- **E2E coverage** — Playwright tests for compound assign, `<Show>`, `<For>`, SPA effects replay, and todo server-action round-trip.
+- **Reentrancy tests** — mutual effect cycle and `use_computed` init-count regression tests.
+- **TypeScript** — shared `types.ts`, module shims, `mount-cleanups.ts`, `portals.ts`, and `tsc`-clean runtime sources.
+
+### Removed
+
+- **Redis rate-limit backend** — Resuma no longer depends on Redis. Production uses the built-in **disk** backend (`{RESUMA_DATA_DIR}/rate-limit/`, multi-process safe via file locks). Dev uses **memory**. Set `RESUMA_RATE_BACKEND=memory|disk`.
+
+### Changed
+
+- Runtime bundles rebuilt (`core.js`, `loader.js`, `flow.js`, `runtime.js`).
+
 ## [1.1.0] - 2026-07-05
 
 ### Fixed
@@ -64,8 +111,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Auto route generation** on `resuma dev` / `resuma build`.
 - **Runtime size gate** in `npm run size` (loader ≤ 1 KiB gzip, core ≤ 5 KiB gzip).
 - **Unified rs2js error messages** across handler/effect/computed/debounce macros.
-
-## [Unreleased]
 
 ## [0.4.8] - 2026-06-08
 

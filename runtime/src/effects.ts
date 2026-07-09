@@ -3,7 +3,7 @@
  */
 
 import { signalId, type SignalCell, type RawSignalId } from "./signals.js";
-import type { ResumaGlobal } from "./core.js";
+import type { ResumaGlobal } from "./types.js";
 
 export interface ClientEffectSpec {
   id: number;
@@ -61,54 +61,61 @@ export function initEffects(
         resuma: ResumaGlobal,
       ) => unknown;
 
-      const targetCell =
-        eff.target != null ? signals.get(signalId(eff.target)) ?? null : null;
+      const isDebounce = eff.kind === "debounce";
 
-      const execute = () => {
-        try {
-          const result = run(state, global);
-          // `computed!` returns a derived value bound to a target signal;
-          // `effect!` mutates signals itself and returns undefined.
-          if (targetCell && result !== undefined) targetCell.set(result);
-        } catch (err) {
-          console.error("[resuma] effect", eff.id, err);
+      if (isDebounce) {
+        const teardown = run(state, global);
+        if (typeof teardown === "function") {
+          effectCleanups.push(teardown as () => void);
         }
-      };
+      } else {
+        const targetCell =
+          eff.target != null ? signals.get(signalId(eff.target)) : undefined;
 
-      let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-      const schedule = () => {
-        const ms = eff.debounce_ms;
-        if (ms != null && ms > 0) {
+        const execute = () => {
+          try {
+            const result = run(state, global);
+            if (targetCell && result !== undefined) targetCell.set(result);
+          } catch (err) {
+            console.error("[r] effect", eff.id, err);
+          }
+        };
+
+        let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+        const schedule = () => {
+          const ms = eff.debounce_ms;
+          if (ms != null && ms > 0) {
+            if (debounceTimer !== undefined) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(execute, ms);
+            return;
+          }
+          execute();
+        };
+
+        schedule();
+
+        effectCleanups.push(() => {
           if (debounceTimer !== undefined) clearTimeout(debounceTimer);
-          debounceTimer = setTimeout(execute, ms);
-          return;
+        });
+
+        const depKeys = new Set<string>();
+        for (const dep of eff.deps) {
+          depKeys.add(signalId(dep));
         }
-        execute();
-      };
-
-      schedule();
-
-      effectCleanups.push(() => {
-        if (debounceTimer !== undefined) clearTimeout(debounceTimer);
-      });
-
-      const depKeys = new Set<string>();
-      for (const dep of eff.deps) {
-        depKeys.add(signalId(dep));
-      }
-      if (eff.captures) {
-        for (const idRaw of Object.values(eff.captures)) {
-          depKeys.add(signalId(idRaw));
+        if (eff.captures) {
+          for (const idRaw of Object.values(eff.captures)) {
+            depKeys.add(signalId(idRaw));
+          }
         }
-      }
 
-      for (const depKey of depKeys) {
-        const cell = signals.get(depKey);
-        const unsubscribe = cell?.subscribe(() => schedule());
-        if (unsubscribe) effectCleanups.push(unsubscribe);
+        for (const depKey of depKeys) {
+          const cell = signals.get(depKey);
+          const unsubscribe = cell?.subscribe(() => schedule());
+          if (unsubscribe) effectCleanups.push(unsubscribe);
+        }
       }
     } catch (err) {
-      console.error("[resuma] effect init", eff.id, err);
+      console.error("[r] effect init", eff.id, err);
     }
   }
 }

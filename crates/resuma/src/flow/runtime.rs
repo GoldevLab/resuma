@@ -10,6 +10,7 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::future::Future;
+use std::result::Result as StdResult;
 
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -20,12 +21,15 @@ use super::load::LoaderError;
 use super::registry::dispatch_load;
 use super::request::FlowRequest;
 use super::stream_load::is_stream_loader;
+use crate::core::ResumaError;
 
 #[derive(Default)]
 struct FlowRuntime {
     request: Option<FlowRequest>,
     loads: BTreeMap<String, Value>,
     load_errors: BTreeMap<String, LoaderError>,
+    /// First loader failure in registration order (not BTreeMap key order).
+    first_load_error: Option<LoaderError>,
     deferred_loaders: Vec<String>,
     deferred_streaming: bool,
 }
@@ -35,6 +39,9 @@ struct FlowRuntime {
 pub struct DeferredStreamPlan {
     pub deferred: Vec<String>,
     pub request: FlowRequest,
+    /// Loader results fetched before the HTTP stream starts — avoids double
+    /// `dispatch_load` and lets response status reflect loader failures.
+    pub prefetched: BTreeMap<String, StdResult<Value, LoaderError>>,
 }
 
 tokio::task_local! {
@@ -81,13 +88,68 @@ pub fn set_deferred_streaming(enabled: bool) {
     });
 }
 
-pub fn stage_deferred_stream_plan(deferred: Vec<String>, request: FlowRequest) {
+pub fn stage_deferred_stream_plan(
+    deferred: Vec<String>,
+    request: FlowRequest,
+    prefetched: BTreeMap<String, StdResult<Value, LoaderError>>,
+) {
     if deferred.is_empty() {
         return;
     }
     with_deferred_plan(|cell| {
-        *cell.borrow_mut() = Some(DeferredStreamPlan { deferred, request });
+        *cell.borrow_mut() = Some(DeferredStreamPlan {
+            deferred,
+            request,
+            prefetched,
+        });
     });
+}
+
+fn loader_result_from_dispatch(result: StdResult<Value, ResumaError>) -> StdResult<Value, LoaderError> {
+    result.map_err(|err| {
+        let status = match &err {
+            ResumaError::Render(_) | ResumaError::Io(_) => 500,
+            other => other.status_code(),
+        };
+        LoaderError::new(status, err.to_string())
+    })
+}
+
+/// Run deferred stream loaders once before the response is sent.
+///
+/// Returns prefetched results, the (possibly updated) request, and whether any loader failed.
+pub fn prefetch_deferred_loaders(
+    deferred: &[String],
+    mut request: FlowRequest,
+) -> (
+    BTreeMap<String, StdResult<Value, LoaderError>>,
+    FlowRequest,
+    bool,
+) {
+    let mut prefetched = BTreeMap::new();
+    let mut failed = false;
+
+    let Ok(handle) = tokio::runtime::Handle::try_current() else {
+        tracing::error!("prefetch_deferred_loaders requires a Tokio runtime");
+        return (prefetched, request, true);
+    };
+
+    for name in deferred {
+        let result = tokio::task::block_in_place(|| {
+            handle.block_on(dispatch_load(name, request.clone()))
+        });
+        let converted = loader_result_from_dispatch(result);
+        if converted.is_ok() {
+            if let Some(cache) = loader_cache(name) {
+                request.cache_control.insert(name.clone(), cache);
+            }
+        } else {
+            failed = true;
+        }
+        prefetched.insert(name.clone(), converted);
+    }
+
+    (prefetched, request, failed)
 }
 
 pub fn take_deferred_stream_plan() -> Option<DeferredStreamPlan> {
@@ -99,10 +161,7 @@ pub fn with_request<R>(req: FlowRequest, f: impl FnOnce() -> R) -> (R, FlowReque
     with_flow(|cell| {
         let prev = cell.borrow_mut().replace(FlowRuntime {
             request: Some(req.clone()),
-            loads: BTreeMap::new(),
-            load_errors: BTreeMap::new(),
-            deferred_loaders: Vec::new(),
-            deferred_streaming: false,
+            ..Default::default()
         });
         let out = f();
         let final_req = cell
@@ -124,10 +183,8 @@ pub fn with_request_deferred<R>(
     with_flow(|cell| {
         let prev = cell.borrow_mut().replace(FlowRuntime {
             request: Some(req.clone()),
-            loads: BTreeMap::new(),
-            load_errors: BTreeMap::new(),
-            deferred_loaders: Vec::new(),
             deferred_streaming,
+            ..Default::default()
         });
         let out = f();
         let (final_req, deferred) = {
@@ -224,7 +281,14 @@ pub fn try_use_load<T: DeserializeOwned>(name: &str) -> Result<T, LoaderError> {
                     .map_err(|e| LoaderError::new(500, format!("decode `{name}`: {e}")))
             }
             Err(err) => {
-                let loader_err = LoaderError::new(500, err.to_string());
+                let status = match &err {
+                    ResumaError::Render(_) | ResumaError::Io(_) => 500,
+                    other => other.status_code(),
+                };
+                let loader_err = LoaderError::new(status, err.to_string());
+                if rt.first_load_error.is_none() {
+                    rt.first_load_error = Some(loader_err.clone());
+                }
                 rt.load_errors.insert(name.to_string(), loader_err.clone());
                 Err(loader_err)
             }
@@ -272,7 +336,7 @@ pub fn current_request() -> Option<FlowRequest> {
 
 /// First loader error recorded during this render, if any.
 pub fn first_load_error() -> Option<LoaderError> {
-    with_flow(|cell| cell.borrow().as_ref()?.load_errors.values().next().cloned())
+    with_flow(|cell| cell.borrow().as_ref()?.first_load_error.clone())
 }
 
 /// Set a cache-control hint for a loader (used by `#[load(cache = "...")]`).

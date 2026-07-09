@@ -5,6 +5,8 @@
  * interaction or immediately when the page needs reactive bindings upfront.
  */
 
+import "./types.js";
+
 const STATE_SCRIPT_ID = "resuma-state";
 const ROOT_ID = "resuma-root";
 const HANDLER_PREFIX = "data-r-on:";
@@ -16,6 +18,7 @@ interface ResumePayload {
   signals: unknown[];
   handlers: Record<string, Record<string, string>>;
   islands: string[];
+  effects?: unknown[];
   visible_tasks?: Record<string, string>;
   lazy_chunks?: string[];
 }
@@ -64,13 +67,23 @@ function pageRoot(): HTMLElement {
   return document.getElementById(ROOT_ID) ?? document.body;
 }
 
+function payloadHasHandlers(handlers: ResumePayload["handlers"]): boolean {
+  for (const symbols of Object.values(handlers)) {
+    if (Object.keys(symbols).length) return true;
+  }
+  return false;
+}
+
 function needsCoreNow(payload: ResumePayload, scope: HTMLElement): boolean {
   if (payload.signals.length) return true;
   if (payload.islands.length) return true;
+  if (payload.effects?.length) return true;
+  if (payloadHasHandlers(payload.handlers)) return true;
   if (payload.visible_tasks && Object.keys(payload.visible_tasks).length) return true;
   if (payload.lazy_chunks?.length) return true;
+  const handlerSelectors = KNOWN_EVENTS.map((ev) => `[data-r-on\\:${ev}]`).join(", ");
   return !!scope.querySelector(
-    "resuma-island, resuma-boundary, resuma-dyn, resuma-show, resuma-for, resuma-match, [data-r-bind], [data-r-submit], template[data-r-portal], template[data-r-stream-chunk], [data-r-vt], a[data-r-nav]",
+    `resuma-island, resuma-boundary, resuma-dyn, resuma-show, resuma-for, resuma-match, [data-r-bind], [data-r-submit], ${handlerSelectors}, template[data-r-portal], template[data-r-stream-chunk], [data-r-vt], a[data-r-nav]`,
   );
 }
 
@@ -144,12 +157,6 @@ function boot(): void {
 // Start warming core as soon as the loader script executes — do not wait for
 // DOMContentLoaded, otherwise the first user click can race bootstrap.
 preloadCoreIfNeeded();
-
-declare global {
-  interface Window {
-    __resumaCoreReady?: Promise<void>;
-  }
-}
 
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", boot, { once: true });

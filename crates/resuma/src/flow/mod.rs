@@ -31,8 +31,8 @@ pub mod stream_load;
 
 pub use app::{FlowApp, FlowServeOptions};
 pub use cache::{loader_cache, merge_cache_control, register_loader_cache};
-pub use errors::{error_page, not_found_page, FlowError};
-pub use extensions::FlowExtensions;
+pub use errors::{error_page, not_found_page, registry_miss_page, FlowError};
+pub use extensions::{global_extensions, set_global_extensions, FlowExtensions};
 pub use extract::{FromFlowRequest, Path, Query};
 pub use form::form;
 pub use invalidate::{invalidate_href, invalidate_href_now, invalidate_link};

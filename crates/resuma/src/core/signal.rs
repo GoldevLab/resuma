@@ -127,16 +127,30 @@ where
     }
 
     fn serialize_value(&self) -> Value {
-        serde_json::to_value(&*self.inner.value.read()).unwrap_or(Value::Null)
-    }
-
-    fn values_equal(a: &T, b: &T) -> bool {
-        match (serde_json::to_value(a), serde_json::to_value(b)) {
-            (Ok(va), Ok(vb)) => va == vb,
-            _ => false,
+        match serde_json::to_value(&*self.inner.value.read()) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!(error = %e, signal_id = self.inner.id.0, "signal value not JSON-serializable");
+                Value::Null
+            }
         }
     }
 
+    fn values_equal(a: &T, b: &T) -> bool {
+        // Prefer exact float identity matching the client `Object.is`
+        // (NaN equals NaN; -0.0 differs from +0.0) before falling back to JSON.
+        if let Some(eq) = float_bits_equal(a, b) {
+            return eq;
+        }
+        match (serde_json::to_value(a), serde_json::to_value(b)) {
+            (Ok(va), Ok(vb)) => json_values_equal(&va, &vb),
+            // Non-JSON values: try string form before assuming a change.
+            _ => match (serde_json::to_string(a), serde_json::to_string(b)) {
+                (Ok(sa), Ok(sb)) => sa == sb,
+                _ => false,
+            },
+        }
+    }
     /// Split into a read-only and a write-only handle.
     pub fn split(self) -> (ReadSignal<T>, WriteSignal<T>) {
         (
@@ -145,6 +159,41 @@ where
             },
             WriteSignal { signal: self },
         )
+    }
+}
+
+
+fn float_bits_equal<T: 'static>(a: &T, b: &T) -> Option<bool> {
+    use std::any::Any;
+    let a_any = a as &dyn Any;
+    let b_any = b as &dyn Any;
+    if let (Some(a), Some(b)) = (a_any.downcast_ref::<f64>(), b_any.downcast_ref::<f64>()) {
+        return Some(a.to_bits() == b.to_bits() || (a.is_nan() && b.is_nan()));
+    }
+    if let (Some(a), Some(b)) = (a_any.downcast_ref::<f32>(), b_any.downcast_ref::<f32>()) {
+        return Some(a.to_bits() == b.to_bits() || (a.is_nan() && b.is_nan()));
+    }
+    None
+}
+
+/// Equality aligned with the client for nested JSON (and floats that survived
+/// serialization). Numbers use bitwise identity so `-0` ≠ `+0`.
+fn json_values_equal(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::Number(na), Value::Number(nb)) => match (na.as_f64(), nb.as_f64()) {
+            (Some(fa), Some(fb)) => fa.to_bits() == fb.to_bits(),
+            _ => na == nb,
+        },
+        (Value::Array(aa), Value::Array(ba)) => {
+            aa.len() == ba.len() && aa.iter().zip(ba).all(|(x, y)| json_values_equal(x, y))
+        }
+        (Value::Object(ao), Value::Object(bo)) => {
+            ao.len() == bo.len()
+                && ao
+                    .iter()
+                    .all(|(k, v)| bo.get(k).is_some_and(|w| json_values_equal(v, w)))
+        }
+        _ => a == b,
     }
 }
 
@@ -219,6 +268,28 @@ mod tests {
             n.set(0);
             n.set(1);
             assert_eq!(n.peek(), 1);
+        });
+    }
+
+    #[test]
+    fn float_nan_is_equal_like_object_is() {
+        let ctx = RenderContext::new(RenderMode::Ssr);
+        with_context(ctx, || {
+            let n = signal(f64::NAN);
+            // Setting NaN again must be a no-op (matches JS Object.is(NaN, NaN)).
+            n.set(f64::NAN);
+            assert!(n.peek().is_nan());
+        });
+    }
+
+    #[test]
+    fn float_negative_zero_differs_from_positive_zero() {
+        let ctx = RenderContext::new(RenderMode::Ssr);
+        with_context(ctx, || {
+            let n = signal(0.0_f64);
+            n.set(-0.0);
+            // Object.is(+0, -0) is false — notify must fire and value must update.
+            assert_eq!(n.peek().to_bits(), (-0.0_f64).to_bits());
         });
     }
 }

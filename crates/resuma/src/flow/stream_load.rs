@@ -4,14 +4,14 @@ use std::collections::HashSet;
 use std::pin::Pin;
 
 use crate::core::stream_chunk;
-use crate::core::view::View;
-use crate::ssr::{render_body_and_payload, stream_head, stream_tail, PageOptions, StreamChunk};
+use crate::core::view::{Attr, AttrValue, Child, Element, View};
+use crate::core::context::ResumePayload;
+use crate::ssr::{render_view, stream_head, stream_tail, PageOptions, StreamChunk};
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use serde_json::Value;
 
 use super::cache::loader_cache;
-use super::registry::dispatch_load;
 use super::runtime::{take_deferred_stream_plan, DeferredStreamPlan};
 
 static STREAM_LOADERS: Lazy<RwLock<HashSet<String>>> = Lazy::new(|| RwLock::new(HashSet::new()));
@@ -57,32 +57,48 @@ pub fn render_deferred_page_stream(
     shell: View,
     opts: PageOptions,
     path: &str,
+    payload: ResumePayload,
     plan: DeferredStreamPlan,
 ) -> Pin<Box<dyn futures_util::Stream<Item = StreamChunk> + Send>> {
     let path = path.to_string();
     Box::pin(async_stream::stream! {
-        let (shell_html, payload) = render_body_and_payload(&shell);
+        let shell_html = render_view(&shell);
         yield Ok(stream_head(&opts, &path));
         yield Ok(shell_html.clone());
 
         let mut req = plan.request;
         for name in plan.deferred {
-            match dispatch_load(&name, req.clone()).await {
+            let prefetched = plan.prefetched.get(&name).cloned();
+            let resolved = match prefetched {
+                Some(result) => result,
+                None => {
+                    // Loader was not prefetched (should not happen when plan is built correctly).
+                    continue;
+                }
+            };
+
+            match resolved {
                 Ok(value) => {
                     if let Some(cache) = loader_cache(&name) {
                         req.cache_control.insert(name.clone(), cache);
                     }
-                    let inner = crate::ssr::render_view(&render_chunk_view(&name, &value));
-                    let chunk = crate::ssr::render_view(&stream_chunk(&name, inner));
+                    let inner = render_view(&render_chunk_view(&name, &value));
+                    let chunk = render_view(&stream_chunk(&name, inner));
                     yield Ok(chunk);
                 }
                 Err(err) => {
-                    let inner = format!(
-                        r#"<p class="resuma-error">Error loading `{name}`: {err}</p>"#,
-                        name = name,
-                        err = err,
-                    );
-                    let chunk = crate::ssr::render_view(&stream_chunk(&name, inner));
+                    let inner = render_view(&View::Element(Element {
+                        tag: "p".into(),
+                        attrs: vec![Attr {
+                            name: "class".into(),
+                            value: AttrValue::Static("resuma-stream-error".into()),
+                        }],
+                        children: vec![Child::Text(format!(
+                            "Error loading `{name}`: {err}"
+                        ))],
+                        dom_id: None,
+                    }));
+                    let chunk = render_view(&stream_chunk(&name, inner));
                     yield Ok(chunk);
                 }
             }
@@ -96,13 +112,47 @@ fn deferred_stream_hook(
     shell: View,
     opts: &PageOptions,
     path: &str,
+    payload: &ResumePayload,
 ) -> Option<Pin<Box<dyn futures_util::Stream<Item = StreamChunk> + Send>>> {
     let plan = take_deferred_stream_plan()?;
-    Some(render_deferred_page_stream(shell, opts.clone(), path, plan))
+    Some(render_deferred_page_stream(
+        shell,
+        opts.clone(),
+        path,
+        payload.clone(),
+        plan,
+    ))
 }
 
 pub fn install_deferred_stream_hook() {
     crate::server::set_deferred_stream_hook(deferred_stream_hook);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::view::{Child, Element, View};
+    use crate::flow::load::LoaderError;
+    use crate::ssr::escape_text;
+
+    #[test]
+    fn stream_error_html_escapes_loader_message() {
+        let err = LoaderError::new(500, "<script>alert(1)</script>");
+        let html = render_view(&View::Element(Element {
+            tag: "p".into(),
+            attrs: vec![crate::core::view::Attr {
+                name: "class".into(),
+                value: crate::core::view::AttrValue::Static("resuma-stream-error".into()),
+            }],
+            children: vec![Child::Text(format!(
+                "Error loading `items`: {}",
+                err.message
+            ))],
+            dom_id: None,
+        }));
+        assert!(!html.contains("<script>"));
+        assert!(html.contains(&escape_text("<script>alert(1)</script>")));
+    }
 }
 
 #[ctor::ctor(unsafe)]

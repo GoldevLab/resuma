@@ -53,6 +53,11 @@ pub trait FlowPageRegistry: Send + Sync {
     fn routes(&self) -> &'static [(&'static str, &'static str)] {
         &[]
     }
+
+    /// Layout URL patterns for a page pattern, root → leaf (embedded at codegen time).
+    fn layout_for(&self, _pattern: &str) -> &'static [&'static str] {
+        &[]
+    }
 }
 
 /// Look up a discovered route by URL pattern.

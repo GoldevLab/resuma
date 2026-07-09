@@ -39,10 +39,27 @@ async fn contact(data: ContactForm) -> std::result::Result<Redirect, SubmitError
     Ok(Redirect::to("/thanks"))
 }
 
+#[data]
+struct TodoItem {
+    id: i32,
+    title: String,
+}
+
 #[component]
 fn Counter() {
     let count = signal(0_i32);
     let status = signal(String::new());
+    let open = signal(true);
+    let items = signal(vec![
+        TodoItem {
+            id: 1,
+            title: "Alpha".into(),
+        },
+        TodoItem {
+            id: 2,
+            title: "Beta".into(),
+        },
+    ]);
 
     view! {
         <section data-testid="counter">
@@ -61,6 +78,35 @@ fn Counter() {
                 "Save Count"
             </button>
             <p data-testid="save-status">{status}</p>
+
+            <button
+                type="button"
+                data-testid="toggle-show"
+                onClick={open.update(|v| *v = !*v)}
+            >
+                "Toggle panel"
+            </button>
+            <Show when={open}>
+                <p data-testid="show-panel">"Panel visible"</p>
+            </Show>
+
+            <button
+                type="button"
+                data-testid="add-item"
+                onClick={js! {
+                    const list = [...state.items.value];
+                    const nextId = list.reduce((m, t) => Math.max(m, t.id), 0) + 1;
+                    list.push({ id: nextId, title: "Item " + nextId });
+                    state.items.set(list);
+                }}
+            >
+                "Add item"
+            </button>
+            <ul data-testid="item-list">
+                <For each={items} key="id" let:item>
+                    <li data-testid="list-item">{item.title.clone()}</li>
+                </For>
+            </ul>
         </section>
     }
 }

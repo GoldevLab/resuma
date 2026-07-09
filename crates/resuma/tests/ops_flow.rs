@@ -109,7 +109,7 @@ fn redirect_submit(
     Box::pin(async { Ok(serde_json::to_value(resuma::Redirect::to("/items?created=1")).unwrap()) })
 }
 
-const TEST_CSRF: &str = "abcdef0123456789abcdef";
+const TEST_CSRF: &str = "0123456789abcdef0123456789abcdef";
 
 #[data]
 struct ActionDto {
@@ -147,6 +147,7 @@ async fn data_macro_supplies_action_serialization_traits() {
             Request::post("/_resuma/action/ops_flow_data_action")
                 .header("content-type", "application/json")
                 .header("host", "localhost")
+                .header("origin", "http://localhost")
                 .header("cookie", format!("__resuma-csrf={TEST_CSRF}"))
                 .header("x-resuma-csrf", TEST_CSRF)
                 .extension(test_connect_info())
@@ -175,6 +176,7 @@ async fn action_decode_error_names_argument_and_suggests_data_macro() {
             Request::post("/_resuma/action/ops_flow_data_action")
                 .header("content-type", "application/json")
                 .header("host", "localhost")
+                .header("origin", "http://localhost")
                 .header("cookie", format!("__resuma-csrf={TEST_CSRF}"))
                 .header("x-resuma-csrf", TEST_CSRF)
                 .extension(test_connect_info())
@@ -207,6 +209,7 @@ async fn submit_field_errors_return_422_json() {
                 .header("content-type", "application/x-www-form-urlencoded")
                 .header("accept", "application/json")
                 .header("host", "localhost")
+                .header("origin", "http://localhost")
                 .header("cookie", format!("__resuma-csrf={TEST_CSRF}"))
                 .header("x-resuma-csrf", TEST_CSRF)
                 .extension(test_connect_info())
@@ -294,6 +297,7 @@ async fn unknown_submit_returns_404_json() {
                 .header("content-type", "application/x-www-form-urlencoded")
                 .header("accept", "application/json")
                 .header("host", "localhost")
+                .header("origin", "http://localhost")
                 .header("cookie", format!("__resuma-csrf={TEST_CSRF}"))
                 .header("x-resuma-csrf", TEST_CSRF)
                 .extension(test_connect_info())
@@ -333,6 +337,8 @@ async fn submit_redirect_303_without_js() {
         .oneshot(
             Request::post("/_resuma/submit/ops_flow_redirect_submit")
                 .header("content-type", "application/x-www-form-urlencoded")
+                .header("host", "localhost")
+                .header("origin", "http://localhost")
                 .header("cookie", format!("__resuma-csrf={TEST_CSRF}"))
                 .header("x-resuma-csrf", TEST_CSRF)
                 .extension(test_connect_info())
@@ -362,6 +368,8 @@ async fn submit_redirect_json_hint() {
             Request::post("/_resuma/submit/ops_flow_redirect_submit_json")
                 .header("content-type", "application/x-www-form-urlencoded")
                 .header("accept", "application/json")
+                .header("host", "localhost")
+                .header("origin", "http://localhost")
                 .header("cookie", format!("__resuma-csrf={TEST_CSRF}"))
                 .header("x-resuma-csrf", TEST_CSRF)
                 .extension(test_connect_info())

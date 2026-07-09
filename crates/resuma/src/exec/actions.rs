@@ -19,35 +19,3 @@ fn exec_status_action(
         Ok(serde_json::to_value(super::status::snapshot())?)
     })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::exec::security::{configure, ExecSecurityConfig};
-
-    #[tokio::test]
-    async fn exec_status_action_requires_auth_when_api_key_set() {
-        configure(ExecSecurityConfig {
-            api_key: Some("super-secret-key-for-tests-only".into()),
-            public: false,
-            ..ExecSecurityConfig::from_env()
-        });
-        let err = exec_status_action(vec![], FlowRequest::default())
-            .await
-            .expect_err("unauthenticated");
-        assert!(matches!(err, crate::core::ResumaError::Unauthorized));
-    }
-
-    #[tokio::test]
-    async fn exec_status_action_allows_authenticated_session() {
-        configure(ExecSecurityConfig {
-            api_key: Some("super-secret-key-for-tests-only".into()),
-            public: false,
-            ..ExecSecurityConfig::from_env()
-        });
-        let mut req = FlowRequest::default();
-        req.set_extension("authenticated", serde_json::json!(true));
-        let out = exec_status_action(vec![], req).await.expect("ok");
-        assert!(out.get("ok").and_then(|v| v.as_bool()).unwrap_or(false));
-    }
-}

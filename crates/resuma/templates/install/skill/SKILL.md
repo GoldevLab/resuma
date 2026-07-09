@@ -50,6 +50,23 @@ Also works with `when={logged_in}` (signal reference). Do **not** use `{if signa
 
 Prefer `onInput` with `js!` or signal binding — avoid `value={signal.get()}` (one-way SSR snapshot).
 
+### Visible tasks
+
+Use `visible_task!` with signal captures so `state.todos` works on the client:
+
+```rust
+visible_task!(
+    r#"(async (state, __resuma) => {
+        const next = await __resuma.action("list_todos", []);
+        state.todos.set(next);
+    })"#,
+    todos,
+    ui,
+);
+```
+
+Return a cleanup function from the task body to remove global listeners on SPA navigation.
+
 ```rust
 <input onInput={js! { state.q.set(event.target.value); }} />
 ```

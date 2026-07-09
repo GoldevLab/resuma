@@ -3,35 +3,7 @@
  * swaps `#resuma-root` + `#resuma-state` without a full document reload.
  */
 
-import { bindReactiveAttrs, bindReactiveText, initSignals, type SignalCell, type RawSignalId } from "./signals.js";
-import { initIslands } from "./islands.js";
-
-interface ResumePayload {
-  signals: Array<{ id: RawSignalId; value: unknown }>;
-  handlers: Record<string, Record<string, string>>;
-  islands: string[];
-  actions: string[];
-  contexts?: Record<string, unknown>;
-  visible_tasks?: Record<string, string>;
-}
-
-interface ResumaGlobal {
-  state: Record<string, SignalCell<unknown>>;
-  signals: Map<string, SignalCell<unknown>>;
-  handlers: Record<string, Record<string, string>>;
-  contexts: Record<string, unknown>;
-  action: (name: string, args: unknown[]) => Promise<unknown>;
-  safeAction: (name: string, args: unknown[]) => Promise<{ ok: true; value: unknown } | { ok: false; error: string }>;
-  loaded: Map<string, Record<string, Function>>;
-  refreshIsland: (id: string) => Promise<void>;
-  context: (key: string) => unknown;
-  /** SPA navigation — refetches SSR HTML and remounts signals (use for query-driven `#[load]`). */
-  navigate: (href: string, pushState?: boolean) => Promise<void>;
-  /** Build same-origin path + query (`{ fecha: "2026-01-01" }`). */
-  buildUrl: (path: string, query?: Record<string, string | null | undefined>) => string;
-  /** Re-run server loaders via SPA navigation. */
-  invalidate: (path?: string, query?: Record<string, string | null | undefined>) => Promise<void>;
-}
+import "./types.js";
 
 const ROOT_ID = "resuma-root";
 const STATE_SCRIPT_ID = "resuma-state";
@@ -41,7 +13,7 @@ const prefetchCache = new Map<string, string>();
 const prefetchInFlight = new Set<string>();
 
 async function prefetchRoute(href: string): Promise<void> {
-  if (!href || prefetchCache.has(href) || prefetchInFlight.has(href)) return;
+  if (!href || prefetchInFlight.has(href)) return;
   if (href.startsWith("http") && !href.startsWith(location.origin)) return;
   prefetchInFlight.add(href);
   try {
@@ -87,18 +59,6 @@ function isSameOrigin(href: string): boolean {
   }
 }
 
-function readPayloadFromScript(node: HTMLElement | null): ResumePayload {
-  if (!node?.textContent) {
-    return { signals: [], handlers: {}, islands: [], actions: [] };
-  }
-  try {
-    return JSON.parse(node.textContent) as ResumePayload;
-  } catch (e) {
-    console.error("[resuma] failed to parse state payload", e);
-    return { signals: [], handlers: {}, islands: [], actions: [] };
-  }
-}
-
 function pathsMatch(href: string, current: string): boolean {
   if (href === current) return true;
   const base = "http://resuma.local";
@@ -131,50 +91,26 @@ function updateNavActiveClasses(path: string): void {
 }
 
 /** Re-mount signals and bindings after swapping page HTML. */
-export function remountPage(): void {
+export async function remountPage(): Promise<void> {
   if (!window.__resuma) {
-    // Core not yet bootstrapped — let the loader/core take over via full load.
     window.location.reload();
     return;
   }
 
-  // Preferred path: replay the exact same mount the active runtime uses on
-  // first load, so effects/tasks/lazy-chunks/portals survive SPA navigation.
   if (pageMounter) {
     pageMounter();
     updateNavActiveClasses(location.pathname + location.search);
     return;
   }
 
-  // Fallback (no runtime registered a mounter): reactive bindings + islands.
-  const payload = readPayloadFromScript(document.getElementById(STATE_SCRIPT_ID));
-  const signals = initSignals(payload.signals);
-
-  const state: Record<string, SignalCell<unknown>> = {};
-  for (const [k, cell] of signals) state[k] = cell;
-
-  const prev = window.__resuma;
-  const __resuma: ResumaGlobal = {
-    state,
-    signals,
-    handlers: payload.handlers,
-    contexts: payload.contexts ?? {},
-    loaded: prev.loaded ?? new Map(),
-    action: prev.action,
-    safeAction: prev.safeAction,
-    refreshIsland: prev.refreshIsland,
-    context: (key: string) => __resuma.contexts[key],
-    navigate,
-    buildUrl,
-    invalidate,
-  };
-  window.__resuma = __resuma;
-
-  const scope = root();
-  bindReactiveText(scope, signals);
-  bindReactiveAttrs(scope, signals);
-  initIslands(scope, signals);
-  updateNavActiveClasses(location.pathname + location.search);
+  // Fallback when no mounter registered — replay core mount pipeline.
+  try {
+    const mod = await import("./core.js");
+    mod.mountPage();
+    updateNavActiveClasses(location.pathname + location.search);
+  } catch {
+    window.location.reload();
+  }
 }
 
 /** Move focus to the page root for assistive tech after an SPA swap. */
@@ -211,6 +147,7 @@ export async function invalidate(
   path?: string,
   query?: Record<string, string | null | undefined>,
 ): Promise<void> {
+  prefetchCache.clear();
   const targetPath = path?.split("?")[0] ?? location.pathname;
   const bust = String(Date.now());
   await navigate(buildUrl(targetPath, { ...query, _r: bust }));
@@ -273,7 +210,7 @@ export async function navigate(href: string, pushState = true): Promise<void> {
   } catch (err) {
     // Aborted by a newer navigation — stay silent, the newer one owns the page.
     if (err instanceof DOMException && err.name === "AbortError") return;
-    console.error("[resuma] navigation failed", err);
+    console.error("[r] nav", err);
     window.location.href = href;
   }
 }
@@ -299,7 +236,7 @@ export function followRedirect(path: string): void {
   }
   // Anything else (cross-origin, protocol-relative, javascript:, data:) is
   // treated as untrusted: ignore rather than navigate.
-  console.warn("[resuma] ignored unsafe redirect target", path);
+  console.warn("[r] bad redirect", path);
 }
 
 function shouldEnhanceLink(a: HTMLAnchorElement, ev: MouseEvent): boolean {
@@ -346,8 +283,4 @@ export function initNavLinks(): void {
   window.addEventListener("popstate", () => {
     void navigate(location.pathname + location.search, false);
   });
-}
-
-declare global {
-  interface Window { __resuma?: ResumaGlobal; }
 }

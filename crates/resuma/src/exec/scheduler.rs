@@ -232,7 +232,7 @@ pub fn create(body: CreateScheduleBody) -> Result<ScheduleJob> {
     let schedule = cron::parse(&body.cron)?;
     let now = id::now_ms();
     let job = ScheduleJob {
-        id: format!("s_{}", crate::server::security::random_token()),
+        id: format!("s_{}", crate::server::security::try_random_token()?),
         name: body.name,
         cron: body.cron,
         worker: body.worker,

@@ -42,7 +42,7 @@ fn action_pipeline(
         if let Ok(expected) = std::env::var("RESUMA_TODO_API_KEY") {
             if !expected.is_empty() {
                 let got = req.header("x-resuma-demo-key").unwrap_or("");
-                if got != expected {
+                if !resuma::server::verify_secret(&expected, got) {
                     return Err(ResumaError::Unauthorized);
                 }
             }

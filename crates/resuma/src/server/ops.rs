@@ -54,12 +54,14 @@ pub async fn request_id_middleware(mut req: Request<Body>, next: Next) -> Respon
     }
 
     let started = Instant::now();
-    // Isolate staged page metadata (CSRF token, CSP nonce, cache headers) per
-    // request task so concurrent requests on the same worker thread cannot
-    // clobber each other's staging mid-render.
-    let mut res = super::page_cache::scope_page_staging(crate::flow::runtime::scope_flow_runtime(
-        next.run(req),
-    ))
+    // Isolate render context, component context stack, Flow loader state, and
+    // page staging per request task so concurrent requests on the same worker
+    // thread cannot clobber each other's state mid-render (block_in_place).
+    let mut res = super::page_cache::scope_page_staging(
+        crate::core::context::scope_render_context(crate::core::app_context::scope_context_stack(
+            crate::flow::runtime::scope_flow_runtime(next.run(req)),
+        )),
+    )
     .await;
     let latency_ms = started.elapsed().as_millis();
     let status = res.status().as_u16();

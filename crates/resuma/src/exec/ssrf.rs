@@ -14,7 +14,11 @@ pub const BLOCKED_HEADERS: &[&str] = &[
     "proxy-authorization",
     "x-forwarded-for",
     "x-forwarded-host",
+    "x-forwarded-scheme",
     "x-real-ip",
+    "x-original-url",
+    "forwarded",
+    "true-client-ip",
 ];
 
 /// Validate a URL before outbound fetch (hostname / scheme checks, no DNS yet).

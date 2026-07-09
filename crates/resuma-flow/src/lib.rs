@@ -44,3 +44,21 @@ pub mod prelude {
     pub use resuma::prelude::*;
     pub use resuma::worker;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use resuma::ssr::render_view;
+
+    #[test]
+    fn flow_styles_is_non_empty() {
+        let view = flow_styles();
+        let html = render_view(&view);
+        assert!(html.contains("style") || html.contains("css"));
+    }
+
+    #[test]
+    fn prelude_reexports_flow_app() {
+        let _ = FlowApp::new();
+    }
+}

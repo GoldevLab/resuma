@@ -58,17 +58,45 @@ fn TodoMini() -> View {
                     if (q && !t.title.toLowerCase().includes(q)) return false;
                     return true;
                 });
+                ul.replaceChildren();
                 if (!visible.length) {
-                    ul.innerHTML = '<li class="muted">No tasks match</li>';
+                    const li = document.createElement('li');
+                    li.className = 'muted';
+                    li.textContent = 'No tasks match';
+                    ul.appendChild(li);
                     return;
                 }
-                ul.innerHTML = visible.map(t =>
-                    '<li class="todo-row" data-id="' + t.id + '">' +
-                    '<label><input type="checkbox" data-toggle="' + t.id + '" ' + (t.done ? 'checked' : '') + '/> ' +
-                    '<span class="todo-title" data-title="' + t.id + '">' + t.title + '</span></label>' +
-                    '<button type="button" class="btn btn-ghost btn-xs" data-rename="' + t.id + '">edit</button>' +
-                    '<button type="button" class="btn btn-ghost btn-xs" data-remove="' + t.id + '">×</button></li>'
-                ).join('');
+                for (const t of visible) {
+                    const li = document.createElement('li');
+                    li.className = 'todo-row';
+                    li.dataset.id = String(t.id);
+                    const label = document.createElement('label');
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.dataset.toggle = String(t.id);
+                    if (t.done) cb.checked = true;
+                    const span = document.createElement('span');
+                    span.className = 'todo-title';
+                    span.dataset.title = String(t.id);
+                    span.textContent = t.title;
+                    label.appendChild(cb);
+                    label.appendChild(document.createTextNode(' '));
+                    label.appendChild(span);
+                    const editBtn = document.createElement('button');
+                    editBtn.type = 'button';
+                    editBtn.className = 'btn btn-ghost btn-xs';
+                    editBtn.dataset.rename = String(t.id);
+                    editBtn.textContent = 'edit';
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.className = 'btn btn-ghost btn-xs';
+                    removeBtn.dataset.remove = String(t.id);
+                    removeBtn.textContent = '×';
+                    li.appendChild(label);
+                    li.appendChild(editBtn);
+                    li.appendChild(removeBtn);
+                    ul.appendChild(li);
+                }
                 ul.querySelectorAll('[data-toggle]').forEach(el => {
                     el.addEventListener('change', async () => {
                         try {

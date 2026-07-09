@@ -377,11 +377,24 @@ pub fn registry(_req: FlowRequest) -> View {
                     items.forEach(i => i.classList.remove('selected'));
                     el.classList.add('selected');
                     if (!detail) return;
-                    detail.innerHTML =
-                        '<h3>' + el.dataset.name + '</h3>' +
-                        '<p class="muted">' + el.dataset.catLabel + ' · ' + el.dataset.route + '</p>' +
-                        '<p><a href="' + el.dataset.route + '">Open demo →</a></p>' +
-                        '<p class="pill">Interactive: ' + (el.dataset.interactive === '1' ? 'yes' : 'no') + '</p>';
+                    detail.replaceChildren();
+                    const h3 = document.createElement('h3');
+                    h3.textContent = el.dataset.name || '';
+                    const meta = document.createElement('p');
+                    meta.className = 'muted';
+                    meta.textContent = (el.dataset.catLabel || '') + ' · ' + (el.dataset.route || '');
+                    const open = document.createElement('p');
+                    const link = document.createElement('a');
+                    link.href = el.dataset.route || '#';
+                    link.textContent = 'Open demo →';
+                    open.appendChild(link);
+                    const pill = document.createElement('p');
+                    pill.className = 'pill';
+                    pill.textContent = 'Interactive: ' + (el.dataset.interactive === '1' ? 'yes' : 'no');
+                    detail.appendChild(h3);
+                    detail.appendChild(meta);
+                    detail.appendChild(open);
+                    detail.appendChild(pill);
                 });
             });
             if (items[0]) items[0].click();

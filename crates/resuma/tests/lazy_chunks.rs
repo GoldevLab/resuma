@@ -28,6 +28,31 @@ async fn component_handlers_register_as_lazy_chunks() {
 }
 
 #[tokio::test]
+async fn oversized_page_handlers_marked_lazy_and_served_as_chunk() {
+    use resuma::core::context::{with_context, RenderContext, RenderMode, INLINE_HANDLER_MAX_BYTES};
+
+    let ctx = RenderContext::new(RenderMode::Ssr);
+    let full = with_context(ctx.clone(), || {
+        ctx.register_handler("__page__", "h_big", &"x".repeat(INLINE_HANDLER_MAX_BYTES + 1));
+        ctx.snapshot_full()
+    });
+
+    assert!(full.handlers["__page__"].contains_key("h_big"));
+    let client = full.for_client();
+    assert!(client.lazy_chunks.iter().any(|c| c == "__page__"));
+    assert!(
+        client
+            .handlers
+            .get("__page__")
+            .and_then(|m| m.get("h_big"))
+            .is_none()
+    );
+
+    let module = resuma::server::handler_assets::handler_chunk_module(&full.handlers["__page__"]);
+    assert!(module.contains("export function h_big("));
+}
+
+#[tokio::test]
 async fn event_handlers_accept_direct_signal_expressions() {
     use resuma::prelude::*;
 

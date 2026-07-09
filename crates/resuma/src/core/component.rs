@@ -3,6 +3,7 @@
 use serde::Serialize;
 
 use super::signal::Signal;
+use super::effect::Computed;
 use super::store::Store;
 use super::view::{Child, Dynamic, View};
 
@@ -95,6 +96,24 @@ impl<T: Clone + Serialize + 'static> IntoView for Signal<T> {
 }
 
 impl<T: Clone + Serialize + 'static> IntoView for &Signal<T> {
+    fn into_view(&self) -> View {
+        (*self).into_view()
+    }
+}
+
+/// `Computed<T>` delegates to its inner signal id for reactive `<resuma-dyn>` binding.
+impl<T: Clone + Serialize + Send + Sync + 'static> IntoView for Computed<T> {
+    fn into_view(&self) -> View {
+        let snapshot = serde_json::to_value(self.peek()).unwrap_or(serde_json::Value::Null);
+        View::Dynamic(Dynamic {
+            signal: self.id(),
+            format: None,
+            snapshot,
+        })
+    }
+}
+
+impl<T: Clone + Serialize + Send + Sync + 'static> IntoView for &Computed<T> {
     fn into_view(&self) -> View {
         (*self).into_view()
     }

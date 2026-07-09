@@ -12,7 +12,14 @@ pub fn encode_payload(payload: &ResumePayload) -> String {
         Ok(s) => s,
         Err(e) => {
             tracing::error!(error = %e, "failed to serialize resumability payload");
-            "{}".into()
+            if crate::server::security::config().production {
+                tracing::error!(
+                    "serialization failed in production — page interactivity may be broken"
+                );
+            }
+            return sanitize_json_for_script(
+                r#"{"signals":[],"handlers":{},"effects":[],"serialization_error":true}"#,
+            );
         }
     };
     sanitize_json_for_script(&raw)

@@ -68,14 +68,13 @@ pub fn expand(input: TokenStream) -> TokenStream {
 
     quote! {
         {
-            let __sig = ::std::clone::Clone::clone(&#primary);
             let __captures = ::std::collections::BTreeMap::from([#(#capture_pairs),*]);
             {
                 #(#clone_lets)*
-                ::resuma::__private::use_debounce(&__sig, #ms, #closure);
+                ::resuma::__private::use_effect(#closure);
             }
             ::resuma::__private::register_debounce_effect(
-                &__sig,
+                &#primary,
                 #ms,
                 __captures,
                 &#js,

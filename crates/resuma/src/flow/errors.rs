@@ -59,6 +59,13 @@ pub fn not_found_page() -> View {
     error_page(&FlowError::NotFound)
 }
 
+/// 500 when a route is registered but its page module is missing from the registry.
+pub fn registry_miss_page(module: &str) -> View {
+    error_page(&FlowError::Render(format!(
+        "page module `{module}` missing from registry — run `resuma routes --generate`"
+    )))
+}
+
 fn view_error_shell(status: u16, message: &str) -> View {
     View::Element(Element {
         tag: "main".into(),

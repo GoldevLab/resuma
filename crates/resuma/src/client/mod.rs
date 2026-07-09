@@ -50,7 +50,16 @@ impl ClientComponent {
     }
 
     pub fn props(mut self, props: impl serde::Serialize) -> Self {
-        self.props = serde_json::to_value(props).ok();
+        match serde_json::to_value(props) {
+            Ok(v) => self.props = Some(v),
+            Err(e) => {
+                tracing::warn!(
+                    client_id = %self.id,
+                    error = %e,
+                    "ClientComponent props failed to serialize — mount will have no data-r-client-props"
+                );
+            }
+        }
         self
     }
 
@@ -75,7 +84,11 @@ pub fn client_script_url(id: &str) -> String {
 
 /// Mount point + deferred module script for a [`ClientComponent`].
 pub fn client_component(comp: ClientComponent) -> View {
-    if !valid_client_id(&comp.id) {
+    if let Err(()) = validate_client_id(&comp.id) {
+        tracing::warn!(
+            client_id = %comp.id,
+            "invalid client component id — must be 1-64 alphanumeric, dash, or underscore"
+        );
         return View::empty();
     }
 
@@ -111,10 +124,6 @@ pub fn client_component(comp: ClientComponent) -> View {
         r#"<div {attrs}></div>
 <script type="module" src="{script}" defer{nonce_attr}></script>"#
     ))
-}
-
-fn valid_client_id(id: &str) -> bool {
-    validate_client_id(id).is_ok()
 }
 
 /// Validate a client component bundle id (`/static/client/{id}.js`).
@@ -179,9 +188,9 @@ mod tests {
 
     #[test]
     fn valid_client_id_accepts_common_names() {
-        assert!(valid_client_id("hero-particles"));
-        assert!(valid_client_id("chart_v2"));
-        assert!(!valid_client_id(""));
-        assert!(!valid_client_id("../escape"));
+        assert!(validate_client_id("hero-particles").is_ok());
+        assert!(validate_client_id("chart_v2").is_ok());
+        assert!(validate_client_id("").is_err());
+        assert!(validate_client_id("../escape").is_err());
     }
 }

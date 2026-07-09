@@ -387,7 +387,17 @@ pub fn image_list(req: FlowRequest) -> View {
                     const row = document.createElement('div');
                     row.className = 'img-row';
                     row.style.top = (i * ROW_H) + 'px';
-                    row.innerHTML = '<img loading="lazy" decoding="async" width="160" height="120" alt="' + item.title + '" src="' + item.thumb_url + '" /><span>' + item.title + '</span>';
+                    const img = document.createElement('img');
+                    img.loading = 'lazy';
+                    img.decoding = 'async';
+                    img.width = 160;
+                    img.height = 120;
+                    img.alt = item.title;
+                    img.src = item.thumb_url;
+                    const span = document.createElement('span');
+                    span.textContent = item.title;
+                    row.appendChild(img);
+                    row.appendChild(span);
                     inner.appendChild(row);
                 }}
                 meta.textContent = 'Showing ' + (start + 1) + '–' + end + ' of ' + ITEMS.length + ' (SSR loader + lazy images)';

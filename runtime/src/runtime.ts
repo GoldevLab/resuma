@@ -19,10 +19,16 @@
  * interactions on demand.
  */
 
-import { initSignals, type SignalCell, applyDom, bindReactiveText, bindReactiveAttrs, type RawSignalId } from "./signals.js";
+import { initSignals, signalId, type SignalCell, bindReactiveText, bindReactiveAttrs, bindShows, bindFor, bindMatch, type RawSignalId } from "./signals.js";
 import { initIslands } from "./islands.js";
+import { initEffects, flushEffectCleanups, type ClientEffectSpec } from "./effects.js";
 import { resolveHandler } from "./handler-loader.js";
-import { followRedirect, initNavLinks, remountPage, setPageMounter } from "./navigation.js";
+import { followRedirect, initNavLinks, setPageMounter, navigate, buildUrl, invalidate } from "./navigation.js";
+import { runVisibleTasks, type VisibleTaskEntry } from "./visible-tasks.js";
+import { flushMountCleanups } from "./mount-cleanups.js";
+import { beginPortalMount, mountStaticPortals } from "./portals.js";
+import type { ResumaGlobal } from "./types.js";
+import "./types.js";
 
 interface ResumePayload {
   signals: Array<{ id: RawSignalId; value: unknown }>;
@@ -30,24 +36,10 @@ interface ResumePayload {
   islands: string[];
   actions: string[];
   contexts?: Record<string, unknown>;
-  visible_tasks?: Record<string, string>;
+  visible_tasks?: Record<string, VisibleTaskEntry>;
+  effects?: ClientEffectSpec[];
   csrf_token?: string;
-}
-
-interface ResumaGlobal {
-  state: Record<string, SignalCell<unknown>>;
-  signals: Map<string, SignalCell<unknown>>;
-  handlers: Record<string, Record<string, string>>;
-  contexts: Record<string, unknown>;
-  action: (name: string, args: unknown[]) => Promise<unknown>;
-  safeAction: (name: string, args: unknown[]) => Promise<{ ok: true; value: unknown } | { ok: false; error: string }>;
-  loaded: Map<string, Record<string, Function>>;
-  refreshIsland: (id: string) => Promise<void>;
-  context: (key: string) => unknown;
-}
-
-declare global {
-  interface Window { __resuma?: ResumaGlobal; }
+  serialization_error?: boolean;
 }
 
 const STATE_SCRIPT_ID = "resuma-state";
@@ -62,7 +54,13 @@ function readPayload(): ResumePayload {
   const node = document.getElementById(STATE_SCRIPT_ID);
   if (!node || !node.textContent) return { signals: [], handlers: {}, islands: [], actions: [] };
   try {
-    return JSON.parse(node.textContent) as ResumePayload;
+    const payload = JSON.parse(node.textContent) as ResumePayload;
+    if (payload.serialization_error) {
+      console.error(
+        "[resuma] resumability payload failed to serialize on the server — page interactivity is broken",
+      );
+    }
+    return payload;
   } catch (e) {
     console.error("[resuma] failed to parse state payload", e);
     return { signals: [], handlers: {}, islands: [], actions: [] };
@@ -90,32 +88,43 @@ function bootstrap(): void {
 }
 
 function mountCurrentPage(): void {
+  flushEffectCleanups();
+  flushMountCleanups();
+  beginPortalMount();
   const payload = readPayload();
   const signals = initSignals(payload.signals);
 
   const state: Record<string, SignalCell<unknown>> = {};
   for (const [k, cell] of signals) state[k] = cell;
 
+  const prev = window.__resuma;
   const __resuma: ResumaGlobal = {
     state,
     signals,
     handlers: payload.handlers,
     contexts: payload.contexts ?? {},
-    loaded: new Map(),
+    loaded: prev?.loaded ?? new Map(),
     action: callServerAction,
     safeAction: callServerActionSafe,
     refreshIsland,
     context: (key: string) => __resuma.contexts[key],
+    navigate,
+    buildUrl,
+    invalidate,
   };
   window.__resuma = __resuma;
 
   bindReactiveText(root(), signals);
   bindReactiveAttrs(root(), signals);
+  bindShows(root(), signals);
+  bindFor(root(), signals);
+  bindMatch(root(), signals);
   initIslands(root(), signals);
   applyStreamSlots(root());
-  initPortals(root());
+  mountStaticPortals(root());
   initViewTransitions(root());
-  runVisibleTasks(payload.visible_tasks ?? {}, state);
+  if (payload.effects?.length) initEffects(payload.effects, signals, __resuma);
+  runVisibleTasks(payload.visible_tasks ?? {}, signals, state, root);
 }
 
 /* ------------------------------------------------------------------- */
@@ -184,8 +193,10 @@ function buildLocalState(captures: string[]): Record<string, SignalCell<unknown>
   if (!captures.length) return r.state;
   const local: Record<string, SignalCell<unknown>> = {};
   for (const pair of captures) {
-    const [name, id] = pair.split(":");
-    const key = id ?? name;
+    const sep = pair.indexOf(":");
+    const name = sep === -1 ? pair : pair.slice(0, sep);
+    const id = sep === -1 ? undefined : pair.slice(sep + 1);
+    const key = id != null ? signalId(id) : name;
     const cell = r.signals.get(key);
     if (cell) local[name] = cell;
   }
@@ -240,7 +251,7 @@ function attachFormEnhancement(): void {
 function showFieldErrors(form: HTMLFormElement, errors: Record<string, string>): void {
   clearFieldErrors(form);
   for (const [name, message] of Object.entries(errors)) {
-    const input = form.querySelector(`[name="${name}"]`) as HTMLElement | null;
+    const input = form.querySelector(`[name="${CSS.escape(name)}"]`) as HTMLElement | null;
     if (!input) continue;
     const el = document.createElement("span");
     el.className = "resuma-field-error";
@@ -272,26 +283,25 @@ function applyStreamSlots(scope: HTMLElement): void {
 }
 
 /* ------------------------------------------------------------------- */
-/*  Portals                                                            */
-/* ------------------------------------------------------------------- */
-
-function initPortals(scope: HTMLElement): void {
-  scope.querySelectorAll("template[data-r-portal]").forEach((tpl) => {
-    const showBranch = tpl.closest<HTMLElement>("[data-r-show-if]");
-    if (showBranch?.hidden) return;
-    const targetId = tpl.getAttribute("data-r-portal");
-    if (!targetId) return;
-    const target =
-      document.getElementById(targetId) ??
-      document.querySelector(`[data-r-portal-target="${targetId}"]`);
-    if (!target) return;
-    target.appendChild(tpl.content.cloneNode(true));
-  });
-}
-
-/* ------------------------------------------------------------------- */
 /*  View Transitions                                                   */
 /* ------------------------------------------------------------------- */
+
+function navigateForViewTransition(href: string): void {
+  if (href.startsWith("/") && !href.startsWith("//")) {
+    void navigate(href);
+    return;
+  }
+  try {
+    const url = new URL(href, location.origin);
+    if (url.origin === location.origin && (url.protocol === "http:" || url.protocol === "https:")) {
+      void navigate(url.pathname + url.search + url.hash);
+      return;
+    }
+  } catch {
+    /* fall through */
+  }
+  window.location.assign(href);
+}
 
 function initViewTransitions(scope: HTMLElement): void {
   if (!("startViewTransition" in document)) return;
@@ -302,66 +312,11 @@ function initViewTransitions(scope: HTMLElement): void {
       const href = anchor.getAttribute("href");
       if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
       ev.preventDefault();
-      const run = () => { window.location.href = href; };
-      (document as Document & { startViewTransition?: (cb: () => void) => void })
-        .startViewTransition?.(run);
+      const go = () => navigateForViewTransition(href);
+      (document as Document & { startViewTransition?: (cb: () => void | Promise<void>) => void })
+        .startViewTransition?.(go) ?? go();
     });
   });
-}
-
-/* ------------------------------------------------------------------- */
-/*  Visible tasks (use_visible_task)                                   */
-/* ------------------------------------------------------------------- */
-
-function runVisibleTasks(tasks: Record<string, string>, state: Record<string, SignalCell<unknown>>): void {
-  const entries = Object.entries(tasks);
-  if (!entries.length) return;
-
-  const run = (id: string, source: string) => {
-    try {
-      let trimmed = source.trim();
-      if (trimmed.endsWith(")()")) trimmed = trimmed.slice(0, -2);
-      const fn = new Function(
-        "state",
-        "__resuma",
-        `return (${trimmed})(state, __resuma);`,
-      ) as (state: unknown, resuma: ResumaGlobal) => Promise<void> | void;
-      void Promise.resolve(fn(state, window.__resuma!));
-    } catch (err) {
-      console.error("[resuma] visible task", id, err);
-    }
-  };
-
-  const pending = new Set(entries.map(([id]) => id));
-  const runOnce = (id: string, source: string) => {
-    if (!pending.has(id)) return;
-    pending.delete(id);
-    run(id, source);
-  };
-
-  for (const [id, source] of entries) runOnce(id, source);
-
-  if ("IntersectionObserver" in window) {
-    const io = new IntersectionObserver((entries, obs) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        const id = (entry.target as HTMLElement).dataset.rVisibleTask;
-        const source = id ? tasks[id] : undefined;
-        if (id && source) runOnce(id, source);
-        obs.unobserve(entry.target);
-      }
-    }, { rootMargin: "50px" });
-    for (const [id] of entries) {
-      const marker = document.createElement("span");
-      marker.dataset.rVisibleTask = id;
-      marker.style.cssText =
-        "position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden";
-      root().appendChild(marker);
-      io.observe(marker);
-    }
-  } else {
-    for (const [id, source] of entries) run(id, source);
-  }
 }
 
 /* ------------------------------------------------------------------- */
@@ -408,7 +363,10 @@ async function refreshIsland(instance: string): Promise<void> {
   const html = await res.text();
   const target = document.querySelector(`resuma-island[data-r-instance="${instance}"]`);
   if (target) target.outerHTML = html;
-  remountPage();
+  const { applyDom } = await import("./signals.js");
+  applyDom();
+  const signals = window.__resuma?.signals;
+  if (signals) initIslands(root(), signals);
 }
 
 /* ------------------------------------------------------------------- */

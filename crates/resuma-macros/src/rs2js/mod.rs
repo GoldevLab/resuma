@@ -183,6 +183,26 @@ impl Translator {
             Expr::Binary(ExprBinary {
                 left, op, right, ..
             }) => {
+                // syn 2 models compound assignments (`count += 1`) as
+                // `Expr::Binary` with an `*Assign` `BinOp`. When the target is a
+                // captured signal, `state.count` is a `SignalCell` (an object),
+                // so a raw `state.count += 1` coerces it to `NaN` and destroys
+                // the reference. Route signal targets through `.update()`.
+                if let Some(arith) = compound_assign_arith(*op) {
+                    let r = self.expr(right)?;
+                    if let Some(name) = self.capture_lhs(left) {
+                        return Ok(format!(
+                            "state.{name}.update((__v) => (__v {arith} {r}))",
+                            name = name,
+                            arith = arith,
+                            r = r
+                        ));
+                    }
+                    let l = self.expr(left)?;
+                    let op = bin_op_to_js(*op)
+                        .ok_or_else(|| Rs2JsError::unsupported("binary op", e.span()))?;
+                    return Ok(format!("({} {} {})", l, op, r));
+                }
                 let l = self.expr(left)?;
                 let r = self.expr(right)?;
                 let op = bin_op_to_js(*op)
@@ -294,12 +314,15 @@ impl Translator {
         }
     }
 
-    /// If `left` is a simple captured signal identifier, return its name.
-    fn capture_lhs(&self, left: &Expr) -> Option<String> {
+    /// If `left` is a simple captured signal identifier, register it as a
+    /// capture and return its name. Assignments (`x = 1`, `x += 1`) must record
+    /// the target signal so the runtime exposes it in the handler's `state`.
+    fn capture_lhs(&mut self, left: &Expr) -> Option<String> {
         if let Expr::Path(ExprPath { path, .. }) = left {
             let segments: Vec<String> = path.segments.iter().map(|s| s.ident.to_string()).collect();
             if let [name] = segments.as_slice() {
                 if !self.is_local(name) {
+                    self.captures.insert(name.clone());
                     return Some(name.clone());
                 }
             }
@@ -340,6 +363,22 @@ impl Translator {
     fn method_call(&mut self, call: &ExprMethodCall) -> Result<String, Rs2JsError> {
         let receiver = self.expr(&call.receiver)?;
         let method = call.method.to_string();
+
+        // `signal.update(|c| *c += 1)` — in Rust the closure receives `&mut T`
+        // and mutates in place (returning `()`). The JS `SignalCell.update`
+        // contract instead expects the callback to *return* the next value, so
+        // we translate the closure to return its (reassigned) parameter. This
+        // keeps block-bodied closures (`|c| { *c += 1; }`) working, which would
+        // otherwise return `undefined` and silently drop the update.
+        if method == "update" {
+            if let Some(Expr::Closure(closure)) = call.args.first() {
+                if call.args.len() == 1 {
+                    let cb = self.translate_update_closure(closure)?;
+                    return Ok(format!("{}.update({})", receiver, cb));
+                }
+            }
+        }
+
         let args: Result<Vec<_>, _> = call.args.iter().map(|a| self.expr(a)).collect();
         let args = args?;
 
@@ -520,6 +559,36 @@ impl Translator {
         Ok(format!("if ({}) {{ {} }}{}", cond, then, else_part))
     }
 
+    /// Translate a closure passed to `Signal::update`. The Rust closure mutates
+    /// its `&mut T` param and returns `()`; the emitted JS arrow reassigns the
+    /// param and returns it so `SignalCell.update` receives the next value.
+    fn translate_update_closure(&mut self, c: &ExprClosure) -> Result<String, Rs2JsError> {
+        self.locals.push(BTreeSet::new());
+
+        let param = match c.inputs.first() {
+            Some(input) => {
+                let (name, _ty) = pat_to_param(input)?;
+                self.locals.last_mut().unwrap().insert(name.clone());
+                name
+            }
+            None => "_v".to_string(),
+        };
+
+        let body = match &*c.body {
+            Expr::Block(ExprBlock { block, .. }) => self.stmts(&block.stmts)?,
+            other => format!("{};", self.expr(other)?),
+        };
+
+        self.locals.pop();
+
+        // Append `return <param>` so the (reassigned) value flows back out.
+        Ok(format!(
+            "({param}) => {{ {body} return {param}; }}",
+            param = param,
+            body = body
+        ))
+    }
+
     fn is_local(&self, name: &str) -> bool {
         self.locals.iter().rev().any(|s| s.contains(name))
     }
@@ -562,6 +631,24 @@ fn pat_to_param(p: &Pat) -> Result<(String, Option<String>), Rs2JsError> {
             Span::call_site(),
         )),
     }
+}
+
+/// Underlying arithmetic/bitwise operator for a compound-assignment `BinOp`
+/// (`+=` → `+`). Returns `None` for non-assignment operators.
+fn compound_assign_arith(op: BinOp) -> Option<&'static str> {
+    Some(match op {
+        BinOp::AddAssign(_) => "+",
+        BinOp::SubAssign(_) => "-",
+        BinOp::MulAssign(_) => "*",
+        BinOp::DivAssign(_) => "/",
+        BinOp::RemAssign(_) => "%",
+        BinOp::BitAndAssign(_) => "&",
+        BinOp::BitOrAssign(_) => "|",
+        BinOp::BitXorAssign(_) => "^",
+        BinOp::ShlAssign(_) => "<<",
+        BinOp::ShrAssign(_) => ">>",
+        _ => return None,
+    })
 }
 
 fn bin_op_to_js(op: BinOp) -> Option<&'static str> {
@@ -679,8 +766,60 @@ mod tests {
 
     #[test]
     fn handler_signal_update_roundtrip() {
-        let js = handler_js("move |_| count.update(|c| c + 1)");
+        let js = handler_js("move |_| count.update(|c| *c += 1)");
         assert!(js.contains("state.count.update"));
         assert!(js.contains("async (_event, state, __resuma)"));
+    }
+
+    #[test]
+    fn update_expr_body_returns_mutated_param() {
+        let js = expr_js("count.update(|c| *c += 1)");
+        assert!(js.contains("state.count.update"), "got: {js}");
+        assert!(js.contains("return c;"), "must return param: {js}");
+        assert!(js.contains("c += 1"), "must reassign param: {js}");
+    }
+
+    #[test]
+    fn update_block_body_returns_mutated_param() {
+        // Block-bodied update closures previously returned `undefined` in JS,
+        // silently dropping the update. Ensure the param is returned.
+        let js = expr_js("count.update(|c| { *c += 2; })");
+        assert!(js.contains("state.count.update"), "got: {js}");
+        assert!(js.contains("return c;"), "block body must still return param: {js}");
+        assert!(js.contains("c += 2"), "got: {js}");
+    }
+
+    #[test]
+    fn compound_assign_on_signal_uses_update() {
+        let js = expr_js("count += 1");
+        assert!(
+            js.contains("state.count.update"),
+            "compound assign on signal must use .update(): {js}"
+        );
+        assert!(
+            !js.contains("state.count +="),
+            "must not emit raw += on signal cell: {js}"
+        );
+        assert!(js.contains("+ 1"), "arithmetic preserved: {js}");
+    }
+
+    #[test]
+    fn compound_assign_sub_on_signal() {
+        let js = expr_js("total -= 5");
+        assert!(js.contains("state.total.update"), "got: {js}");
+        assert!(js.contains("- 5"), "got: {js}");
+    }
+
+    #[test]
+    fn compound_assign_on_local_stays_raw() {
+        let js = handler_js("move |n| { let x = n; x += 1 }");
+        assert!(
+            js.contains("x +="),
+            "local vars keep raw += : {js}"
+        );
+        assert!(
+            !js.contains("state.x.update"),
+            "must not treat let-binding as signal: {js}"
+        );
     }
 }

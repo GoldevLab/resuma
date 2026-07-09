@@ -7,6 +7,15 @@ pub struct RouteMatch {
     pub params: BTreeMap<String, String>,
 }
 
+/// Normalize a URL path for static route lookup (strip trailing slash except root).
+pub fn normalize_lookup_path(path: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.is_empty() || trimmed == "/" {
+        return "/".to_string();
+    }
+    trimmed.trim_end_matches('/').to_string()
+}
+
 /// Match a URL path against a Resuma Flow pattern.
 ///
 /// Patterns use:
@@ -132,5 +141,12 @@ mod tests {
     #[test]
     fn trailing_slash_normalized() {
         assert!(match_route("/about", "/about/").is_some());
+    }
+
+    #[test]
+    fn normalize_lookup_strips_trailing_slash() {
+        assert_eq!(normalize_lookup_path("/about/"), "/about");
+        assert_eq!(normalize_lookup_path("/"), "/");
+        assert_eq!(normalize_lookup_path(""), "/");
     }
 }

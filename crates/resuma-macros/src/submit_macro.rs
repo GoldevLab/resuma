@@ -96,7 +96,7 @@ pub fn expand(_args: TokenStream, input: TokenStream) -> TokenStream {
             data: ::resuma::__private::serde_json::Value,
             req: ::resuma::FlowRequest,
         ) -> ::resuma::__private::Result<::resuma::__private::serde_json::Value> {
-            let #data_ident: _ = ::resuma::__private::serde_json::from_value(data.clone())
+            let #data_ident: _ = ::resuma::__private::serde_json::from_value(data)
                 .map_err(|e| ::resuma::__private::ResumaError::Validation(format!(
                     "Could not decode form data for submit `{}` into `{}`: {}. If `{}` is your own struct or enum, add #[data] above its definition.",
                     #name_str,

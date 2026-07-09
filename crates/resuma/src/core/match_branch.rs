@@ -94,6 +94,15 @@ mod tests {
     use crate::ssr::render_view;
 
     #[test]
+    fn match_value_string_matches_json_to_string() {
+        assert_eq!(match_value_string(&Option::<String>::None), "null");
+        assert_eq!(match_value_string(&42_i32), "42");
+        assert_eq!(match_value_string(&true), "true");
+        assert_eq!(match_value_string(&serde_json::json!({"a": 1})), r#"{"a":1}"#);
+        assert_eq!(match_value_string(&serde_json::json!(["x"])), r#"["x"]"#);
+    }
+
+    #[test]
     fn match_signal_emits_resuma_match_marker() {
         let ctx = RenderContext::new(RenderMode::Ssr);
         let html = with_context(ctx, || {

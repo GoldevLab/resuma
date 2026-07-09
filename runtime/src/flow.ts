@@ -30,12 +30,11 @@ export interface ExecStatus {
   scheduler: { total: number; enabled: number; due: number };
 }
 
-declare global {
-  interface Window {
-    __resuma?: {
-      action: (name: string, args: unknown[]) => Promise<unknown>;
-    };
-  }
+
+function resumaAction(name: string, args: unknown[]): Promise<unknown> {
+  const r = window.__resuma;
+  if (!r?.action) throw new Error("Resuma core not loaded");
+  return r.action(name, args);
 }
 
 // Long-lived resources (poll timers, SSE connections) created by Flow widgets.
@@ -156,13 +155,11 @@ function escapeHtml(s: string): string {
 }
 
 async function fetchExecStatus(): Promise<ExecStatus | null> {
-  if (typeof window.__resuma?.action === "function") {
-    try {
-      const data = await window.__resuma.action("exec_status", []);
-      return data as ExecStatus;
-    } catch {
-      /* fall through */
-    }
+  try {
+    const data = await resumaAction("exec_status", []);
+    return data as ExecStatus;
+  } catch {
+    /* fall through */
   }
   try {
     const res = await fetch("/_resuma/status", { credentials: "same-origin" });
