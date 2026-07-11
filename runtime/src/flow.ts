@@ -600,6 +600,7 @@ function mountEventStream(el: HTMLElement): void {
   if (!graphId) return;
   const viewport = eventStreamViewport(el);
   const list = el.querySelector("ul") ?? el;
+  list.innerHTML = "";
   const max = 1000;
   const gen = (eventStreamMountGen.get(graphId) ?? 0) + 1;
   eventStreamMountGen.set(graphId, gen);
@@ -822,6 +823,15 @@ function mountWorkerPanel(el: HTMLElement): void {
     const pauseBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-pause]");
     const resumeBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-resume]");
     const cancelBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-cancel]");
+    if (completedGraphIds.has(graphId)) {
+      await syncWorkerControls(
+        el,
+        graphId,
+        token,
+        "Graph finished — run the worker again to try Pause/Cancel.",
+      );
+      return;
+    }
     if (pauseBtn) pauseBtn.disabled = true;
     if (resumeBtn) resumeBtn.disabled = true;
     if (cancelBtn) cancelBtn.disabled = true;

@@ -7,23 +7,35 @@ pub fn worker_panel(id: impl Into<String>) -> View {
     worker_panel_auth(id, None)
 }
 
-fn control_btn(class: &'static str, data_attr: &'static str, label: &'static str) -> View {
+fn control_btn(
+    class: &'static str,
+    data_attr: &'static str,
+    label: &'static str,
+    disabled: bool,
+) -> View {
+    let mut attrs = vec![
+        Attr {
+            name: "type".into(),
+            value: AttrValue::Static("button".into()),
+        },
+        Attr {
+            name: "class".into(),
+            value: AttrValue::Static(class.into()),
+        },
+        Attr {
+            name: data_attr.into(),
+            value: AttrValue::Static("true".into()),
+        },
+    ];
+    if disabled {
+        attrs.push(Attr {
+            name: "disabled".into(),
+            value: AttrValue::Static("true".into()),
+        });
+    }
     View::Element(Element {
         tag: "button".into(),
-        attrs: vec![
-            Attr {
-                name: "type".into(),
-                value: AttrValue::Static("button".into()),
-            },
-            Attr {
-                name: "class".into(),
-                value: AttrValue::Static(class.into()),
-            },
-            Attr {
-                name: data_attr.into(),
-                value: AttrValue::Static("true".into()),
-            },
-        ],
+        attrs,
         children: vec![Child::Text(label.into())],
         dom_id: None,
     })
@@ -63,21 +75,25 @@ pub fn worker_panel_auth(id: impl Into<String>, access_token: Option<String>) ->
                         "r-flow-control r-flow-control--ghost r-flow-control--pause",
                         "data-r-worker-pause",
                         "Pause",
+                        true,
                     )),
                     Child::View(control_btn(
                         "r-flow-control r-flow-control--ghost r-flow-control--resume",
                         "data-r-worker-resume",
                         "Resume",
+                        true,
                     )),
                     Child::View(control_btn(
                         "r-flow-control r-flow-control--danger",
                         "data-r-worker-cancel",
                         "Cancel",
+                        true,
                     )),
                     Child::View(control_btn(
                         "r-flow-control r-flow-control--ghost r-flow-control--replay",
                         "data-r-worker-replay",
                         "Replay",
+                        false,
                     )),
                 ],
                 dom_id: None,
@@ -98,7 +114,7 @@ pub fn worker_panel_auth(id: impl Into<String>, access_token: Option<String>) ->
                         value: AttrValue::Static("polite".into()),
                     },
                 ],
-                children: vec![],
+                children: vec![Child::Text("Loading controls…".into())],
                 dom_id: None,
             })),
         ],
