@@ -287,6 +287,7 @@ function subscribeGraphEvents(
   graphId: string,
   token: string,
   onEvent: (ev: WorkerEvent) => void,
+  opts?: { closeOnError?: boolean },
 ): () => void {
   if (!graphId || typeof EventSource === "undefined") return () => {};
   const url = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}/events`, token);
@@ -311,7 +312,10 @@ function subscribeGraphEvents(
     }
   };
   es.onerror = () => {
-    if (terminal) finish();
+    // EventSource auto-reconnects by default; after a completed graph the server
+    // replays the full history on each reconnect — close permanently to avoid
+    // duplicate streams in the UI.
+    if (terminal || opts?.closeOnError !== false) finish();
   };
   return finish;
 }
@@ -395,20 +399,30 @@ function mountFlowGraph(el: HTMLElement): void {
   const token = graphTokenFrom(el);
   if (!graphId) return;
 
+  if (el.dataset.rFlowMounted === "1") {
+    el.dispatchEvent(new Event("resuma:disconnect"));
+  }
+  el.dataset.rFlowMounted = "1";
+
+  let aborted = false;
   let closeSse: (() => void) | null = null;
   const stop = () => {
+    aborted = true;
     closeSse?.();
     closeSse = null;
+    delete el.dataset.rFlowMounted;
   };
   el.addEventListener("resuma:disconnect", stop, { once: true });
   registerFlowCleanup(stop);
 
   const scheduleRefresh = debounce(() => {
-    void refreshGraph(el, graphId, token);
+    if (!aborted) void refreshGraph(el, graphId, token);
   }, 400);
 
   void (async () => {
+    if (aborted) return;
     await refreshGraph(el, graphId, token);
+    if (aborted) return;
     const live = el.getAttribute("data-r-flow-graph-live") === "true";
     if (!live) return;
 
@@ -418,6 +432,7 @@ function mountFlowGraph(el: HTMLElement): void {
         headers: graphFetchHeaders(token),
         credentials: "same-origin",
       });
+      if (aborted) return;
       if (res.ok) {
         const snap = (await res.json()) as { status?: string };
         if (graphTerminalStatus(snap.status)) return;
@@ -426,7 +441,10 @@ function mountFlowGraph(el: HTMLElement): void {
       /* ignore */
     }
 
+    if (aborted) return;
+
     closeSse = subscribeGraphEvents(graphId, token, (ev) => {
+      if (aborted) return;
       if (ev.type === "progress" || ev.type === "log" || ev.type === "ai_thinking") return;
       if (
         ev.type === "graph_done" ||
@@ -465,46 +483,60 @@ function mountEventStream(el: HTMLElement): void {
     append(formatEvent(ev));
   };
 
+  if (el.dataset.rFlowMounted === "1") {
+    el.dispatchEvent(new Event("resuma:disconnect"));
+  }
+  el.dataset.rFlowMounted = "1";
+
+  let aborted = false;
   let closeSse: (() => void) | null = null;
   const stop = () => {
+    aborted = true;
     closeSse?.();
     closeSse = null;
+    delete el.dataset.rFlowMounted;
   };
   el.addEventListener("resuma:disconnect", stop, { once: true });
   registerFlowCleanup(stop);
 
   void (async () => {
-    const graphPath = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}`, token);
     const replayPath = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}/replay`, token);
     const headers = graphFetchHeaders(token);
 
     let terminal = false;
     try {
-      const snapRes = await fetch(graphPath, { headers, credentials: "same-origin" });
-      if (snapRes.ok) {
-        const snap = (await snapRes.json()) as { status?: string };
-        terminal = graphTerminalStatus(snap.status);
-      }
-    } catch {
-      /* ignore */
-    }
-
-    try {
       const res = await fetch(replayPath, { headers, credentials: "same-origin" });
+      if (aborted) return;
       if (res.ok) {
         const events = (await res.json()) as WorkerEvent[];
         list.innerHTML = "";
         seen.clear();
         for (const ev of events) appendEvent(ev);
-        if (events.some((ev) => ev.type === "graph_done")) terminal = true;
+        terminal = events.some((ev) => ev.type === "graph_done");
       }
     } catch {
       /* ignore */
     }
 
-    if (terminal) return;
+    if (aborted || terminal) return;
 
-    closeSse = subscribeGraphEvents(graphId, token, (ev) => appendEvent(ev));
+    try {
+      const graphPath = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}`, token);
+      const snapRes = await fetch(graphPath, { headers, credentials: "same-origin" });
+      if (aborted) return;
+      if (snapRes.ok) {
+        const snap = (await snapRes.json()) as { status?: string };
+        if (graphTerminalStatus(snap.status)) return;
+      }
+    } catch {
+      /* ignore */
+    }
+
+    if (aborted) return;
+
+    closeSse = subscribeGraphEvents(graphId, token, (ev) => {
+      if (!aborted) appendEvent(ev);
+    });
   })();
 }
 
