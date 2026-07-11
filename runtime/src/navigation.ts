@@ -20,6 +20,7 @@ async function prefetchRoute(href: string): Promise<void> {
     const res = await fetch(href, {
       headers: { Accept: "text/html" },
       credentials: "same-origin",
+      cache: "no-store",
     });
     if (res.ok) prefetchCache.set(href, await res.text());
   } catch {
@@ -85,19 +86,28 @@ function pathsMatch(href: string, current: string, exact = false): boolean {
   return false;
 }
 
-function updateNavActiveClasses(path: string): void {
+export function updateNavActiveClasses(path: string): void {
   document.querySelectorAll<HTMLAnchorElement>("a[data-r-nav]").forEach((a) => {
     const href = a.getAttribute("href");
     if (!href) return;
     const activeClass = a.getAttribute("data-r-active-class");
     if (!activeClass) return;
-    const base = (a.getAttribute("data-r-base-class") ?? a.className)
-      .split(/\s+/)
-      .filter((c) => c && c !== activeClass)
-      .join(" ");
-    a.setAttribute("data-r-base-class", base);
+
+    let base = a.getAttribute("data-r-base-class");
+    if (!base) {
+      base = a.className
+        .split(/\s+/)
+        .filter((c) => c && c !== activeClass)
+        .join(" ");
+      if (!base) base = a.className;
+      a.setAttribute("data-r-base-class", base);
+    }
+
     const exact = a.hasAttribute("data-r-nav-exact");
-    a.className = pathsMatch(href, path, exact) ? `${base} ${activeClass}`.trim() : base;
+    const isActive = pathsMatch(href, path, exact);
+    a.className = isActive ? `${base} ${activeClass}`.trim() : base;
+    if (isActive) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
   });
 }
 
@@ -206,6 +216,7 @@ async function runNavigation(href: string, pushState: boolean, gen: number, sign
     const res = await fetch(href, {
       headers: { Accept: "text/html" },
       credentials: "same-origin",
+      cache: "no-store",
       signal,
     });
     if (gen !== navGen) return;

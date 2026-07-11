@@ -9,7 +9,7 @@ import { initEffects, flushEffectCleanups, type ClientEffectSpec } from "./effec
 import { prefetchLazyChunks } from "./boundaries.js";
 import { invalidateHandlerChunks } from "./handler-loader.js";
 import { resolveHandler, type Handler } from "./handler-loader.js";
-import { initNavLinks, followRedirect, navigate, buildUrl, invalidate, setPageMounter } from "./navigation.js";
+import { initNavLinks, followRedirect, navigate, buildUrl, invalidate, setPageMounter, updateNavActiveClasses } from "./navigation.js";
 import { runVisibleTasks, type VisibleTaskEntry } from "./visible-tasks.js";
 import { flushMountCleanups } from "./mount-cleanups.js";
 import { beginPortalMount, mountStaticPortals } from "./portals.js";
@@ -186,6 +186,7 @@ export async function bootstrap(): Promise<void> {
   attachFormEnhancement();
   initLoaderRefreshForms();
   initNavLinks();
+  updateNavActiveClasses(location.pathname + location.search);
   connectDevBridge();
 }
 
