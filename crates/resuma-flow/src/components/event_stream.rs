@@ -30,12 +30,26 @@ pub fn event_stream_auth(id: impl Into<String>, access_token: Option<String>) ->
         tag: "div".into(),
         attrs,
         children: vec![Child::View(View::Element(Element {
-            tag: "ul".into(),
-            attrs: vec![Attr {
-                name: "class".into(),
-                value: AttrValue::Static("r-event-stream-list".into()),
-            }],
-            children: vec![Child::Text("Waiting for events…".into())],
+            tag: "div".into(),
+            attrs: vec![
+                Attr {
+                    name: "class".into(),
+                    value: AttrValue::Static("r-event-stream__viewport".into()),
+                },
+                Attr {
+                    name: "data-r-event-stream-viewport".into(),
+                    value: AttrValue::Static("true".into()),
+                },
+            ],
+            children: vec![Child::View(View::Element(Element {
+                tag: "ul".into(),
+                attrs: vec![Attr {
+                    name: "class".into(),
+                    value: AttrValue::Static("r-event-stream-list".into()),
+                }],
+                children: vec![],
+                dom_id: None,
+            }))],
             dom_id: None,
         }))],
         dom_id: None,

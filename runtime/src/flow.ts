@@ -461,27 +461,48 @@ function mountFlowGraph(el: HTMLElement): void {
   })();
 }
 
+function eventStreamViewport(el: HTMLElement): HTMLElement {
+  return (
+    el.querySelector<HTMLElement>("[data-r-event-stream-viewport]") ??
+    el.querySelector<HTMLElement>(".r-event-stream__viewport") ??
+    el.querySelector<HTMLElement>(".r-event-stream-list") ??
+    el
+  );
+}
+
+function scrollStreamToEnd(viewport: HTMLElement, smooth = true): void {
+  requestAnimationFrame(() => {
+    const top = viewport.scrollHeight;
+    if (smooth && "scrollTo" in viewport) {
+      viewport.scrollTo({ top, behavior: "smooth" });
+    } else {
+      viewport.scrollTop = top;
+    }
+  });
+}
+
 function mountEventStream(el: HTMLElement): void {
   const graphId = graphIdFrom(el);
   const token = graphTokenFrom(el);
   if (!graphId) return;
+  const viewport = eventStreamViewport(el);
   const list = el.querySelector("ul") ?? el;
-  const max = 200;
+  const max = 1000;
   const seen = new Set<string>();
-  const append = (line: string) => {
+  const append = (line: string, smooth = true) => {
     const li = document.createElement("li");
     li.textContent = line;
     list.appendChild(li);
     while (list.children.length > max) {
       list.removeChild(list.firstChild!);
     }
-    list.scrollTop = list.scrollHeight;
+    scrollStreamToEnd(viewport, smooth);
   };
-  const appendEvent = (ev: WorkerEvent) => {
+  const appendEvent = (ev: WorkerEvent, smooth = true) => {
     const key = eventKey(ev);
     if (seen.has(key)) return;
     seen.add(key);
-    append(formatEvent(ev));
+    append(formatEvent(ev), smooth);
   };
 
   eventStreamOwners.get(graphId)?.();
@@ -519,7 +540,8 @@ function mountEventStream(el: HTMLElement): void {
         const events = (await res.json()) as WorkerEvent[];
         list.innerHTML = "";
         seen.clear();
-        for (const ev of events) appendEvent(ev);
+        for (const ev of events) appendEvent(ev, false);
+        scrollStreamToEnd(viewport, false);
         terminal = events.some((ev) => ev.type === "graph_done");
       }
     } catch {
@@ -651,18 +673,21 @@ function mountWorkerPanel(el: HTMLElement): void {
     );
     if (!res.ok) return;
     const events = (await res.json()) as WorkerEvent[];
-    const stream = el.closest("[data-r-flow-execution]")?.querySelector("[data-r-event-stream] ul");
-    if (!stream) return;
+    const stream = el.closest("[data-r-flow-execution]")?.querySelector("[data-r-event-stream]");
+    const listEl = stream?.querySelector("ul");
+    const viewportEl = stream ? eventStreamViewport(stream as HTMLElement) : null;
+    if (!listEl) return;
     const seen = new Set<string>();
-    stream.innerHTML = "";
+    listEl.innerHTML = "";
     for (const ev of events) {
       const key = eventKey(ev);
       if (seen.has(key)) continue;
       seen.add(key);
       const li = document.createElement("li");
       li.textContent = formatEvent(ev);
-      stream.appendChild(li);
+      listEl.appendChild(li);
     }
+    if (viewportEl) scrollStreamToEnd(viewportEl, false);
     await syncWorkerControls(el, graphId, token, "Replay loaded.");
   });
 }
