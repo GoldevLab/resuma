@@ -324,15 +324,28 @@ function renderGraph(
 }
 
 async function refreshGraph(el: HTMLElement, graphId: string, token: string): Promise<void> {
+  const statusEl = el.querySelector<HTMLElement>("[data-r-flow-graph-status]");
   const path = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}`, token);
-  const res = await fetch(path, { headers: graphFetchHeaders(token), credentials: "same-origin" });
-  if (!res.ok) return;
-  const snap = (await res.json()) as {
-    nodes?: Array<{ id: unknown; label: string; status: string }>;
-    status?: string;
-    worker?: string;
-  };
-  renderGraph(el, snap);
+  try {
+    const res = await fetch(path, { headers: graphFetchHeaders(token), credentials: "same-origin" });
+    if (!res.ok) {
+      if (statusEl) {
+        statusEl.textContent =
+          res.status === 401
+            ? "Unauthorized — invalid or expired graph token."
+            : `Failed to load graph (HTTP ${res.status}).`;
+      }
+      return;
+    }
+    const snap = (await res.json()) as {
+      nodes?: Array<{ id: unknown; label: string; status: string }>;
+      status?: string;
+      worker?: string;
+    };
+    renderGraph(el, snap);
+  } catch {
+    if (statusEl) statusEl.textContent = "Network error loading graph.";
+  }
 }
 
 function mountFlowGraph(el: HTMLElement): void {
@@ -345,7 +358,9 @@ function mountFlowGraph(el: HTMLElement): void {
   const close = subscribeGraphEvents(graphId, token, () => {
     void refreshGraph(el, graphId, token);
   });
-  registerFlowCleanup(close);
+  const stop = () => close();
+  el.addEventListener("resuma:disconnect", stop, { once: true });
+  registerFlowCleanup(stop);
 }
 
 function mountEventStream(el: HTMLElement): void {
@@ -363,8 +378,26 @@ function mountEventStream(el: HTMLElement): void {
     }
     list.scrollTop = list.scrollHeight;
   };
+  const loadReplay = async () => {
+    try {
+      const res = await fetch(
+        withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}/replay`, token),
+        { headers: graphFetchHeaders(token), credentials: "same-origin" },
+      );
+      if (!res.ok) return;
+      const events = (await res.json()) as WorkerEvent[];
+      if (!events.length) return;
+      list.innerHTML = "";
+      for (const ev of events) append(formatEvent(ev));
+    } catch {
+      /* ignore */
+    }
+  };
+  void loadReplay();
   const close = subscribeGraphEvents(graphId, token, (ev) => append(formatEvent(ev)));
-  registerFlowCleanup(close);
+  const stop = () => close();
+  el.addEventListener("resuma:disconnect", stop, { once: true });
+  registerFlowCleanup(stop);
 }
 
 function mountWorkerPanel(el: HTMLElement): void {
@@ -413,10 +446,22 @@ function mountWorkerPanel(el: HTMLElement): void {
   });
 }
 
+/** Disconnect Flow widgets inside `scope` (timers, SSE) without touching siblings. */
+export function disconnectFlowWidgets(scope: ParentNode = document): void {
+  scope.querySelectorAll<HTMLElement>("[data-r-flow-dashboard], [data-r-flow-graph], [data-r-event-stream], [data-r-worker-panel]").forEach((el) => {
+    el.dispatchEvent(new Event("resuma:disconnect"));
+  });
+}
+
 /** Mount all Flow widgets (dashboard, graph, events, controls). */
-export function initFlowWidgets(scope: ParentNode = document): void {
-  // Tear down the previous mount's timers/SSE before wiring up fresh widgets.
-  flushFlowCleanups();
+export function initFlowWidgets(scope: ParentNode = document, opts?: { flush?: boolean }): void {
+  if (opts?.flush !== false) {
+    // Full page mount — tear down every widget from the prior navigation.
+    flushFlowCleanups();
+  } else {
+    // Scoped mount (e.g. dynamic exec panel) — only disconnect widgets in this subtree.
+    disconnectFlowWidgets(scope);
+  }
   scope.querySelectorAll<HTMLElement>("[data-r-flow-dashboard]").forEach(mountFlowDashboard);
   scope.querySelectorAll<HTMLElement>("[data-r-flow-graph]").forEach(mountFlowGraph);
   scope.querySelectorAll<HTMLElement>("[data-r-event-stream]").forEach(mountEventStream);

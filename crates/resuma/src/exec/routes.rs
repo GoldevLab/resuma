@@ -2,6 +2,7 @@
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::pin::Pin;
 use std::time::Duration;
 
 use async_stream::stream;
@@ -11,12 +12,14 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
+use futures_util::Stream;
 use serde::Deserialize;
 use serde_json::Value;
 use tokio::sync::broadcast::error::RecvError;
 
 use crate::core::ResumaError;
 use crate::exec::engine::FlowEngine;
+use crate::exec::events::SharedEventBus;
 use crate::exec::metrics;
 use crate::exec::queue::{self, EnqueueResponse};
 use crate::exec::scheduler::{self, CreateScheduleBody, ScheduleListResponse};
@@ -315,24 +318,12 @@ async fn resume_graph(
     Ok(Json(FlowEngine::resume(&gid).await?))
 }
 
-async fn graph_events_sse(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
-    Path(id): Path<String>,
-    Query(query): Query<GraphTokenQuery>,
-) -> Result<Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>>, ExecHttpError> {
-    let host = request_host(&headers);
-    let ip = client_ip(&headers, addr);
-    validate_graph_id(&id)?;
-    let gid = GraphId(id.clone());
-    guard_graph_read(&headers, &host, &ip, &gid, query.token.as_deref())?;
+type GraphEventStream = Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>>;
 
-    let bus = FlowEngine::bus(&gid).ok_or(ExecHttpError(ResumaError::UnknownGraph(gid.0)))?;
-
+fn graph_sse_stream(bus: SharedEventBus) -> GraphEventStream {
     let history = bus.history();
     let mut rx = bus.subscribe();
-
-    let stream = stream! {
+    Box::pin(stream! {
         for event in history {
             if let Ok(data) = serde_json::to_string(&event) {
                 yield Ok(Event::default().data(data));
@@ -349,6 +340,36 @@ async fn graph_events_sse(
                 Err(RecvError::Closed) => break,
             }
         }
+    })
+}
+
+fn graph_sse_replay(gid: &GraphId) -> GraphEventStream {
+    let history = super::durable::load_events(gid).unwrap_or_default();
+    Box::pin(stream! {
+        for event in history {
+            if let Ok(data) = serde_json::to_string(&event) {
+                yield Ok(Event::default().data(data));
+            }
+        }
+    })
+}
+
+async fn graph_events_sse(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(query): Query<GraphTokenQuery>,
+) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ExecHttpError> {
+    let host = request_host(&headers);
+    let ip = client_ip(&headers, addr);
+    validate_graph_id(&id)?;
+    let gid = GraphId(id.clone());
+    guard_graph_read(&headers, &host, &ip, &gid, query.token.as_deref())?;
+
+    let stream: GraphEventStream = if let Some(bus) = FlowEngine::bus(&gid) {
+        graph_sse_stream(bus)
+    } else {
+        graph_sse_replay(&gid)
     };
 
     Ok(Sse::new(stream).keep_alive(
