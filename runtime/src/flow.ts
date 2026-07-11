@@ -67,11 +67,22 @@ function seenForList(list: HTMLElement): Set<string> {
 }
 
 function closeGraphSseHub(graphId: string): void {
+  eventStreamOwners.get(graphId)?.();
+  eventStreamOwners.delete(graphId);
+  eventStreamMountGen.delete(graphId);
   const hub = graphSseHubs.get(graphId);
   if (!hub) return;
+  hub.listeners.clear();
   hub.es?.close();
   hub.es = null;
   graphSseHubs.delete(graphId);
+}
+
+/** Tear down SSE, stream owners, and terminal cache for a graph (before replacing panel HTML). */
+export function teardownGraph(graphId: string): void {
+  if (!graphId) return;
+  closeGraphSseHub(graphId);
+  completedGraphIds.delete(graphId);
 }
 
 function markGraphTerminal(graphId: string): void {
@@ -131,8 +142,11 @@ function eventKey(ev: WorkerEvent): string {
       return `${t}:${(ev as { value?: number }).value ?? ""}`;
     case "result":
       return `${t}:${JSON.stringify((ev as { data?: unknown }).data ?? null)}`;
-    case "node_done":
-      return `${t}:${(ev as { duration_ms?: number }).duration_ms ?? ts}`;
+    case "node_done": {
+      const node = nodeLabel((ev as { node: unknown }).node);
+      const ms = (ev as { duration_ms?: number }).duration_ms ?? ts;
+      return `${t}:${node}:${ms}`;
+    }
     case "graph_done":
       return `${t}:done`;
     default:
@@ -141,7 +155,7 @@ function eventKey(ev: WorkerEvent): string {
 }
 
 function graphTerminalStatus(status: string | undefined): boolean {
-  return status === "done" || status === "failed" || status === "paused";
+  return status === "done" || status === "failed";
 }
 
 function nodeLabel(node: unknown): string {
@@ -150,6 +164,57 @@ function nodeLabel(node: unknown): string {
     return String((node as Record<string, string>)["0"]);
   }
   return "node";
+}
+
+function graphStatusFromPanel(el: HTMLElement): string | undefined {
+  const text =
+    el
+      .closest("[data-r-flow-execution]")
+      ?.querySelector<HTMLElement>("[data-r-flow-graph-status]")
+      ?.textContent ?? "";
+  const m = text.match(/Status:\s*(running|paused|done|failed)\b/i);
+  return m?.[1]?.toLowerCase();
+}
+
+function applyWorkerControlState(el: HTMLElement, st: string, hint?: string): void {
+  const statusEl = el.querySelector<HTMLElement>("[data-r-worker-status]");
+  const pauseBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-pause]");
+  const resumeBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-resume]");
+  const cancelBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-cancel]");
+  const replayBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-replay]");
+
+  const terminal = st === "done" || st === "failed";
+  const paused = st === "paused";
+  const running = st === "running";
+
+  if (pauseBtn) pauseBtn.disabled = !running;
+  if (resumeBtn) resumeBtn.disabled = !paused;
+  if (cancelBtn) cancelBtn.disabled = terminal;
+  if (replayBtn) replayBtn.disabled = false;
+
+  for (const btn of [pauseBtn, resumeBtn, cancelBtn, replayBtn]) {
+    if (!btn) continue;
+    if (btn.disabled) btn.setAttribute("aria-disabled", "true");
+    else btn.removeAttribute("aria-disabled");
+  }
+
+  if (!statusEl) return;
+  if (hint) {
+    statusEl.textContent = hint;
+    return;
+  }
+  if (terminal) {
+    statusEl.textContent =
+      st === "done"
+        ? "Done — Pause/Cancel are off. Run worker again to retry."
+        : `Graph ${st} — run worker again to start a new graph.`;
+  } else if (paused) {
+    statusEl.textContent = "Paused — Resume to continue or Cancel to abort.";
+  } else if (running) {
+    statusEl.textContent = "Running — Pause or Cancel now (~25s window).";
+  } else {
+    statusEl.textContent = "Syncing graph status…";
+  }
 }
 
 function formatEvent(ev: WorkerEvent): string {
@@ -723,57 +788,6 @@ function mountEventStream(el: HTMLElement): void {
   })();
 }
 
-function graphStatusFromPanel(el: HTMLElement): string | undefined {
-  const text =
-    el
-      .closest("[data-r-flow-execution]")
-      ?.querySelector<HTMLElement>("[data-r-flow-graph-status]")
-      ?.textContent ?? "";
-  const m = text.match(/Status:\s*(\w+)/i);
-  return m?.[1]?.toLowerCase();
-}
-
-function applyWorkerControlState(el: HTMLElement, st: string, hint?: string): void {
-  const statusEl = el.querySelector<HTMLElement>("[data-r-worker-status]");
-  const pauseBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-pause]");
-  const resumeBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-resume]");
-  const cancelBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-cancel]");
-  const replayBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-replay]");
-
-  const terminal = st === "done" || st === "failed";
-  const paused = st === "paused";
-  const running = st === "running";
-
-  if (pauseBtn) pauseBtn.disabled = !running;
-  if (resumeBtn) resumeBtn.disabled = !paused;
-  if (cancelBtn) cancelBtn.disabled = terminal;
-  if (replayBtn) replayBtn.disabled = false;
-
-  for (const btn of [pauseBtn, resumeBtn, cancelBtn, replayBtn]) {
-    if (!btn) continue;
-    if (btn.disabled) btn.setAttribute("aria-disabled", "true");
-    else btn.removeAttribute("aria-disabled");
-  }
-
-  if (!statusEl) return;
-  if (hint) {
-    statusEl.textContent = hint;
-    return;
-  }
-  if (terminal) {
-    statusEl.textContent =
-      st === "done"
-        ? "Done — Pause/Cancel are off. Run worker again to retry."
-        : `Graph ${st} — run worker again to start a new graph.`;
-  } else if (paused) {
-    statusEl.textContent = "Paused — Resume to continue or Cancel to abort.";
-  } else if (running) {
-    statusEl.textContent = "Running — Pause or Cancel now (~25s window).";
-  } else {
-    statusEl.textContent = "Syncing graph status…";
-  }
-}
-
 async function syncWorkerControls(
   el: HTMLElement,
   graphId: string,
@@ -979,6 +993,16 @@ function mountWorkerPanel(el: HTMLElement): void {
   );
 }
 
+/** Force-sync worker control buttons inside `scope` (e.g. after dynamic panel mount). */
+export function syncFlowControls(scope: ParentNode = document): void {
+  scope.querySelectorAll<HTMLElement>("[data-r-worker-panel]").forEach((el) => {
+    const graphId = graphIdFrom(el);
+    const token = graphTokenFrom(el);
+    if (!graphId) return;
+    void syncWorkerControls(el, graphId, token);
+  });
+}
+
 /** Disconnect Flow widgets inside `scope` (timers, SSE) without touching siblings. */
 export function disconnectFlowWidgets(scope: ParentNode = document): void {
   const graphIds = new Set<string>();
@@ -991,7 +1015,7 @@ export function disconnectFlowWidgets(scope: ParentNode = document): void {
       if (id) graphIds.add(id);
       el.dispatchEvent(new Event("resuma:disconnect"));
     });
-  for (const id of graphIds) closeGraphSseHub(id);
+  for (const id of graphIds) teardownGraph(id);
 }
 
 /** Mount all Flow widgets (dashboard, graph, events, controls). */

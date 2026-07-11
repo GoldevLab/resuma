@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.7] - 2026-07-11
+
+### Fixed
+
+- **Flow worker controls** — `applyWorkerControlState` / `syncWorkerControls` now ship in built `flow.js` (duplicate TS declarations had blocked the v1.2.6 bundle). Pause/Resume/Cancel enable from live graph status; done graphs disable terminal actions.
+- **Flow event stream** — `teardownGraph` + `eventStreamOwners` cleanup on panel replace; dedupe `node_done` by node label; `syncFlowControls` export for dynamic mounts.
+- **Paused graphs** — no longer treated as terminal (SSE + controls stay active while paused).
+
 ## [1.2.1] - 2026-07-11
 
 ### Added
