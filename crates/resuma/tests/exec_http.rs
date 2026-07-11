@@ -636,6 +636,41 @@ async fn metrics_requires_api_key_when_configured() {
 }
 
 #[tokio::test]
+async fn graph_token_reads_not_ip_rate_limited() {
+    let _guard = exec_http_lock();
+    let _root = temp_durable("graph-rate");
+    enable_exec_routes();
+    configure_test_exec_security();
+    let worker = format!("http_rate_{}", id::next_id());
+    register_echo_worker(&worker);
+
+    let app = ResumaApp::new().into_router();
+    let (graph_id, token) = start_worker_via_http(&app, &worker).await;
+
+    for _ in 0..200 {
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/_resuma/graph/{graph_id}?token={token}"))
+                    .extension(test_connect_info())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_ne!(
+            res.status(),
+            StatusCode::TOO_MANY_REQUESTS,
+            "graph token reads should not hit IP rate limit"
+        );
+        if res.status() != StatusCode::OK {
+            break;
+        }
+    }
+}
+
+#[tokio::test]
 async fn scheduler_create_and_list_via_http() {
     let _guard = exec_http_lock();
     let _root = temp_durable("scheduler-http");

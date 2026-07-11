@@ -71,6 +71,33 @@ function graphTokenFrom(el: HTMLElement): string {
   return el.getAttribute("data-r-graph-token") ?? "";
 }
 
+function debounce<T extends (...args: never[]) => void>(fn: T, ms: number): T {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return ((...args: never[]) => {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  }) as T;
+}
+
+function eventKey(ev: WorkerEvent): string {
+  const t = ev.type ?? "event";
+  const ts = (ev as { timestamp_ms?: number }).timestamp_ms ?? 0;
+  switch (t) {
+    case "log":
+      return `${t}:${ts}:${(ev as { message?: string }).message ?? ""}`;
+    case "progress":
+      return `${t}:${ts}:${(ev as { value?: number }).value ?? ""}`;
+    case "node_done":
+      return `${t}:${ts}:${(ev as { duration_ms?: number }).duration_ms ?? ""}`;
+    default:
+      return `${t}:${ts}`;
+  }
+}
+
+function graphTerminalStatus(status: string | undefined): boolean {
+  return status === "done" || status === "failed" || status === "paused";
+}
+
 function nodeLabel(node: unknown): string {
   if (typeof node === "string") return node;
   if (node && typeof node === "object" && "0" in node) {
@@ -264,16 +291,29 @@ function subscribeGraphEvents(
   if (!graphId || typeof EventSource === "undefined") return () => {};
   const url = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}/events`, token);
   const es = new EventSource(url);
+  let closed = false;
+  let terminal = false;
+  const finish = () => {
+    if (closed) return;
+    closed = true;
+    es.close();
+  };
   es.onmessage = (msg) => {
     try {
       const ev = JSON.parse(msg.data) as WorkerEvent;
       onEvent(ev);
-      if (ev.type === "graph_done") es.close();
+      if (ev.type === "graph_done") {
+        terminal = true;
+        finish();
+      }
     } catch {
       /* ignore */
     }
   };
-  return () => es.close();
+  es.onerror = () => {
+    if (terminal) finish();
+  };
+  return finish;
 }
 
 function renderGraph(
@@ -354,15 +394,52 @@ function mountFlowGraph(el: HTMLElement): void {
   const graphId = graphIdFrom(el);
   const token = graphTokenFrom(el);
   if (!graphId) return;
-  void refreshGraph(el, graphId, token);
-  const live = el.getAttribute("data-r-flow-graph-live") === "true";
-  if (!live) return;
-  const close = subscribeGraphEvents(graphId, token, () => {
-    void refreshGraph(el, graphId, token);
-  });
-  const stop = () => close();
+
+  let closeSse: (() => void) | null = null;
+  const stop = () => {
+    closeSse?.();
+    closeSse = null;
+  };
   el.addEventListener("resuma:disconnect", stop, { once: true });
   registerFlowCleanup(stop);
+
+  const scheduleRefresh = debounce(() => {
+    void refreshGraph(el, graphId, token);
+  }, 400);
+
+  void (async () => {
+    await refreshGraph(el, graphId, token);
+    const live = el.getAttribute("data-r-flow-graph-live") === "true";
+    if (!live) return;
+
+    try {
+      const path = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}`, token);
+      const res = await fetch(path, {
+        headers: graphFetchHeaders(token),
+        credentials: "same-origin",
+      });
+      if (res.ok) {
+        const snap = (await res.json()) as { status?: string };
+        if (graphTerminalStatus(snap.status)) return;
+      }
+    } catch {
+      /* ignore */
+    }
+
+    closeSse = subscribeGraphEvents(graphId, token, (ev) => {
+      if (ev.type === "progress" || ev.type === "log" || ev.type === "ai_thinking") return;
+      if (
+        ev.type === "graph_done" ||
+        ev.type === "node_done" ||
+        ev.type === "node_start" ||
+        ev.type === "node_failed"
+      ) {
+        void refreshGraph(el, graphId, token);
+        return;
+      }
+      scheduleRefresh();
+    });
+  })();
 }
 
 function mountEventStream(el: HTMLElement): void {
@@ -371,6 +448,7 @@ function mountEventStream(el: HTMLElement): void {
   if (!graphId) return;
   const list = el.querySelector("ul") ?? el;
   const max = 200;
+  const seen = new Set<string>();
   const append = (line: string) => {
     const li = document.createElement("li");
     li.textContent = line;
@@ -379,6 +457,12 @@ function mountEventStream(el: HTMLElement): void {
       list.removeChild(list.firstChild!);
     }
     list.scrollTop = list.scrollHeight;
+  };
+  const appendEvent = (ev: WorkerEvent) => {
+    const key = eventKey(ev);
+    if (seen.has(key)) return;
+    seen.add(key);
+    append(formatEvent(ev));
   };
 
   let closeSse: (() => void) | null = null;
@@ -399,7 +483,7 @@ function mountEventStream(el: HTMLElement): void {
       const snapRes = await fetch(graphPath, { headers, credentials: "same-origin" });
       if (snapRes.ok) {
         const snap = (await snapRes.json()) as { status?: string };
-        terminal = snap.status === "done" || snap.status === "failed" || snap.status === "paused";
+        terminal = graphTerminalStatus(snap.status);
       }
     } catch {
       /* ignore */
@@ -410,7 +494,8 @@ function mountEventStream(el: HTMLElement): void {
       if (res.ok) {
         const events = (await res.json()) as WorkerEvent[];
         list.innerHTML = "";
-        for (const ev of events) append(formatEvent(ev));
+        seen.clear();
+        for (const ev of events) appendEvent(ev);
         if (events.some((ev) => ev.type === "graph_done")) terminal = true;
       }
     } catch {
@@ -419,7 +504,7 @@ function mountEventStream(el: HTMLElement): void {
 
     if (terminal) return;
 
-    closeSse = subscribeGraphEvents(graphId, token, (ev) => append(formatEvent(ev)));
+    closeSse = subscribeGraphEvents(graphId, token, (ev) => appendEvent(ev));
   })();
 }
 

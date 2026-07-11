@@ -279,6 +279,9 @@ pub fn guard_admin(
 ///
 /// A valid graph token or API key is always required — public mode only
 /// relaxes worker/queue admin routes, never per-graph access.
+///
+/// Graph-scoped tokens are not IP rate-limited: the token is the credential
+/// and live demos poll snapshot/replay heavily during a single run.
 pub fn guard_graph_read(
     headers: &HeaderMap,
     host: &str,
@@ -288,11 +291,27 @@ pub fn guard_graph_read(
 ) -> Result<()> {
     let cfg = config();
     let _ = host;
+
+    if graph_token_valid(headers, graph_id, query_token) {
+        return Ok(());
+    }
+
     check_rate_limit(ip, "exec:graph", cfg.graph_reads_per_minute)?;
-    if graph_access_granted(headers, graph_id, query_token) {
+    if api_key_valid_strict(headers) {
         return Ok(());
     }
     Err(ResumaError::Unauthorized)
+}
+
+/// True when a valid per-graph token is presented (header or query on read routes).
+fn graph_token_valid(
+    headers: &HeaderMap,
+    graph_id: &GraphId,
+    query_token: Option<&str>,
+) -> bool {
+    let header_token = extract_graph_token(headers);
+    let token = header_token.as_deref().or(query_token);
+    validate_graph_token(graph_id, token)
 }
 
 /// Guard graph control routes (pause, resume, cancel).
@@ -332,9 +351,7 @@ fn graph_access_granted(
     if api_key_valid_strict(headers) {
         return true;
     }
-    let header_token = extract_graph_token(headers);
-    let token = header_token.as_deref().or(query_token);
-    validate_graph_token(graph_id, token)
+    graph_token_valid(headers, graph_id, query_token)
 }
 
 /// Reject mutations when both `Origin` and `Referer` are absent (production hardening).
