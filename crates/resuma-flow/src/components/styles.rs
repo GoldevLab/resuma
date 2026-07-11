@@ -22,7 +22,8 @@ pub const FLOW_CSS: &str = r#"
 .r-flow-dash__table th,.r-flow-dash__table td{padding:.45rem .5rem;text-align:left;border-bottom:1px solid #243044}
 .r-flow-dash__table th{color:#8b9cb3;font-weight:500}
 .r-flow-dash__bar{height:6px;background:#1e293b;border-radius:3px;overflow:hidden;margin-top:.25rem}
-.r-flow-dash__bar span{display:block;height:100%;background:linear-gradient(90deg,#3b82f6,#6366f1);border-radius:3px}
+.r-flow-dash__bar svg{display:block;width:100%;height:6px}
+.r-flow-dash__bar-fill{fill:#6366f1;height:100%}
 .r-flow-exec{display:grid;grid-template-columns:1fr;gap:1.15rem;margin:1rem 0}
 @media(min-width:900px){.r-flow-exec{grid-template-columns:1.15fr .85fr;align-items:start}}
 .r-flow-exec__side{display:flex;flex-direction:column;gap:1rem;min-width:0}

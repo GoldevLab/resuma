@@ -125,12 +125,18 @@ export function mountPage(): void {
   for (const [k, cell] of signals) state[k] = cell;
 
   const prev = window.__resuma;
+  const loaded = prev?.loaded ?? new Map<string, Record<string, Function>>();
+  // `__page__` accumulates route-specific handlers server-side; drop stale module
+  // cache on SPA navigation so newly merged symbols resolve after remount.
+  if (payload.lazy_chunks?.includes("__page__")) {
+    loaded.delete("__page__");
+  }
   const __resuma: ResumaGlobal = {
     state,
     signals,
     handlers: payload.handlers,
     contexts: payload.contexts ?? {},
-    loaded: prev?.loaded ?? new Map(),
+    loaded,
     action: callServerAction,
     safeAction: callServerActionSafe,
     refreshIsland,

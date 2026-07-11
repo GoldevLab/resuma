@@ -22,7 +22,7 @@ export function prefetchHandlerChunk(chunk: string): void {
 export function prefetchLazyChunks(chunks: string[], root: HTMLElement): void {
   root.querySelectorAll(`[${MARKER_ATTR}]`).forEach((n) => n.remove());
 
-  const unique = [...new Set(chunks.filter((c) => c && c !== "__page__"))];
+  const unique = [...new Set(chunks.filter(Boolean))];
   if (!unique.length) return;
 
   if (!("IntersectionObserver" in window)) {

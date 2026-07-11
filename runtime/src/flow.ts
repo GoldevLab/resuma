@@ -225,7 +225,7 @@ function renderDashboard(root: HTMLElement, status: ExecStatus): void {
         <td>${q.processing}</td>
         <td>${q.done}</td>
         <td>${q.failed}</td>
-        <td><div class="r-flow-dash__bar"><span style="width:${pct}%"></span></div></td>
+        <td><div class="r-flow-dash__bar"><svg viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="r-flow-dash__bar-fill" width="${pct}" height="6" rx="3"/></svg></div></td>
       </tr>`;
     })
     .join("");
