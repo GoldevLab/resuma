@@ -220,7 +220,7 @@ async function controlErrorMessage(res: Response): Promise<string> {
     /* ignore */
   }
   if (res.status === 422) {
-    return "Graph already finished — run the worker again.";
+    return "Graph already finished — click Run worker again, then Pause while Running.";
   }
   if (res.status === 401 || res.status === 403) {
     return "Unauthorized — refresh the page and run the worker again.";
@@ -741,9 +741,15 @@ async function syncWorkerControls(
     if (statusEl) {
       if (hint) statusEl.textContent = hint;
       else if (terminal)
-        statusEl.textContent = `Graph ${st} — Pause/Cancel only work while running. Run again for a new graph.`;
-      else if (paused) statusEl.textContent = "Paused — click Resume to continue from checkpoint.";
-      else statusEl.textContent = "Running — Pause stops cooperatively at the next checkpoint (~3s).";
+        statusEl.textContent =
+          st === "done"
+            ? "Done — controls are off. Click Run worker above to try Pause/Cancel again."
+            : `Graph ${st} — click Run worker above to start a new run.`;
+      else if (paused)
+        statusEl.textContent = "Paused — click Resume to continue, or Cancel to abort.";
+      else
+        statusEl.textContent =
+          "Running — click Pause or Cancel now (you have ~25s before this graph finishes).";
     }
   } catch {
     if (statusEl && hint) statusEl.textContent = hint;

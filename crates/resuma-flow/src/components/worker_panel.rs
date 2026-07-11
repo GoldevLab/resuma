@@ -114,7 +114,9 @@ pub fn worker_panel_auth(id: impl Into<String>, access_token: Option<String>) ->
                         value: AttrValue::Static("polite".into()),
                     },
                 ],
-                children: vec![Child::Text("Loading controls…".into())],
+                children: vec![Child::Text(
+                    "Waiting for status… Pause / Cancel unlock when Running.".into(),
+                )],
                 dom_id: None,
             })),
         ],
