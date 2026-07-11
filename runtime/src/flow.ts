@@ -43,6 +43,43 @@ function resumaAction(name: string, args: unknown[]): Promise<unknown> {
 // navigation leaks a running interval and an open SSE stream to detached DOM.
 const flowCleanups: Array<() => void> = [];
 const eventStreamOwners = new Map<string, () => void>();
+const eventStreamMountGen = new Map<string, number>();
+const streamSeenKeys = new WeakMap<HTMLElement, Set<string>>();
+
+type SseListener = (ev: WorkerEvent) => void;
+interface GraphSseHub {
+  listeners: Set<SseListener>;
+  es: EventSource | null;
+  refs: number;
+  terminal: boolean;
+}
+const graphSseHubs = new Map<string, GraphSseHub>();
+
+function seenForList(list: HTMLElement): Set<string> {
+  let seen = streamSeenKeys.get(list);
+  if (!seen) {
+    seen = new Set();
+    streamSeenKeys.set(list, seen);
+  }
+  return seen;
+}
+
+function closeGraphSseHub(graphId: string): void {
+  const hub = graphSseHubs.get(graphId);
+  if (!hub) return;
+  hub.es?.close();
+  hub.es = null;
+  graphSseHubs.delete(graphId);
+}
+
+function markGraphTerminal(graphId: string): void {
+  const hub = graphSseHubs.get(graphId);
+  if (hub) {
+    hub.terminal = true;
+    hub.es?.close();
+    hub.es = null;
+  }
+}
 
 function registerFlowCleanup(fn: () => void): void {
   flowCleanups.push(fn);
@@ -311,34 +348,54 @@ function subscribeGraphEvents(
   opts?: { closeOnError?: boolean },
 ): () => void {
   if (!graphId || typeof EventSource === "undefined") return () => {};
-  const url = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}/events`, token);
-  const es = new EventSource(url);
+
+  let hub = graphSseHubs.get(graphId);
+  if (!hub) {
+    hub = { listeners: new Set(), es: null, refs: 0, terminal: false };
+    graphSseHubs.set(graphId, hub);
+  }
+  if (hub.terminal) return () => {};
+
+  hub.listeners.add(onEvent);
+  hub.refs += 1;
+
+  const open = (): void => {
+    if (hub!.terminal || hub!.es) return;
+    const url = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}/events`, token);
+    const es = new EventSource(url);
+    hub!.es = es;
+    es.onmessage = (msg) => {
+      try {
+        const ev = JSON.parse(msg.data) as WorkerEvent;
+        for (const fn of hub!.listeners) fn(ev);
+        if (ev.type === "graph_done") {
+          hub!.terminal = true;
+          es.close();
+          hub!.es = null;
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    es.onerror = () => {
+      es.close();
+      hub!.es = null;
+    };
+  };
+
+  open();
+
   let closed = false;
-  let terminal = false;
-  const finish = () => {
+  return () => {
     if (closed) return;
     closed = true;
-    es.close();
-  };
-  es.onmessage = (msg) => {
-    try {
-      const ev = JSON.parse(msg.data) as WorkerEvent;
-      onEvent(ev);
-      if (ev.type === "graph_done") {
-        terminal = true;
-        finish();
-      }
-    } catch {
-      /* ignore */
+    hub!.listeners.delete(onEvent);
+    hub!.refs -= 1;
+    if (hub!.refs <= 0) {
+      hub!.es?.close();
+      graphSseHubs.delete(graphId);
     }
   };
-  es.onerror = () => {
-    // EventSource auto-reconnects by default; after a completed graph the server
-    // replays the full history on each reconnect — close permanently to avoid
-    // duplicate streams in the UI.
-    if (terminal || opts?.closeOnError !== false) finish();
-  };
-  return finish;
 }
 
 function renderGraph(
@@ -513,8 +570,13 @@ function mountEventStream(el: HTMLElement): void {
   const viewport = eventStreamViewport(el);
   const list = el.querySelector("ul") ?? el;
   const max = 1000;
-  const seen = new Set<string>();
+  const gen = (eventStreamMountGen.get(graphId) ?? 0) + 1;
+  eventStreamMountGen.set(graphId, gen);
+  const isActive = () => eventStreamMountGen.get(graphId) === gen;
+  const seen = seenForList(list as HTMLElement);
+
   const append = (line: string, smooth = false) => {
+    if (!isActive()) return;
     const li = document.createElement("li");
     li.textContent = line;
     list.appendChild(li);
@@ -524,10 +586,12 @@ function mountEventStream(el: HTMLElement): void {
     scrollStreamToEnd(viewport, smooth);
   };
   const appendEvent = (ev: WorkerEvent, smooth = false) => {
+    if (!isActive()) return;
     const key = eventKey(ev);
     if (seen.has(key)) return;
     seen.add(key);
     append(formatEvent(ev), smooth);
+    if (ev.type === "graph_done") markGraphTerminal(graphId);
   };
 
   eventStreamOwners.get(graphId)?.();
@@ -545,6 +609,9 @@ function mountEventStream(el: HTMLElement): void {
     closeSse?.();
     closeSse = null;
     delete el.dataset.rFlowMounted;
+    if (eventStreamMountGen.get(graphId) === gen) {
+      eventStreamMountGen.delete(graphId);
+    }
     if (eventStreamOwners.get(graphId) === stop) {
       eventStreamOwners.delete(graphId);
     }
@@ -560,7 +627,7 @@ function mountEventStream(el: HTMLElement): void {
     let terminal = false;
     try {
       const res = await fetch(replayPath, { headers, credentials: "same-origin" });
-      if (aborted) return;
+      if (!isActive() || aborted) return;
       if (res.ok) {
         const events = (await res.json()) as WorkerEvent[];
         list.innerHTML = "";
@@ -568,29 +635,34 @@ function mountEventStream(el: HTMLElement): void {
         for (const ev of events) appendEvent(ev, false);
         scrollStreamToEnd(viewport, false);
         terminal = events.some((ev) => ev.type === "graph_done");
+        if (terminal) markGraphTerminal(graphId);
       }
     } catch {
       /* ignore */
     }
 
-    if (aborted || terminal) return;
+    if (!isActive() || aborted || terminal) return;
 
     try {
       const graphPath = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}`, token);
       const snapRes = await fetch(graphPath, { headers, credentials: "same-origin" });
-      if (aborted) return;
+      if (!isActive() || aborted) return;
       if (snapRes.ok) {
         const snap = (await snapRes.json()) as { status?: string };
-        if (graphTerminalStatus(snap.status)) return;
+        if (graphTerminalStatus(snap.status)) {
+          markGraphTerminal(graphId);
+          return;
+        }
       }
     } catch {
       /* ignore */
     }
 
-    if (aborted) return;
+    if (!isActive() || aborted) return;
 
     closeSse = subscribeGraphEvents(graphId, token, (ev) => {
-      if (!aborted) appendEvent(ev);
+      if (!isActive() || aborted) return;
+      appendEvent(ev);
     });
   })();
 }
@@ -626,9 +698,10 @@ async function syncWorkerControls(
 
     if (statusEl) {
       if (hint) statusEl.textContent = hint;
-      else if (terminal) statusEl.textContent = `Graph ${st} — controls locked. Run again for a new graph.`;
+      else if (terminal)
+        statusEl.textContent = `Graph ${st} — Pause/Cancel only work while running. Run again for a new graph.`;
       else if (paused) statusEl.textContent = "Paused — click Resume to continue from checkpoint.";
-      else statusEl.textContent = "Running — Pause stops cooperatively at the next checkpoint.";
+      else statusEl.textContent = "Running — Pause stops cooperatively at the next checkpoint (~3s).";
     }
   } catch {
     if (statusEl && hint) statusEl.textContent = hint;
@@ -662,17 +735,40 @@ function mountWorkerPanel(el: HTMLElement): void {
     if (!aborted) void syncWorkerControls(el, graphId, token);
   }, 300);
 
-  closeSse = subscribeGraphEvents(graphId, token, (ev) => {
-    if (aborted) return;
-    if (
-      ev.type === "graph_done" ||
-      ev.type === "node_done" ||
-      ev.type === "node_failed" ||
-      ev.type === "progress"
-    ) {
-      scheduleControlSync();
+  void (async () => {
+    try {
+      const path = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}`, token);
+      const res = await fetch(path, { headers: graphFetchHeaders(token), credentials: "same-origin" });
+      if (aborted) return;
+      if (res.ok) {
+        const snap = (await res.json()) as { status?: string };
+        if (graphTerminalStatus(snap.status)) {
+          markGraphTerminal(graphId);
+          await syncWorkerControls(el, graphId, token);
+          return;
+        }
+      }
+    } catch {
+      /* ignore */
     }
-  });
+    if (aborted) return;
+
+    closeSse = subscribeGraphEvents(graphId, token, (ev) => {
+      if (aborted) return;
+      if (ev.type === "graph_done") {
+        markGraphTerminal(graphId);
+        void syncWorkerControls(el, graphId, token);
+        return;
+      }
+      if (
+        ev.type === "node_done" ||
+        ev.type === "node_failed" ||
+        ev.type === "progress"
+      ) {
+        scheduleControlSync();
+      }
+    });
+  })();
 
   const postOpts = (): RequestInit => ({
     method: "POST",
@@ -721,7 +817,8 @@ function mountWorkerPanel(el: HTMLElement): void {
     const listEl = stream?.querySelector("ul");
     const viewportEl = stream ? eventStreamViewport(stream as HTMLElement) : null;
     if (!listEl) return;
-    const seen = new Set<string>();
+    const seen = seenForList(listEl as HTMLElement);
+    seen.clear();
     listEl.innerHTML = "";
     for (const ev of events) {
       const key = eventKey(ev);
@@ -738,9 +835,17 @@ function mountWorkerPanel(el: HTMLElement): void {
 
 /** Disconnect Flow widgets inside `scope` (timers, SSE) without touching siblings. */
 export function disconnectFlowWidgets(scope: ParentNode = document): void {
-  scope.querySelectorAll<HTMLElement>("[data-r-flow-dashboard], [data-r-flow-graph], [data-r-event-stream], [data-r-worker-panel]").forEach((el) => {
-    el.dispatchEvent(new Event("resuma:disconnect"));
-  });
+  const graphIds = new Set<string>();
+  scope
+    .querySelectorAll<HTMLElement>(
+      "[data-r-flow-dashboard], [data-r-flow-graph], [data-r-event-stream], [data-r-worker-panel]",
+    )
+    .forEach((el) => {
+      const id = graphIdFrom(el);
+      if (id) graphIds.add(id);
+      el.dispatchEvent(new Event("resuma:disconnect"));
+    });
+  for (const id of graphIds) closeGraphSseHub(id);
 }
 
 /** Mount all Flow widgets (dashboard, graph, events, controls). */

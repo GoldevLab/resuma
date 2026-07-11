@@ -95,8 +95,8 @@ export function runVisibleTasks(
     for (const [id] of entries) {
       const marker = document.createElement("span");
       marker.dataset.rVisibleTask = id;
-      marker.style.cssText =
-        "position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden";
+      marker.className = "r-visible-task-marker";
+      marker.setAttribute("aria-hidden", "true");
       rootEl().appendChild(marker);
       io.observe(marker);
     }
