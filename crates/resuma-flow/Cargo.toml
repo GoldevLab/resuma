@@ -14,7 +14,7 @@ categories.workspace = true
 keywords = ["web", "framework", "ssr", "flow", "workers"]
 
 [dependencies]
-resuma = { path = "../resuma", version = "1.2.0" }
+resuma = { path = "../resuma", version = "1.2.1" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

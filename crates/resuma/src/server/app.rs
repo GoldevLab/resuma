@@ -31,11 +31,11 @@ use super::compressed_asset::{
 };
 use super::deferred_stream::try_deferred_stream;
 use super::page_cache::take_response_cache_control;
-use super::runtime_asset::{CORE_JS, FLOW_JS, LOADER_JS, RUNTIME_JS};
+use super::runtime_asset::{CORE_JS, FLOW_CSS, FLOW_JS, LOADER_JS, RUNTIME_JS};
 use super::security::{
-    self, client_ip_from_parts, csrf_set_cookie, guard_mutation, http_status,
-    resolve_page_csp_nonce, resolve_page_csrf, validate_config,
-    request_is_https, CspNonce, SecurityConfig, SecurityHeaderOptions,
+    self, client_ip_from_parts, csrf_set_cookie, guard_mutation, http_status, request_is_https,
+    resolve_page_csp_nonce, resolve_page_csrf, validate_config, CspNonce, SecurityConfig,
+    SecurityHeaderOptions,
 };
 
 /// HTTP application builder for single-page and manual-route apps.
@@ -247,9 +247,7 @@ impl ResumaApp {
 
     pub async fn serve(self, opts: ServeOptions) -> std::io::Result<()> {
         crate::exec::init_exec().await;
-        validate_config(&opts.security).map_err(|e| {
-            std::io::Error::other(e.to_string())
-        })?;
+        validate_config(&opts.security).map_err(|e| std::io::Error::other(e.to_string()))?;
         security::configure(opts.security.clone());
         security::warn_insecure_config(&opts.security);
         let router = super::limits::apply_server_limits(
@@ -309,6 +307,7 @@ impl ResumaApp {
             .route("/_resuma/loader.js", get(serve_loader))
             .route("/_resuma/core.js", get(serve_core))
             .route("/_resuma/flow.js", get(serve_flow))
+            .route("/_resuma/flow.css", get(serve_flow_css))
             .route("/_resuma/runtime.js", get(serve_runtime))
             .route("/_resuma/action/{name}", post(serve_action))
             .route("/_resuma/handler/{chunk}", get(serve_handler_chunk))
@@ -454,11 +453,12 @@ fn render_page_response(
             &payload,
         );
 
-        let stream = if let Some(deferred) = try_deferred_stream(view.clone(), &opts, path, &payload) {
-            deferred
-        } else {
-            crate::ssr::build_page_stream(opts.clone(), path, body.clone(), payload, vec![body])
-        };
+        let stream =
+            if let Some(deferred) = try_deferred_stream(view.clone(), &opts, path, &payload) {
+                deferred
+            } else {
+                crate::ssr::build_page_stream(opts.clone(), path, body.clone(), payload, vec![body])
+            };
 
         let stream = stream.map(|chunk| {
             chunk
@@ -597,6 +597,23 @@ async fn serve_flow(headers: HeaderMap) -> Response {
     serve_js(&headers, flow_asset(), FLOW_JS)
 }
 
+async fn serve_flow_css() -> Response {
+    (
+        [
+            (
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("text/css; charset=utf-8"),
+            ),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("public, max-age=31536000, immutable"),
+            ),
+        ],
+        FLOW_CSS,
+    )
+        .into_response()
+}
+
 async fn serve_runtime(headers: HeaderMap) -> Response {
     serve_js(&headers, runtime_asset(), RUNTIME_JS)
 }
@@ -714,7 +731,17 @@ async fn serve_handler_chunk(
                 .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
             res
         }
-        None => (StatusCode::NOT_FOUND, "handler chunk not found").into_response(),
+        None => {
+            let body = format!("throw new Error('handler chunk not found: {key}');");
+            let mut res = Response::new(body.into());
+            res.headers_mut().insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/javascript; charset=utf-8"),
+            );
+            res.headers_mut()
+                .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+            res
+        }
     }
 }
 

@@ -15,6 +15,7 @@
 //! | `GET /_resuma/loader.js` | Tiny bootstrap (~884 B gzip) |
 //! | `GET /_resuma/core.js` | Lazy-loaded resumability core |
 //! | `GET /_resuma/flow.js` | Lazy-loaded Flow exec widgets |
+//! | `GET /_resuma/flow.css` | Flow widget stylesheet (CSP-safe for dynamic panels) |
 //! | `GET /_resuma/runtime.js` | Legacy monolithic runtime |
 //! | `GET /_resuma/handler/:chunk.js` | Lazy handler chunk (`#[component]` boundaries) |
 //! | `GET /_resuma/island-chunk/:chunk.js` | Optional `#[island]` chunk |
@@ -59,6 +60,7 @@ pub use security::{
     build_content_security_policy, client_ip, client_ip_from_parts,
     configure as configure_security, csrf_token, guard_mutation, http_status, random_token,
     request_is_https, resolve_page_csp_nonce, resolve_page_csrf, try_random_token, validate_config,
-    validate_csrf, validate_origin, validate_submit_name, verify_secret, warn_insecure_config, CspConfig, CspNonce, SecurityConfig,
-    SecurityHeaderOptions, CSRF_COOKIE, CSRF_FIELD, CSRF_HEADER,
+    validate_csrf, validate_origin, validate_submit_name, verify_secret, warn_insecure_config,
+    CspConfig, CspNonce, SecurityConfig, SecurityHeaderOptions, CSRF_COOKIE, CSRF_FIELD,
+    CSRF_HEADER,
 };

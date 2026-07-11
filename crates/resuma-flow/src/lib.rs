@@ -19,8 +19,8 @@ pub mod components;
 
 pub use components::{
     event_stream, event_stream_auth, flow_dashboard, flow_dashboard_live, flow_dashboard_poll,
-    flow_execution, flow_execution_auth, flow_graph, flow_graph_auth, flow_ops_page, flow_styles,
-    worker_panel, worker_panel_auth,
+    flow_execution, flow_execution_auth, flow_execution_panel_auth, flow_graph, flow_graph_auth,
+    flow_ops_page, flow_styles, flow_styles_link, worker_panel, worker_panel_auth, FLOW_CSS,
 };
 pub use resuma::flow::*;
 pub use resuma::{
@@ -34,8 +34,9 @@ pub use resuma::{
 pub mod prelude {
     pub use crate::components::{
         event_stream, event_stream_auth, flow_dashboard, flow_dashboard_live, flow_dashboard_poll,
-        flow_execution, flow_execution_auth, flow_graph, flow_graph_auth, flow_ops_page,
-        flow_styles, worker_panel, worker_panel_auth,
+        flow_execution, flow_execution_auth, flow_execution_panel_auth, flow_graph,
+        flow_graph_auth, flow_ops_page, flow_styles, flow_styles_link, worker_panel,
+        worker_panel_auth, FLOW_CSS,
     };
     pub use crate::{
         enqueue, exec_status, FlowApp, FlowEngine, FlowServeOptions, GraphId, WorkerContext,
@@ -55,6 +56,20 @@ mod tests {
         let view = flow_styles();
         let html = render_view(&view);
         assert!(html.contains("style") || html.contains("css"));
+    }
+
+    #[test]
+    fn flow_styles_link_points_at_static_route() {
+        let html = render_view(&flow_styles_link());
+        assert!(html.contains("/_resuma/flow.css"));
+    }
+
+    #[test]
+    fn flow_execution_panel_omits_inline_styles() {
+        let panel = flow_execution_panel_auth("g_test", true, None);
+        let html = render_view(&panel);
+        assert!(html.contains("data-r-flow-execution"));
+        assert!(!html.contains("data-r-flow-styles"));
     }
 
     #[test]

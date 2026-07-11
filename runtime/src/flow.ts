@@ -458,15 +458,23 @@ function renderGraph(
 
 async function refreshGraph(el: HTMLElement, graphId: string, token: string): Promise<void> {
   const statusEl = el.querySelector<HTMLElement>("[data-r-flow-graph-status]");
+  if (completedGraphIds.has(graphId)) {
+    if (statusEl) statusEl.textContent = "Graph finished.";
+    return;
+  }
   const path = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}`, token);
   try {
     const res = await fetch(path, { headers: graphFetchHeaders(token), credentials: "same-origin" });
     if (!res.ok) {
       if (statusEl) {
-        statusEl.textContent =
-          res.status === 401
-            ? "Unauthorized — invalid or expired graph token."
-            : `Failed to load graph (HTTP ${res.status}).`;
+        if (res.status === 401 || res.status === 403) {
+          markGraphTerminal(graphId);
+          statusEl.textContent = completedGraphIds.has(graphId)
+            ? "Graph finished."
+            : "Unauthorized — refresh the page and run the worker again.";
+        } else {
+          statusEl.textContent = `Failed to load graph (HTTP ${res.status}).`;
+        }
       }
       return;
     }
@@ -476,6 +484,9 @@ async function refreshGraph(el: HTMLElement, graphId: string, token: string): Pr
       worker?: string;
     };
     renderGraph(el, snap);
+    if (graphTerminalStatus(snap.status)) {
+      markGraphTerminal(graphId);
+    }
   } catch {
     if (statusEl) statusEl.textContent = "Network error loading graph.";
   }
@@ -889,7 +900,29 @@ export function initFlowWidgets(scope: ParentNode = document, opts?: { flush?: b
     disconnectFlowWidgets(scope);
   }
   scope.querySelectorAll<HTMLElement>("[data-r-flow-dashboard]").forEach(mountFlowDashboard);
-  scope.querySelectorAll<HTMLElement>("[data-r-flow-graph]").forEach(mountFlowGraph);
-  scope.querySelectorAll<HTMLElement>("[data-r-event-stream]").forEach(mountEventStream);
-  scope.querySelectorAll<HTMLElement>("[data-r-worker-panel]").forEach(mountWorkerPanel);
+  const mounted = new Set<string>();
+  const mountGraphWidget = (
+    kind: string,
+    el: HTMLElement,
+    fn: (node: HTMLElement) => void,
+  ) => {
+    const graphId = graphIdFrom(el);
+    if (!graphId) {
+      fn(el);
+      return;
+    }
+    const key = `${kind}:${graphId}`;
+    if (mounted.has(key)) return;
+    mounted.add(key);
+    fn(el);
+  };
+  scope.querySelectorAll<HTMLElement>("[data-r-flow-graph]").forEach((el) => {
+    mountGraphWidget("graph", el, mountFlowGraph);
+  });
+  scope.querySelectorAll<HTMLElement>("[data-r-event-stream]").forEach((el) => {
+    mountGraphWidget("stream", el, mountEventStream);
+  });
+  scope.querySelectorAll<HTMLElement>("[data-r-worker-panel]").forEach((el) => {
+    mountGraphWidget("panel", el, mountWorkerPanel);
+  });
 }

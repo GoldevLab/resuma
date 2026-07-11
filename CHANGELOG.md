@@ -6,6 +6,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-07-11
+
+### Added
+
+- **`GET /_resuma/flow.css`** — static Flow widget stylesheet (CSP-safe alternative to inline `flow_styles()` on dynamically injected panels).
+- **`flow_styles_link()`** — `<link rel="stylesheet" href="/_resuma/flow.css">` for pages that mount Flow HTML after load.
+- **`flow_execution_panel_auth`** — execution panel without embedded styles (pair with `flow_styles_link()` or layout `flow_styles()`).
+
+### Fixed
+
+- **Flow `flow_styles()` CSP** — inline `<style>` tags now receive the per-request CSP nonce during SSR.
+- **Flow graph 401 noise** — terminal graphs show “Graph finished.” instead of token errors; completed graphs skip refresh polling.
+- **Flow widget remounts** — `initFlowWidgets` dedupes graph/stream/panel mounts per `graph_id` to prevent duplicate SSE replays.
+- **Handler chunk 404 MIME** — missing `/_resuma/handler/{chunk}.js` returns `application/javascript` so dynamic `import()` fails with a clear error instead of a MIME block.
+
 ## [1.2.0] - 2026-07-09
 
 ### Fixed
