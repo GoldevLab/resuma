@@ -1,5 +1,8 @@
 use resuma::prelude::*;
 
+mod exec;
+mod workers;
+
 #[data]
 struct SaveCountInput {
     value: i32,
@@ -211,6 +214,7 @@ async fn main() -> std::io::Result<()> {
         .component("/", HomePage)
         .component("/about", AboutPage)
         .component("/thanks", ThanksPage)
+        .component("/exec", exec::ExecPage)
         .serve(FlowServeOptions::default())
         .await
 }

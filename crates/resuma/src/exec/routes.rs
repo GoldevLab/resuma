@@ -321,14 +321,8 @@ async fn resume_graph(
 type GraphEventStream = Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>>;
 
 fn graph_sse_stream(bus: SharedEventBus) -> GraphEventStream {
-    let history = bus.history();
     let mut rx = bus.subscribe();
     Box::pin(stream! {
-        for event in history {
-            if let Ok(data) = serde_json::to_string(&event) {
-                yield Ok(Event::default().data(data));
-            }
-        }
         loop {
             match rx.recv().await {
                 Ok(event) => {

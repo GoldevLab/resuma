@@ -67,3 +67,5 @@ fs2                 = "0.4"
 
 [dev-dependencies]
 tower = { workspace = true, features = ["util"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["time"] }

@@ -266,7 +266,9 @@ function subscribeGraphEvents(
   const es = new EventSource(url);
   es.onmessage = (msg) => {
     try {
-      onEvent(JSON.parse(msg.data) as WorkerEvent);
+      const ev = JSON.parse(msg.data) as WorkerEvent;
+      onEvent(ev);
+      if (ev.type === "graph_done") es.close();
     } catch {
       /* ignore */
     }
@@ -378,26 +380,47 @@ function mountEventStream(el: HTMLElement): void {
     }
     list.scrollTop = list.scrollHeight;
   };
-  const loadReplay = async () => {
+
+  let closeSse: (() => void) | null = null;
+  const stop = () => {
+    closeSse?.();
+    closeSse = null;
+  };
+  el.addEventListener("resuma:disconnect", stop, { once: true });
+  registerFlowCleanup(stop);
+
+  void (async () => {
+    const graphPath = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}`, token);
+    const replayPath = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}/replay`, token);
+    const headers = graphFetchHeaders(token);
+
+    let terminal = false;
     try {
-      const res = await fetch(
-        withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}/replay`, token),
-        { headers: graphFetchHeaders(token), credentials: "same-origin" },
-      );
-      if (!res.ok) return;
-      const events = (await res.json()) as WorkerEvent[];
-      if (!events.length) return;
-      list.innerHTML = "";
-      for (const ev of events) append(formatEvent(ev));
+      const snapRes = await fetch(graphPath, { headers, credentials: "same-origin" });
+      if (snapRes.ok) {
+        const snap = (await snapRes.json()) as { status?: string };
+        terminal = snap.status === "done" || snap.status === "failed" || snap.status === "paused";
+      }
     } catch {
       /* ignore */
     }
-  };
-  void loadReplay();
-  const close = subscribeGraphEvents(graphId, token, (ev) => append(formatEvent(ev)));
-  const stop = () => close();
-  el.addEventListener("resuma:disconnect", stop, { once: true });
-  registerFlowCleanup(stop);
+
+    try {
+      const res = await fetch(replayPath, { headers, credentials: "same-origin" });
+      if (res.ok) {
+        const events = (await res.json()) as WorkerEvent[];
+        list.innerHTML = "";
+        for (const ev of events) append(formatEvent(ev));
+        if (events.some((ev) => ev.type === "graph_done")) terminal = true;
+      }
+    } catch {
+      /* ignore */
+    }
+
+    if (terminal) return;
+
+    closeSse = subscribeGraphEvents(graphId, token, (ev) => append(formatEvent(ev)));
+  })();
 }
 
 function mountWorkerPanel(el: HTMLElement): void {

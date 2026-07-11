@@ -51,6 +51,8 @@ function startServer() {
       ...process.env,
       RESUMA_ADDR: `${host}:${port}`,
       RESUMA_ENV: "development",
+      RESUMA_DEV: "1",
+      RESUMA_EXEC_ENABLED: "1",
     },
     stdio,
     windowsHide: true,
@@ -196,6 +198,60 @@ async function runBrowserChecks() {
     await expectText(page.getByTestId("about-doubled"), "Doubled: 0", "computed initial after nav");
     await clickUnique(page.getByTestId("about-bump"), "about bump button");
     await expectText(page.getByTestId("about-doubled"), "Doubled: 2", "computed replays after SPA nav");
+
+    log("testing Resuma OS worker + Flow widgets");
+    await page.goto(`${baseUrl}/exec`, { waitUntil: "networkidle" });
+    await expectText(page.getByTestId("exec-lead"), "Live worker + execution graph", "exec page");
+    await clickUnique(page.getByTestId("exec-start"), "exec start button");
+    const statusEl = page.locator("[data-r-flow-graph-status]");
+    await statusEl.waitFor({ state: "visible", timeout: 10_000 });
+    const statusDeadline = Date.now() + 15_000;
+    let statusText = "";
+    while (Date.now() < statusDeadline) {
+      statusText = (await statusEl.innerText()).trim();
+      if (!statusText.includes("Loading graph")) break;
+      await delay(200);
+    }
+    assert(
+      !statusText.includes("Loading graph"),
+      `execution graph stuck loading: "${statusText}"`,
+    );
+    const eventDeadline = Date.now() + 10_000;
+    let eventCount = 0;
+    while (Date.now() < eventDeadline) {
+      eventCount = await page.locator(".r-event-stream-list li").count();
+      if (eventCount > 0) break;
+      await delay(200);
+    }
+    assert(eventCount > 0, `expected worker events in stream, got ${eventCount}`);
+
+    log("testing exec event stream is not duplicated");
+    await page.waitForFunction(
+      () => {
+        const items = [...document.querySelectorAll(".r-event-stream-list li")];
+        return items.some((li) => li.textContent?.includes("[done]"));
+      },
+      { timeout: 15_000 },
+    );
+    let streamTexts = await page.locator(".r-event-stream-list li").allTextContents();
+    const startCount = streamTexts.filter((t) => t.includes("[start]")).length;
+    assert(startCount === 1, `expected one [start] event, got ${startCount}`);
+
+    log("testing second worker run replaces stream without stacking");
+    await clickUnique(page.getByTestId("exec-start"), "exec start button (second run)");
+    await page.waitForFunction(
+      () => {
+        const items = [...document.querySelectorAll(".r-event-stream-list li")];
+        return items.some((li) => li.textContent?.includes("[done]"));
+      },
+      { timeout: 15_000 },
+    );
+    streamTexts = await page.locator(".r-event-stream-list li").allTextContents();
+    const startCountAfterRerun = streamTexts.filter((t) => t.includes("[start]")).length;
+    assert(
+      startCountAfterRerun === 1,
+      `second run should reset stream, got ${startCountAfterRerun} [start] lines`,
+    );
 
     assert(consoleErrors.length === 0, `browser console errors:\n${consoleErrors.join("\n")}`);
   } finally {
