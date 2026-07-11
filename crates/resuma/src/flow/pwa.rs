@@ -419,7 +419,7 @@ self.addEventListener("fetch", (event) => {{
           return res;
         }});
         return cached || network;
-      }}))
+      }})
     );
   }}
 }});
