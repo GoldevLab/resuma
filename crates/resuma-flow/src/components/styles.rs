@@ -40,6 +40,7 @@ pub const FLOW_CSS: &str = r#"
 .r-event-stream{display:flex;flex-direction:column;min-height:0;gap:.5rem}
 .r-event-stream__viewport{
   min-height:12rem;max-height:min(42vh,22rem);overflow-x:hidden;overflow-y:auto;overflow-anchor:none;
+  overscroll-behavior:contain;
   padding:.65rem .75rem;border-radius:12px;border:1px solid #243044;
   background:rgba(11,16,32,.55);scroll-behavior:smooth;
   -webkit-overflow-scrolling:touch;

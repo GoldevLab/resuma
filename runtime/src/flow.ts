@@ -548,19 +548,30 @@ function eventStreamViewport(el: HTMLElement): HTMLElement {
 }
 
 function scrollStreamToEnd(viewport: HTMLElement, smooth = true): void {
-  const scroll = () => {
-    const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+  const run = () => {
+    // Assign a large value — more reliable than scrollHeight - clientHeight after DOM updates.
+    const top = viewport.scrollHeight;
     if (smooth && "scrollTo" in viewport) {
-      viewport.scrollTo({ top: maxTop, behavior: "smooth" });
+      viewport.scrollTo({ top, behavior: "smooth" });
     } else {
-      viewport.scrollTop = maxTop;
-    }
-    const last = viewport.querySelector(".r-event-stream-list li:last-child");
-    if (last instanceof HTMLElement) {
-      last.scrollIntoView({ block: "end", behavior: smooth ? "smooth" : "auto" });
+      viewport.scrollTop = top;
     }
   };
-  requestAnimationFrame(() => requestAnimationFrame(scroll));
+  // Flex/backdrop-filter layouts may measure one frame late.
+  requestAnimationFrame(() => {
+    run();
+    requestAnimationFrame(run);
+  });
+}
+
+function bindStreamAutoScroll(viewport: HTMLElement, list: HTMLElement): () => void {
+  if (typeof ResizeObserver === "undefined") return () => {};
+  const scroll = () => {
+    viewport.scrollTop = viewport.scrollHeight;
+  };
+  const ro = new ResizeObserver(scroll);
+  ro.observe(list);
+  return () => ro.disconnect();
 }
 
 function mountEventStream(el: HTMLElement): void {
@@ -574,6 +585,7 @@ function mountEventStream(el: HTMLElement): void {
   eventStreamMountGen.set(graphId, gen);
   const isActive = () => eventStreamMountGen.get(graphId) === gen;
   const seen = seenForList(list as HTMLElement);
+  const stopAutoScroll = bindStreamAutoScroll(viewport, list as HTMLElement);
 
   const append = (line: string, smooth = false) => {
     if (!isActive()) return;
@@ -606,6 +618,7 @@ function mountEventStream(el: HTMLElement): void {
   let closeSse: (() => void) | null = null;
   const stop = () => {
     aborted = true;
+    stopAutoScroll();
     closeSse?.();
     closeSse = null;
     delete el.dataset.rFlowMounted;
