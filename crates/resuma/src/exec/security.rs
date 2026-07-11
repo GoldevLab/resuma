@@ -304,11 +304,7 @@ pub fn guard_graph_read(
 }
 
 /// True when a valid per-graph token is presented (header or query on read routes).
-fn graph_token_valid(
-    headers: &HeaderMap,
-    graph_id: &GraphId,
-    query_token: Option<&str>,
-) -> bool {
+fn graph_token_valid(headers: &HeaderMap, graph_id: &GraphId, query_token: Option<&str>) -> bool {
     let header_token = extract_graph_token(headers);
     let token = header_token.as_deref().or(query_token);
     validate_graph_token(graph_id, token)

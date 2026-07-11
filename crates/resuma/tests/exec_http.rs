@@ -2,8 +2,8 @@
 
 use std::future::Future;
 use std::net::SocketAddr;
-use std::pin::Pin;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -55,7 +55,10 @@ fn configure_test_exec_security() {
     });
 }
 
-fn echo_worker(input: Value, ctx: WorkerContext) -> Pin<Box<dyn Future<Output = Result<Value>> + Send>> {
+fn echo_worker(
+    input: Value,
+    ctx: WorkerContext,
+) -> Pin<Box<dyn Future<Output = Result<Value>> + Send>> {
     Box::pin(async move {
         ctx.log("worker started");
         ctx.progress(25);
@@ -78,7 +81,10 @@ fn register_echo_worker(name: &str) {
         .install();
 }
 
-fn slow_worker(_input: Value, ctx: WorkerContext) -> Pin<Box<dyn Future<Output = Result<Value>> + Send>> {
+fn slow_worker(
+    _input: Value,
+    ctx: WorkerContext,
+) -> Pin<Box<dyn Future<Output = Result<Value>> + Send>> {
     Box::pin(async move {
         for _ in 0..50 {
             ctx.check_cancelled()?;
@@ -164,10 +170,7 @@ async fn start_worker_via_http(app: &axum::Router, worker: &str) -> (String, Str
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK, "start worker");
     let body = body_json(res).await;
-    let graph_id = body["graph_id"]
-        .as_str()
-        .expect("graph_id")
-        .to_string();
+    let graph_id = body["graph_id"].as_str().expect("graph_id").to_string();
     let token = body["access_token"]
         .as_str()
         .expect("access_token")
@@ -587,7 +590,8 @@ async fn queue_enqueue_and_stats_via_http() {
     assert_eq!(stats_res.status(), StatusCode::OK);
     let stats = body_json(stats_res).await;
     assert!(
-        stats["pending"].as_u64().unwrap_or(0) + stats["processing"].as_u64().unwrap_or(0)
+        stats["pending"].as_u64().unwrap_or(0)
+            + stats["processing"].as_u64().unwrap_or(0)
             + stats["done"].as_u64().unwrap_or(0)
             >= 1,
         "queue stats should reflect enqueued job: {stats}"
@@ -719,7 +723,8 @@ async fn scheduler_create_and_list_via_http() {
     let list = body_json(list_res).await;
     let jobs = list["jobs"].as_array().expect("jobs array");
     assert!(
-        jobs.iter().any(|j| j["name"].as_str() == Some(schedule_name.as_str())),
+        jobs.iter()
+            .any(|j| j["name"].as_str() == Some(schedule_name.as_str())),
         "listed schedules should include created job"
     );
 }

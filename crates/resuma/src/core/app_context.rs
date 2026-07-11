@@ -35,9 +35,7 @@ static NEXT_CONTEXT_FRAME: AtomicU32 = AtomicU32::new(1);
 
 /// Run `fut` with a fresh, task-isolated component context stack (one scope per HTTP request).
 pub async fn scope_context_stack<F: Future>(fut: F) -> F::Output {
-    CONTEXT_FRAMES
-        .scope(RefCell::new(Vec::new()), fut)
-        .await
+    CONTEXT_FRAMES.scope(RefCell::new(Vec::new()), fut).await
 }
 
 fn with_context_frames<R>(f: impl FnOnce(&RefCell<Vec<usize>>) -> R) -> R {
@@ -51,8 +49,7 @@ fn with_context_frames<R>(f: impl FnOnce(&RefCell<Vec<usize>>) -> R) -> R {
 fn alloc_context_frame() -> usize {
     let handle = NEXT_CONTEXT_FRAME.fetch_add(1, Ordering::Relaxed) as usize;
     CONTEXT_FRAME_MAP.with(|map| {
-        map.borrow_mut()
-            .insert(handle, Rc::new(BTreeMap::new()));
+        map.borrow_mut().insert(handle, Rc::new(BTreeMap::new()));
     });
     handle
 }

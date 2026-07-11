@@ -2,8 +2,8 @@
 
 use serde::Serialize;
 
-use super::signal::Signal;
 use super::effect::Computed;
+use super::signal::Signal;
 use super::store::Store;
 use super::view::{Child, Dynamic, View};
 

@@ -20,7 +20,9 @@ use super::middleware::run_middleware;
 use super::pages::{discover_pages, DiscoveredPage, FlowPageRegistry};
 use super::request::FlowRequest;
 use super::routes::attach_flow_routes;
-use super::runtime::{first_load_error, prefetch_deferred_loaders, stage_deferred_stream_plan, with_request_deferred};
+use super::runtime::{
+    first_load_error, prefetch_deferred_loaders, stage_deferred_stream_plan, with_request_deferred,
+};
 
 type PageFn = Arc<dyn Fn(FlowRequest) -> View + Send + Sync>;
 
@@ -351,9 +353,8 @@ impl FlowApp {
 
     pub async fn serve(self, opts: FlowServeOptions) -> std::io::Result<()> {
         crate::exec::init_exec().await;
-        crate::server::security::validate_config(&opts.security).map_err(|e| {
-            std::io::Error::other(e.to_string())
-        })?;
+        crate::server::security::validate_config(&opts.security)
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
         crate::server::configure_security(opts.security.clone());
         crate::server::security::warn_insecure_config(&opts.security);
         let production = opts.security.production;

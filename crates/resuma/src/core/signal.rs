@@ -162,7 +162,6 @@ where
     }
 }
 
-
 fn float_bits_equal<T: 'static>(a: &T, b: &T) -> Option<bool> {
     use std::any::Any;
     let a_any = a as &dyn Any;

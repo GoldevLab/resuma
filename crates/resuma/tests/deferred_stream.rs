@@ -22,9 +22,7 @@ fn counting_stream_loader(
 fn failing_stream_loader(
     _req: FlowRequest,
 ) -> Pin<Box<dyn std::future::Future<Output = resuma::Result<serde_json::Value>> + Send>> {
-    Box::pin(async {
-        Err(resuma::ResumaError::Other("stream loader failed".into()))
-    })
+    Box::pin(async { Err(resuma::ResumaError::Other("stream loader failed".into())) })
 }
 
 #[tokio::test(flavor = "multi_thread")]

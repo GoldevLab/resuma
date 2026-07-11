@@ -78,9 +78,7 @@ pub fn sanitize_cache_for_session(
         let lower = c.to_ascii_lowercase();
         lower.contains("public") || lower.contains("max-age")
     }) {
-        tracing::warn!(
-            "overriding Cache-Control to private, no-store — page sets CSRF cookie"
-        );
+        tracing::warn!("overriding Cache-Control to private, no-store — page sets CSRF cookie");
     }
     Some("private, no-store".to_string())
 }

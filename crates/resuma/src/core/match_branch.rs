@@ -98,7 +98,10 @@ mod tests {
         assert_eq!(match_value_string(&Option::<String>::None), "null");
         assert_eq!(match_value_string(&42_i32), "42");
         assert_eq!(match_value_string(&true), "true");
-        assert_eq!(match_value_string(&serde_json::json!({"a": 1})), r#"{"a":1}"#);
+        assert_eq!(
+            match_value_string(&serde_json::json!({"a": 1})),
+            r#"{"a":1}"#
+        );
         assert_eq!(match_value_string(&serde_json::json!(["x"])), r#"["x"]"#);
     }
 

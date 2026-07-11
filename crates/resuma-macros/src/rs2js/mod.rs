@@ -785,7 +785,10 @@ mod tests {
         // silently dropping the update. Ensure the param is returned.
         let js = expr_js("count.update(|c| { *c += 2; })");
         assert!(js.contains("state.count.update"), "got: {js}");
-        assert!(js.contains("return c;"), "block body must still return param: {js}");
+        assert!(
+            js.contains("return c;"),
+            "block body must still return param: {js}"
+        );
         assert!(js.contains("c += 2"), "got: {js}");
     }
 
@@ -813,10 +816,7 @@ mod tests {
     #[test]
     fn compound_assign_on_local_stays_raw() {
         let js = handler_js("move |n| { let x = n; x += 1 }");
-        assert!(
-            js.contains("x +="),
-            "local vars keep raw += : {js}"
-        );
+        assert!(js.contains("x +="), "local vars keep raw += : {js}");
         assert!(
             !js.contains("state.x.update"),
             "must not treat let-binding as signal: {js}"

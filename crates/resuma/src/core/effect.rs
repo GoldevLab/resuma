@@ -187,10 +187,7 @@ where
         });
     }
 
-    let eff = Effect {
-        id,
-        callback: cb,
-    };
+    let eff = Effect { id, callback: cb };
     eff.run();
 
     let signal = signal_slot
@@ -198,7 +195,10 @@ where
         .clone()
         .expect("use_computed: effect must initialize signal");
 
-    Computed { signal, effect: eff }
+    Computed {
+        signal,
+        effect: eff,
+    }
 }
 
 /// Like [`use_computed`] but also registers a rs2js-translated body for client replay.

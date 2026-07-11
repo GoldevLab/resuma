@@ -50,11 +50,7 @@ pub async fn dispatch(name: &str, args: Vec<Value>, mut req: FlowRequest) -> Res
 
 /// Parse query string into a map (URL-decoded).
 pub fn parse_query(query: &str) -> BTreeMap<String, String> {
-    crate::flow::request::parse_query(if query.is_empty() {
-        None
-    } else {
-        Some(query)
-    })
+    crate::flow::request::parse_query(if query.is_empty() { None } else { Some(query) })
 }
 
 #[cfg(test)]

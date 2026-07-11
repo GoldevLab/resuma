@@ -3,9 +3,9 @@
 use std::collections::HashSet;
 use std::pin::Pin;
 
+use crate::core::context::ResumePayload;
 use crate::core::stream_chunk;
 use crate::core::view::{Attr, AttrValue, Child, Element, View};
-use crate::core::context::ResumePayload;
 use crate::ssr::{render_view, stream_head, stream_tail, PageOptions, StreamChunk};
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;

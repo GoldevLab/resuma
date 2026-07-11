@@ -84,10 +84,10 @@ pub use crate::core::{
     provide_context, provide_theme, push_slots, resolve_slot, show, show_signal, signal,
     stream_chunk, stream_slot, theme_css_vars, try_use_context, use_computed, use_computed_with_js,
     use_context, use_debounce, use_effect, use_signal, use_store, use_task, use_theme,
-    use_visible_task, use_visible_task_with_captures, visible_task_js, with_default_slot, with_view_transition, Child, Component,
-    Computed, ContextId, Effect, FlowRequest, IntoView, NoSerialize, ReadSignal, RenderContext,
-    RenderMode, Result, ResumaError, ResumePayload, Signal, SlotGuard, SlottedChild, Store, Theme,
-    View, VisibleTaskSpec, WriteSignal,
+    use_visible_task, use_visible_task_with_captures, visible_task_js, with_default_slot,
+    with_view_transition, Child, Component, Computed, ContextId, Effect, FlowRequest, IntoView,
+    NoSerialize, ReadSignal, RenderContext, RenderMode, Result, ResumaError, ResumePayload, Signal,
+    SlotGuard, SlottedChild, Store, Theme, View, VisibleTaskSpec, WriteSignal,
 };
 
 pub use crate::server::{
@@ -157,12 +157,12 @@ pub mod prelude {
         render_to_string, render_view, resolve_slot, server, set_action_middleware, show, signal,
         stream_slot, submit, theme_css_vars, try_use_context, try_use_load, try_use_load_value,
         use_computed, use_computed_with_js, use_context, use_debounce, use_effect, use_load,
-        use_signal, use_store, use_task, use_theme, use_visible_task, use_visible_task_with_captures,
-        visible_task, view, with_view_transition,
-        AttrValue, Child, ClientComponent, Component, Computed, CspConfig, Effect, FlowApp,
-        FlowError, FlowPageRegistry, FlowPwaConfig, FlowRequest, FlowServeOptions, FromFlowRequest,
-        IntoView, LoadValue, LoaderError, PageOptions, Path, PublicAsset, PwaShortcut, Query,
-        ReadSignal, Redirect, Result, ResumaApp, ResumaError, SecurityConfig, ServeOptions, Signal,
+        use_signal, use_store, use_task, use_theme, use_visible_task,
+        use_visible_task_with_captures, view, visible_task, with_view_transition, AttrValue, Child,
+        ClientComponent, Component, Computed, CspConfig, Effect, FlowApp, FlowError,
+        FlowPageRegistry, FlowPwaConfig, FlowRequest, FlowServeOptions, FromFlowRequest, IntoView,
+        LoadValue, LoaderError, PageOptions, Path, PublicAsset, PwaShortcut, Query, ReadSignal,
+        Redirect, Result, ResumaApp, ResumaError, SecurityConfig, ServeOptions, Signal,
         SlottedChild, Store, SubmitError, Theme, View, WriteSignal, CLIENT_SCRIPT_PREFIX,
         CSRF_FIELD, CSRF_HEADER,
     };
@@ -356,7 +356,9 @@ pub mod __private {
             })
         }
     }
-    impl<T: Clone + serde::Serialize + Send + Sync + 'static> From<&crate::Computed<T>> for AttrValueAuto {
+    impl<T: Clone + serde::Serialize + Send + Sync + 'static> From<&crate::Computed<T>>
+        for AttrValueAuto
+    {
         fn from(c: &crate::Computed<T>) -> Self {
             Self(AttrValue::Dynamic {
                 signal: c.id(),

@@ -708,16 +708,14 @@ fn parse_signal_when(ts: TokenStream) -> Option<(TokenStream, bool)> {
             let recv = &m.receiver;
             Some((quote! { #recv }, false))
         }
-        syn::Expr::Unary(u) if matches!(u.op, syn::UnOp::Not(_)) => {
-            match *u.expr {
-                syn::Expr::MethodCall(m) if m.method == "get" => {
-                    let recv = &m.receiver;
-                    Some((quote! { #recv }, true))
-                }
-                syn::Expr::Path(p) => Some((quote! { #p }, true)),
-                _ => None,
+        syn::Expr::Unary(u) if matches!(u.op, syn::UnOp::Not(_)) => match *u.expr {
+            syn::Expr::MethodCall(m) if m.method == "get" => {
+                let recv = &m.receiver;
+                Some((quote! { #recv }, true))
             }
-        }
+            syn::Expr::Path(p) => Some((quote! { #p }, true)),
+            _ => None,
+        },
         syn::Expr::Path(_) => Some((quote! { #expr }, false)),
         _ => None,
     }

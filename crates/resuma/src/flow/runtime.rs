@@ -105,7 +105,9 @@ pub fn stage_deferred_stream_plan(
     });
 }
 
-fn loader_result_from_dispatch(result: StdResult<Value, ResumaError>) -> StdResult<Value, LoaderError> {
+fn loader_result_from_dispatch(
+    result: StdResult<Value, ResumaError>,
+) -> StdResult<Value, LoaderError> {
     result.map_err(|err| {
         let status = match &err {
             ResumaError::Render(_) | ResumaError::Io(_) => 500,
@@ -135,9 +137,8 @@ pub fn prefetch_deferred_loaders(
     };
 
     for name in deferred {
-        let result = tokio::task::block_in_place(|| {
-            handle.block_on(dispatch_load(name, request.clone()))
-        });
+        let result =
+            tokio::task::block_in_place(|| handle.block_on(dispatch_load(name, request.clone())));
         let converted = loader_result_from_dispatch(result);
         if converted.is_ok() {
             if let Some(cache) = loader_cache(name) {

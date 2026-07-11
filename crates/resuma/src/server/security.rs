@@ -212,8 +212,9 @@ pub fn try_random_token() -> Result<String> {
         ));
     }
     let mut bytes = [0u8; 16];
-    getrandom::fill(&mut bytes)
-        .map_err(|e| ResumaError::ServiceUnavailable(format!("random number generator unavailable: {e}")))?;
+    getrandom::fill(&mut bytes).map_err(|e| {
+        ResumaError::ServiceUnavailable(format!("random number generator unavailable: {e}"))
+    })?;
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 

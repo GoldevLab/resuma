@@ -84,7 +84,12 @@ pub struct PageOptions {
 /// Render a complete HTML document for an already-built view and its resumability payload.
 ///
 /// `payload` must come from the same [`RenderContext`] that built `view`.
-pub fn render_document(opts: &PageOptions, path: &str, view: &View, payload: &ResumePayload) -> String {
+pub fn render_document(
+    opts: &PageOptions,
+    path: &str,
+    view: &View,
+    payload: &ResumePayload,
+) -> String {
     render_prebuilt_document(opts, path, view, payload)
 }
 

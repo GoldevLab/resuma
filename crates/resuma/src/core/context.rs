@@ -496,9 +496,7 @@ pub fn page_needs_client(payload: &ResumePayload, body_html: &str) -> bool {
 
 /// Run `fut` with a fresh, task-isolated render-context handle stack (one scope per HTTP request).
 pub async fn scope_render_context<F: Future>(fut: F) -> F::Output {
-    RENDER_HANDLES
-        .scope(RefCell::new(Vec::new()), fut)
-        .await
+    RENDER_HANDLES.scope(RefCell::new(Vec::new()), fut).await
 }
 
 fn with_render_handles<R>(f: impl FnOnce(&RefCell<Vec<usize>>) -> R) -> R {
