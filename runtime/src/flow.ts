@@ -461,6 +461,13 @@ function renderGraph(
     const st = snapshot.status ?? "unknown";
     statusEl.textContent = `Status: ${st}${worker}`;
   }
+
+  const workerPanel = el
+    .closest("[data-r-flow-execution]")
+    ?.querySelector<HTMLElement>("[data-r-worker-panel]");
+  if (workerPanel && graphIdFrom(workerPanel) === graphIdFrom(el)) {
+    applyWorkerControlState(workerPanel, (snapshot.status ?? "unknown").toLowerCase());
+  }
 }
 
 async function refreshGraph(el: HTMLElement, graphId: string, token: string): Promise<void> {
@@ -716,50 +723,88 @@ function mountEventStream(el: HTMLElement): void {
   })();
 }
 
-async function syncWorkerControls(
-  el: HTMLElement,
-  graphId: string,
-  token: string,
-  hint?: string,
-): Promise<void> {
+function graphStatusFromPanel(el: HTMLElement): string | undefined {
+  const text =
+    el
+      .closest("[data-r-flow-execution]")
+      ?.querySelector<HTMLElement>("[data-r-flow-graph-status]")
+      ?.textContent ?? "";
+  const m = text.match(/Status:\s*(\w+)/i);
+  return m?.[1]?.toLowerCase();
+}
+
+function applyWorkerControlState(el: HTMLElement, st: string, hint?: string): void {
   const statusEl = el.querySelector<HTMLElement>("[data-r-worker-status]");
   const pauseBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-pause]");
   const resumeBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-resume]");
   const cancelBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-cancel]");
   const replayBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-replay]");
 
+  const terminal = st === "done" || st === "failed";
+  const paused = st === "paused";
+  const running = st === "running";
+
+  if (pauseBtn) pauseBtn.disabled = !running;
+  if (resumeBtn) resumeBtn.disabled = !paused;
+  if (cancelBtn) cancelBtn.disabled = terminal;
+  if (replayBtn) replayBtn.disabled = false;
+
+  for (const btn of [pauseBtn, resumeBtn, cancelBtn, replayBtn]) {
+    if (!btn) continue;
+    if (btn.disabled) btn.setAttribute("aria-disabled", "true");
+    else btn.removeAttribute("aria-disabled");
+  }
+
+  if (!statusEl) return;
+  if (hint) {
+    statusEl.textContent = hint;
+    return;
+  }
+  if (terminal) {
+    statusEl.textContent =
+      st === "done"
+        ? "Done — Pause/Cancel are off. Run worker again to retry."
+        : `Graph ${st} — run worker again to start a new graph.`;
+  } else if (paused) {
+    statusEl.textContent = "Paused — Resume to continue or Cancel to abort.";
+  } else if (running) {
+    statusEl.textContent = "Running — Pause or Cancel now (~25s window).";
+  } else {
+    statusEl.textContent = "Syncing graph status…";
+  }
+}
+
+async function syncWorkerControls(
+  el: HTMLElement,
+  graphId: string,
+  token: string,
+  hint?: string,
+): Promise<void> {
+  if (completedGraphIds.has(graphId)) {
+    applyWorkerControlState(el, "done", hint);
+    return;
+  }
+
   const path = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}`, token);
   try {
     const res = await fetch(path, { headers: graphFetchHeaders(token), credentials: "same-origin" });
     if (!res.ok) {
-      if (statusEl) statusEl.textContent = hint ?? `Could not load graph (HTTP ${res.status}).`;
+      const fallback = graphStatusFromPanel(el);
+      if (fallback) {
+        applyWorkerControlState(el, fallback, hint);
+      } else {
+        applyWorkerControlState(el, "unknown", hint ?? `Could not load graph (HTTP ${res.status}).`);
+      }
       return;
     }
     const snap = (await res.json()) as { status?: string };
-    const st = snap.status ?? "unknown";
-    const terminal = st === "done" || st === "failed";
-    const paused = st === "paused";
-
-    if (pauseBtn) pauseBtn.disabled = terminal || paused;
-    if (resumeBtn) resumeBtn.disabled = !paused;
-    if (cancelBtn) cancelBtn.disabled = terminal;
-    if (replayBtn) replayBtn.disabled = false;
-
-    if (statusEl) {
-      if (hint) statusEl.textContent = hint;
-      else if (terminal)
-        statusEl.textContent =
-          st === "done"
-            ? "Done — controls are off. Click Run worker above to try Pause/Cancel again."
-            : `Graph ${st} — click Run worker above to start a new run.`;
-      else if (paused)
-        statusEl.textContent = "Paused — click Resume to continue, or Cancel to abort.";
-      else
-        statusEl.textContent =
-          "Running — click Pause or Cancel now (you have ~25s before this graph finishes).";
-    }
+    const st = (snap.status ?? "unknown").toLowerCase();
+    if (st === "done" || st === "failed") markGraphTerminal(graphId);
+    applyWorkerControlState(el, st, hint);
   } catch {
-    if (statusEl && hint) statusEl.textContent = hint;
+    const fallback = graphStatusFromPanel(el);
+    if (fallback) applyWorkerControlState(el, fallback, hint);
+    else applyWorkerControlState(el, "unknown", hint ?? "Network error loading graph status.");
   }
 }
 
@@ -773,10 +818,15 @@ function mountWorkerPanel(el: HTMLElement): void {
   }
   el.dataset.rFlowMounted = "1";
 
+  const ac = new AbortController();
   let aborted = false;
   let closeSse: (() => void) | null = null;
+  let pollTimer: ReturnType<typeof setInterval> | undefined;
+
   const stop = () => {
     aborted = true;
+    ac.abort();
+    if (pollTimer !== undefined) clearInterval(pollTimer);
     closeSse?.();
     closeSse = null;
     delete el.dataset.rFlowMounted;
@@ -788,7 +838,16 @@ function mountWorkerPanel(el: HTMLElement): void {
 
   const scheduleControlSync = debounce(() => {
     if (!aborted) void syncWorkerControls(el, graphId, token);
-  }, 300);
+  }, 250);
+
+  pollTimer = window.setInterval(() => {
+    if (aborted || completedGraphIds.has(graphId)) {
+      if (pollTimer !== undefined) clearInterval(pollTimer);
+      void syncWorkerControls(el, graphId, token);
+      return;
+    }
+    void syncWorkerControls(el, graphId, token);
+  }, 1500);
 
   void (async () => {
     try {
@@ -816,6 +875,7 @@ function mountWorkerPanel(el: HTMLElement): void {
         return;
       }
       if (
+        ev.type === "node_start" ||
         ev.type === "node_done" ||
         ev.type === "node_failed" ||
         ev.type === "progress"
@@ -845,6 +905,10 @@ function mountWorkerPanel(el: HTMLElement): void {
       );
       return;
     }
+    if (pauseBtn?.disabled && resumeBtn?.disabled && cancelBtn?.disabled) {
+      await syncWorkerControls(el, graphId, token);
+      return;
+    }
     if (pauseBtn) pauseBtn.disabled = true;
     if (resumeBtn) resumeBtn.disabled = true;
     if (cancelBtn) cancelBtn.disabled = true;
@@ -859,43 +923,60 @@ function mountWorkerPanel(el: HTMLElement): void {
     const graphEl = graphRoot?.querySelector<HTMLElement>("[data-r-flow-graph]");
     if (graphEl) void refreshGraph(graphEl, graphId, token);
     const labels = { pause: "Paused", resume: "Resumed", cancel: "Cancelled" } as const;
-    await syncWorkerControls(el, graphId, token, `${labels[path]} — refreshing graph…`);
+    await syncWorkerControls(el, graphId, token, `${labels[path]} — refreshing…`);
   };
-  el.querySelector("[data-r-worker-pause]")?.addEventListener("click", () => {
-    void postControl("pause");
-  });
-  el.querySelector("[data-r-worker-resume]")?.addEventListener("click", () => {
-    void postControl("resume");
-  });
-  el.querySelector("[data-r-worker-cancel]")?.addEventListener("click", () => {
-    void postControl("cancel");
-  });
-  el.querySelector("[data-r-worker-replay]")?.addEventListener("click", async () => {
-    const res = await fetch(
-      withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}/replay`, token),
-      { headers: graphFetchHeaders(token), credentials: "same-origin" },
-    );
-    if (!res.ok) return;
-    const events = (await res.json()) as WorkerEvent[];
-    const stream = el.closest("[data-r-flow-execution]")?.querySelector("[data-r-event-stream]");
-    const listEl = stream?.querySelector("ul");
-    const viewportEl = stream ? eventStreamViewport(stream as HTMLElement) : null;
-    if (!listEl) return;
-    const seen = seenForList(listEl as HTMLElement);
-    seen.clear();
-    listEl.innerHTML = "";
-    delete (stream as HTMLElement).dataset.rStreamTerminal;
-    for (const ev of events) {
-      const key = eventKey(ev);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const li = document.createElement("li");
-      li.textContent = formatEvent(ev);
-      listEl.appendChild(li);
-    }
-    if (viewportEl) scrollStreamToEnd(viewportEl, false);
-    await syncWorkerControls(el, graphId, token, "Replay loaded.");
-  });
+  const signal = ac.signal;
+  el.querySelector("[data-r-worker-pause]")?.addEventListener(
+    "click",
+    () => {
+      void postControl("pause");
+    },
+    { signal },
+  );
+  el.querySelector("[data-r-worker-resume]")?.addEventListener(
+    "click",
+    () => {
+      void postControl("resume");
+    },
+    { signal },
+  );
+  el.querySelector("[data-r-worker-cancel]")?.addEventListener(
+    "click",
+    () => {
+      void postControl("cancel");
+    },
+    { signal },
+  );
+  el.querySelector("[data-r-worker-replay]")?.addEventListener(
+    "click",
+    async () => {
+      const res = await fetch(
+        withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}/replay`, token),
+        { headers: graphFetchHeaders(token), credentials: "same-origin" },
+      );
+      if (!res.ok) return;
+      const events = (await res.json()) as WorkerEvent[];
+      const stream = el.closest("[data-r-flow-execution]")?.querySelector("[data-r-event-stream]");
+      const listEl = stream?.querySelector("ul");
+      const viewportEl = stream ? eventStreamViewport(stream as HTMLElement) : null;
+      if (!listEl) return;
+      const seen = seenForList(listEl as HTMLElement);
+      seen.clear();
+      listEl.innerHTML = "";
+      delete (stream as HTMLElement).dataset.rStreamTerminal;
+      for (const ev of events) {
+        const key = eventKey(ev);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const li = document.createElement("li");
+        li.textContent = formatEvent(ev);
+        listEl.appendChild(li);
+      }
+      if (viewportEl) scrollStreamToEnd(viewportEl, false);
+      await syncWorkerControls(el, graphId, token, "Replay loaded.");
+    },
+    { signal },
+  );
 }
 
 /** Disconnect Flow widgets inside `scope` (timers, SSE) without touching siblings. */
