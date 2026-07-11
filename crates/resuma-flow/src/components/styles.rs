@@ -39,7 +39,7 @@ pub const FLOW_CSS: &str = r#"
 .r-flow-graph__status{margin:.65rem 0 0;font-size:.74rem;color:#64748b;line-height:1.45}
 .r-event-stream{display:flex;flex-direction:column;min-height:0;gap:.5rem}
 .r-event-stream__viewport{
-  min-height:12rem;max-height:min(42vh,22rem);overflow-x:hidden;overflow-y:auto;
+  min-height:12rem;max-height:min(42vh,22rem);overflow-x:hidden;overflow-y:auto;overflow-anchor:none;
   padding:.65rem .75rem;border-radius:12px;border:1px solid #243044;
   background:rgba(11,16,32,.55);scroll-behavior:smooth;
   -webkit-overflow-scrolling:touch;
@@ -53,7 +53,7 @@ pub const FLOW_CSS: &str = r#"
   padding:.42rem .55rem .42rem .7rem;margin:0 0 .28rem;border-radius:8px;
   border:1px solid #1e293b;color:#94a3b8;background:rgba(15,23,42,.35);
 }
-.r-event-stream-list li:last-child{margin-bottom:0}
+.r-event-stream-list li:last-child{margin-bottom:0;overflow-anchor:auto}
 .r-worker-panel{display:flex;flex-direction:column;gap:.65rem;margin:.5rem 0 0}
 .r-worker-panel__actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem}
 @media(min-width:520px){.r-worker-panel__actions{grid-template-columns:repeat(4,minmax(0,1fr))}}

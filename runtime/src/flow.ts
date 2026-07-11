@@ -491,14 +491,19 @@ function eventStreamViewport(el: HTMLElement): HTMLElement {
 }
 
 function scrollStreamToEnd(viewport: HTMLElement, smooth = true): void {
-  requestAnimationFrame(() => {
-    const top = viewport.scrollHeight;
+  const scroll = () => {
+    const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
     if (smooth && "scrollTo" in viewport) {
-      viewport.scrollTo({ top, behavior: "smooth" });
+      viewport.scrollTo({ top: maxTop, behavior: "smooth" });
     } else {
-      viewport.scrollTop = top;
+      viewport.scrollTop = maxTop;
     }
-  });
+    const last = viewport.querySelector(".r-event-stream-list li:last-child");
+    if (last instanceof HTMLElement) {
+      last.scrollIntoView({ block: "end", behavior: smooth ? "smooth" : "auto" });
+    }
+  };
+  requestAnimationFrame(() => requestAnimationFrame(scroll));
 }
 
 function mountEventStream(el: HTMLElement): void {
@@ -509,7 +514,7 @@ function mountEventStream(el: HTMLElement): void {
   const list = el.querySelector("ul") ?? el;
   const max = 1000;
   const seen = new Set<string>();
-  const append = (line: string, smooth = true) => {
+  const append = (line: string, smooth = false) => {
     const li = document.createElement("li");
     li.textContent = line;
     list.appendChild(li);
@@ -518,7 +523,7 @@ function mountEventStream(el: HTMLElement): void {
     }
     scrollStreamToEnd(viewport, smooth);
   };
-  const appendEvent = (ev: WorkerEvent, smooth = true) => {
+  const appendEvent = (ev: WorkerEvent, smooth = false) => {
     const key = eventKey(ev);
     if (seen.has(key)) return;
     seen.add(key);
