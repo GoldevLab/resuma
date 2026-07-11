@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::middleware;
-use axum::routing::get;
+use axum::routing::{get, MethodRouter};
 
 use crate::core::view::View;
 use crate::core::Component;
@@ -45,6 +45,8 @@ pub struct FlowApp {
     extensions: super::extensions::FlowExtensions,
     /// Extra GET routes (e.g. bundled JS/CSS for marketing pages).
     static_assets: Vec<(String, &'static [u8], &'static str)>,
+    /// Additional axum routes (e.g. demo webhook inbox).
+    extra_routes: Vec<(String, MethodRouter)>,
     /// Optional `public/` directory (defaults to `{CARGO_MANIFEST_DIR}/public`).
     public_dir: Option<PathBuf>,
     /// When set, merges [`Theme`](crate::Theme) colors into auto PWA config.
@@ -91,6 +93,7 @@ impl FlowApp {
             pwa_disabled: false,
             extensions: super::extensions::FlowExtensions::default(),
             static_assets: Vec::new(),
+            extra_routes: Vec::new(),
             public_dir: None,
             theme_for_pwa: None,
         }
@@ -118,6 +121,12 @@ impl FlowApp {
         content_type: &'static str,
     ) -> Self {
         self.static_assets.push((path.into(), body, content_type));
+        self
+    }
+
+    /// Mount an extra axum route (POST handlers, JSON APIs, demo inboxes).
+    pub fn route(mut self, path: impl Into<String>, handler: MethodRouter) -> Self {
+        self.extra_routes.push((path.into(), handler));
         self
     }
 
@@ -475,6 +484,10 @@ impl FlowApp {
                     crate::server::static_assets::static_asset_response(content_type, body)
                 }),
             );
+        }
+
+        for (path, handler) in self.extra_routes {
+            router = router.route(&path, handler);
         }
 
         for asset in public_assets {
