@@ -13,6 +13,7 @@
 .r-flow-dash__section h3{margin:0 0 .6rem;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:#8b9cb3}
 .r-flow-dash__chips{display:flex;flex-wrap:wrap;gap:.4rem}
 .r-flow-dash__chip{font-size:.75rem;padding:.25rem .55rem;border-radius:6px;background:#1e293b;border:1px solid #334155;color:#cbd5e1}
+.r-flow-dash__meta{margin:0;font-size:.8rem;color:#94a3b8}
 .r-flow-dash__table{width:100%;border-collapse:collapse;font-size:.8rem}
 .r-flow-dash__table th,.r-flow-dash__table td{padding:.45rem .5rem;text-align:left;border-bottom:1px solid #243044}
 .r-flow-dash__table th{color:#8b9cb3;font-weight:500}

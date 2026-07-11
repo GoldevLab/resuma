@@ -321,7 +321,7 @@ function renderDashboard(root: HTMLElement, status: ExecStatus): void {
     </section>
     <section class="r-flow-dash__section">
       <h3>Scheduler</h3>
-      <p style="margin:0;font-size:.8rem;color:#94a3b8">${status.scheduler.enabled} enabled · ${status.scheduler.total} total · ${status.scheduler.due} due now</p>
+      <p class="r-flow-dash__meta">${status.scheduler.enabled} enabled · ${status.scheduler.total} total · ${status.scheduler.due} due now</p>
     </section>`;
 }
 
