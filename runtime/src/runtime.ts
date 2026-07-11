@@ -304,17 +304,15 @@ function navigateForViewTransition(href: string): void {
 }
 
 function initViewTransitions(scope: HTMLElement): void {
-  if (!("startViewTransition" in document)) return;
   scope.querySelectorAll("[data-r-vt]").forEach((el) => {
     el.addEventListener("click", (ev) => {
       const anchor = (ev.target as HTMLElement | null)?.closest("a[href]");
       if (!anchor || anchor.getAttribute("target") === "_blank") return;
       const href = anchor.getAttribute("href");
       if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
+      if (anchor.hasAttribute("data-r-nav")) return;
       ev.preventDefault();
-      const go = () => navigateForViewTransition(href);
-      (document as Document & { startViewTransition?: (cb: () => void | Promise<void>) => void })
-        .startViewTransition?.(go) ?? go();
+      void navigateForViewTransition(href);
     });
   });
 }

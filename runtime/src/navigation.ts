@@ -158,6 +158,58 @@ export async function invalidate(
 let navGen = 0;
 let navController: AbortController | null = null;
 
+type DocWithVt = Document & {
+  startViewTransition?: (cb: () => void | Promise<void>) => { finished: Promise<void> };
+};
+
+async function swapToHtml(
+  href: string,
+  html: string,
+  pushState: boolean,
+  gen: number,
+): Promise<void> {
+  if (gen !== navGen) return;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const newRoot = doc.getElementById(ROOT_ID);
+  const newState = doc.getElementById(STATE_SCRIPT_ID);
+  if (!newRoot || !newState?.textContent) {
+    window.location.href = href;
+    return;
+  }
+
+  root().innerHTML = newRoot.innerHTML;
+  const stateScript = document.getElementById(STATE_SCRIPT_ID);
+  if (stateScript) stateScript.textContent = newState.textContent;
+  if (doc.title) document.title = doc.title;
+
+  if (pushState) history.pushState({ resumaNav: true }, "", href);
+  await remountPage();
+  if (pushState) window.scrollTo(0, 0);
+  focusMain();
+  document.dispatchEvent(new CustomEvent("resuma:navigate", { detail: { href } }));
+}
+
+async function runNavigation(href: string, pushState: boolean, gen: number, signal: AbortSignal): Promise<void> {
+  let html: string | undefined = prefetchCache.get(href);
+  if (!html) {
+    const res = await fetch(href, {
+      headers: { Accept: "text/html" },
+      credentials: "same-origin",
+      signal,
+    });
+    if (gen !== navGen) return;
+    if (!res.ok) {
+      window.location.href = href;
+      return;
+    }
+    html = await res.text();
+  } else {
+    prefetchCache.delete(href);
+  }
+  if (gen !== navGen) return;
+  await swapToHtml(href, html, pushState, gen);
+}
+
 export async function navigate(href: string, pushState = true): Promise<void> {
   // SPA navigation swaps fetched HTML into our origin — never do that for a
   // cross-origin target. Fall back to a full, browser-mediated navigation.
@@ -169,49 +221,26 @@ export async function navigate(href: string, pushState = true): Promise<void> {
   navController?.abort();
   const controller = new AbortController();
   navController = controller;
-  try {
-    let html: string | undefined = prefetchCache.get(href);
-    if (!html) {
-      const res = await fetch(href, {
-        headers: { Accept: "text/html" },
-        credentials: "same-origin",
-        signal: controller.signal,
-      });
-      if (gen !== navGen) return;
-      if (!res.ok) {
-        window.location.href = href;
-        return;
-      }
-      html = await res.text();
-    } else {
-      prefetchCache.delete(href);
-    }
-    // A newer navigation started while we were fetching — this one is stale.
-    if (gen !== navGen) return;
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    const newRoot = doc.getElementById(ROOT_ID);
-    const newState = doc.getElementById(STATE_SCRIPT_ID);
-    if (!newRoot || !newState?.textContent) {
+
+  const run = async () => {
+    try {
+      await runNavigation(href, pushState, gen, controller.signal);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      console.error("[r] nav", err);
       window.location.href = href;
-      return;
     }
+  };
 
-    root().innerHTML = newRoot.innerHTML;
-    const stateScript = document.getElementById(STATE_SCRIPT_ID);
-    if (stateScript) stateScript.textContent = newState.textContent;
-    if (doc.title) document.title = doc.title;
-
-    if (pushState) history.pushState({ resumaNav: true }, "", href);
-    remountPage();
-    // New navigations land at the top; back/forward keep the browser's scroll.
-    if (pushState) window.scrollTo(0, 0);
-    focusMain();
-    document.dispatchEvent(new CustomEvent("resuma:navigate", { detail: { href } }));
-  } catch (err) {
-    // Aborted by a newer navigation — stay silent, the newer one owns the page.
-    if (err instanceof DOMException && err.name === "AbortError") return;
-    console.error("[r] nav", err);
-    window.location.href = href;
+  const doc = document as DocWithVt;
+  if (doc.startViewTransition) {
+    try {
+      await doc.startViewTransition(run).finished;
+    } catch {
+      await run();
+    }
+  } else {
+    await run();
   }
 }
 
