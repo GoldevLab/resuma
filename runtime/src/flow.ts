@@ -332,7 +332,14 @@ function mountFlowDashboard(el: HTMLElement): void {
 
   const refresh = async () => {
     const status = await fetchExecStatus();
-    if (status) renderDashboard(root, status);
+    if (status) {
+      renderDashboard(root, status);
+      return;
+    }
+    if (!root.querySelector(".r-flow-dash__header")) {
+      root.innerHTML =
+        '<p class="r-flow-dash__meta">Could not refresh ops status. The SSR snapshot above may be stale — reload the page.</p>';
+    }
   };
 
   if (initRaw) {
