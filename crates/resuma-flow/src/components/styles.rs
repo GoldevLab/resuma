@@ -39,12 +39,35 @@ pub const FLOW_CSS: &str = r#"
 .r-event-stream-list li{padding:.35rem .5rem;border-bottom:1px solid #1e293b;color:#94a3b8}
 .r-event-stream-list li:nth-child(odd){background:#0b1020}
 .r-worker-panel{display:flex;flex-direction:column;gap:.65rem;margin:.5rem 0 0}
-.r-worker-panel__actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem}
+.r-worker-panel__actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem}
 @media(min-width:520px){.r-worker-panel__actions{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .r-worker-panel__status{margin:0;font-size:.75rem;color:#64748b;line-height:1.4;min-height:1.1rem}
-.r-worker-panel button:disabled{opacity:.45;cursor:not-allowed}
-.r-worker-panel button{font-size:.78rem;padding:.4rem .85rem;border-radius:6px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;cursor:pointer}
-.r-worker-panel button:hover:not(:disabled){background:#334155}
+.r-flow-control{
+  display:inline-flex;align-items:center;justify-content:center;width:100%;
+  font:inherit;font-size:.78rem;font-weight:600;line-height:1.2;
+  padding:.52rem .85rem;border-radius:999px;cursor:pointer;
+  border:1px solid #475569;
+  background:linear-gradient(145deg,#1e293b 0%,#334155 100%);
+  color:#f8fafc;
+  box-shadow:0 4px 16px rgba(15,23,42,.18),inset 0 1px 0 rgba(255,255,255,.12);
+  transition:transform .15s ease,box-shadow .15s ease,background .15s ease;
+}
+.r-flow-control:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 8px 22px rgba(15,23,42,.22),inset 0 1px 0 rgba(255,255,255,.18)}
+.r-flow-control:active:not(:disabled){transform:translateY(0)}
+.r-flow-control:disabled{opacity:.42;cursor:not-allowed;transform:none}
+.r-flow-control--ghost{
+  background:rgba(30,41,59,.72);
+  border-color:rgba(148,163,184,.45);
+  color:#e2e8f0;
+}
+.r-flow-control--pause{border-color:rgba(96,165,250,.45)}
+.r-flow-control--resume{border-color:rgba(52,211,153,.45)}
+.r-flow-control--danger{
+  border-color:rgba(248,113,113,.55);
+  background:linear-gradient(145deg,#7f1d1d 0%,#991b1b 100%);
+  color:#fff;
+}
+.r-flow-control--replay{border-color:rgba(196,181,253,.4)}
 @keyframes r-flow-pulse{0%,100%{opacity:1}50%{opacity:.65}}
 "#;
 

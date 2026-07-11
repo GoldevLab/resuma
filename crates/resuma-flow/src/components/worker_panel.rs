@@ -7,6 +7,28 @@ pub fn worker_panel(id: impl Into<String>) -> View {
     worker_panel_auth(id, None)
 }
 
+fn control_btn(class: &'static str, data_attr: &'static str, label: &'static str) -> View {
+    View::Element(Element {
+        tag: "button".into(),
+        attrs: vec![
+            Attr {
+                name: "type".into(),
+                value: AttrValue::Static("button".into()),
+            },
+            Attr {
+                name: "class".into(),
+                value: AttrValue::Static(class.into()),
+            },
+            Attr {
+                name: data_attr.into(),
+                value: AttrValue::Static("true".into()),
+            },
+        ],
+        children: vec![Child::Text(label.into())],
+        dom_id: None,
+    })
+}
+
 /// Same as [`worker_panel`] with graph-scoped access token for production auth.
 pub fn worker_panel_auth(id: impl Into<String>, access_token: Option<String>) -> View {
     let id = id.into();
@@ -31,63 +53,52 @@ pub fn worker_panel_auth(id: impl Into<String>, access_token: Option<String>) ->
         attrs,
         children: vec![
             Child::View(View::Element(Element {
-                tag: "button".into(),
-                attrs: vec![
-                    Attr {
-                        name: "type".into(),
-                        value: AttrValue::Static("button".into()),
-                    },
-                    Attr {
-                        name: "data-r-worker-pause".into(),
-                        value: AttrValue::Static("true".into()),
-                    },
+                tag: "div".into(),
+                attrs: vec![Attr {
+                    name: "class".into(),
+                    value: AttrValue::Static("r-worker-panel__actions".into()),
+                }],
+                children: vec![
+                    Child::View(control_btn(
+                        "r-flow-control r-flow-control--ghost r-flow-control--pause",
+                        "data-r-worker-pause",
+                        "Pause",
+                    )),
+                    Child::View(control_btn(
+                        "r-flow-control r-flow-control--ghost r-flow-control--resume",
+                        "data-r-worker-resume",
+                        "Resume",
+                    )),
+                    Child::View(control_btn(
+                        "r-flow-control r-flow-control--danger",
+                        "data-r-worker-cancel",
+                        "Cancel",
+                    )),
+                    Child::View(control_btn(
+                        "r-flow-control r-flow-control--ghost r-flow-control--replay",
+                        "data-r-worker-replay",
+                        "Replay",
+                    )),
                 ],
-                children: vec![Child::Text("Pause".into())],
                 dom_id: None,
             })),
             Child::View(View::Element(Element {
-                tag: "button".into(),
+                tag: "p".into(),
                 attrs: vec![
                     Attr {
-                        name: "type".into(),
-                        value: AttrValue::Static("button".into()),
+                        name: "class".into(),
+                        value: AttrValue::Static("r-worker-panel__status".into()),
                     },
                     Attr {
-                        name: "data-r-worker-resume".into(),
+                        name: "data-r-worker-status".into(),
                         value: AttrValue::Static("true".into()),
                     },
-                ],
-                children: vec![Child::Text("Resume".into())],
-                dom_id: None,
-            })),
-            Child::View(View::Element(Element {
-                tag: "button".into(),
-                attrs: vec![
                     Attr {
-                        name: "type".into(),
-                        value: AttrValue::Static("button".into()),
-                    },
-                    Attr {
-                        name: "data-r-worker-cancel".into(),
-                        value: AttrValue::Static("true".into()),
+                        name: "aria-live".into(),
+                        value: AttrValue::Static("polite".into()),
                     },
                 ],
-                children: vec![Child::Text("Cancel".into())],
-                dom_id: None,
-            })),
-            Child::View(View::Element(Element {
-                tag: "button".into(),
-                attrs: vec![
-                    Attr {
-                        name: "type".into(),
-                        value: AttrValue::Static("button".into()),
-                    },
-                    Attr {
-                        name: "data-r-worker-replay".into(),
-                        value: AttrValue::Static("true".into()),
-                    },
-                ],
-                children: vec![Child::Text("Replay".into())],
+                children: vec![],
                 dom_id: None,
             })),
         ],
