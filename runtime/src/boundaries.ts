@@ -3,21 +3,9 @@
  */
 
 import { registerMountCleanup } from "./mount-cleanups.js";
+import { prefetchHandlerChunk } from "./handler-loader.js";
 
 const MARKER_ATTR = "data-r-lazy-chunk-marker";
-
-export function prefetchHandlerChunk(chunk: string): void {
-  const r = window.__resuma;
-  if (!r) return;
-  if (r.loaded.has(chunk)) return;
-  void import(`/_resuma/handler/${chunk}.js`)
-    .then((mod) => {
-      r.loaded.set(chunk, mod as Record<string, Function>);
-    })
-    .catch(() => {
-      /* chunk may load on first interaction instead */
-    });
-}
 
 export function prefetchLazyChunks(chunks: string[], root: HTMLElement): void {
   root.querySelectorAll(`[${MARKER_ATTR}]`).forEach((n) => n.remove());

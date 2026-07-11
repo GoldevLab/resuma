@@ -334,6 +334,13 @@ async function callServerActionSafe(
   }
 }
 
+interface ActionResponse {
+  ok?: boolean;
+  value?: unknown;
+  error?: string;
+  redirect?: string;
+}
+
 async function callServerAction(name: string, args: unknown[]): Promise<unknown> {
   const res = await fetch(`/_resuma/action/${encodeURIComponent(name)}`, {
     method: "POST",
@@ -341,13 +348,17 @@ async function callServerAction(name: string, args: unknown[]): Promise<unknown>
     headers: mutationHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({ args }),
   });
-  if (!res.ok) throw new Error(`[resuma] action ${name} failed: ${res.status}`);
-  const data = await res.json();
-  if (data.ok === false) throw new Error(data.error ?? "action failed");
-  if (data.redirect) {
-    followRedirect(data.redirect);
-    return data.value;
+  let data: ActionResponse;
+  try {
+    data = (await res.json()) as ActionResponse;
+  } catch {
+    if (!res.ok) throw new Error(`action ${name}: ${res.status}`);
+    throw new Error(`action ${name}: invalid response`);
   }
+  if (!res.ok || data.ok === false) {
+    throw new Error(data.error ?? `action ${name}: ${res.status}`);
+  }
+  if (data.redirect) followRedirect(data.redirect);
   return data.value;
 }
 

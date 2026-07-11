@@ -142,6 +142,10 @@ function eventKey(ev: WorkerEvent): string {
       return `${t}:${(ev as { value?: number }).value ?? ""}`;
     case "result":
       return `${t}:${JSON.stringify((ev as { data?: unknown }).data ?? null)}`;
+    case "node_start": {
+      const node = nodeLabel((ev as { node: unknown }).node);
+      return `${t}:${node}`;
+    }
     case "node_done": {
       const node = nodeLabel((ev as { node: unknown }).node);
       const ms = (ev as { duration_ms?: number }).duration_ms ?? ts;
@@ -680,6 +684,7 @@ function mountEventStream(el: HTMLElement): void {
   const viewport = eventStreamViewport(el);
   const list = el.querySelector("ul") ?? el;
   list.innerHTML = "";
+  streamSeenKeys.delete(list as HTMLElement);
   const max = 1000;
   const gen = (eventStreamMountGen.get(graphId) ?? 0) + 1;
   eventStreamMountGen.set(graphId, gen);
@@ -725,6 +730,7 @@ function mountEventStream(el: HTMLElement): void {
     stopAutoScroll();
     closeSse?.();
     closeSse = null;
+    streamSeenKeys.delete(list as HTMLElement);
     delete el.dataset.rFlowMounted;
     if (eventStreamMountGen.get(graphId) === gen) {
       eventStreamMountGen.delete(graphId);
@@ -1019,7 +1025,14 @@ export function disconnectFlowWidgets(scope: ParentNode = document): void {
 }
 
 /** Mount all Flow widgets (dashboard, graph, events, controls). */
-export function initFlowWidgets(scope: ParentNode = document, opts?: { flush?: boolean }): void {
+export function initFlowWidgets(
+  scope: ParentNode = document,
+  opts?: { flush?: boolean; exclude?: string },
+): void {
+  const exclude = opts?.exclude?.trim();
+  const inScope = (el: Element): boolean =>
+    !exclude || !(el instanceof HTMLElement && el.closest(exclude));
+
   if (opts?.flush !== false) {
     // Full page mount — tear down every widget from the prior navigation.
     flushFlowCleanups();
@@ -1027,13 +1040,16 @@ export function initFlowWidgets(scope: ParentNode = document, opts?: { flush?: b
     // Scoped mount (e.g. dynamic exec panel) — only disconnect widgets in this subtree.
     disconnectFlowWidgets(scope);
   }
-  scope.querySelectorAll<HTMLElement>("[data-r-flow-dashboard]").forEach(mountFlowDashboard);
+  scope.querySelectorAll<HTMLElement>("[data-r-flow-dashboard]").forEach((el) => {
+    if (inScope(el)) mountFlowDashboard(el);
+  });
   const mounted = new Set<string>();
   const mountGraphWidget = (
     kind: string,
     el: HTMLElement,
     fn: (node: HTMLElement) => void,
   ) => {
+    if (!inScope(el)) return;
     const graphId = graphIdFrom(el);
     if (!graphId) {
       fn(el);

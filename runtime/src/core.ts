@@ -7,6 +7,7 @@ import { initSignals, signalId, type SignalCell, bindReactiveText, bindReactiveA
 import { initIslands } from "./islands.js";
 import { initEffects, flushEffectCleanups, type ClientEffectSpec } from "./effects.js";
 import { prefetchLazyChunks } from "./boundaries.js";
+import { invalidateHandlerChunks } from "./handler-loader.js";
 import { resolveHandler, type Handler } from "./handler-loader.js";
 import { initNavLinks, followRedirect, navigate, buildUrl, invalidate, setPageMounter } from "./navigation.js";
 import { runVisibleTasks, type VisibleTaskEntry } from "./visible-tasks.js";
@@ -126,11 +127,20 @@ export function mountPage(): void {
 
   const prev = window.__resuma;
   const loaded = prev?.loaded ?? new Map<string, Record<string, Function>>();
-  // `__page__` accumulates route-specific handlers server-side; drop stale module
-  // cache on SPA navigation so newly merged symbols resolve after remount.
-  if (payload.lazy_chunks?.includes("__page__")) {
-    loaded.delete("__page__");
+  // Handler chunks grow server-side as new pages SSR; invalidate client cache on
+  // SPA navigation so merged symbols resolve from a fresh import.
+  const chunks = new Set(payload.lazy_chunks ?? []);
+  for (const el of document.querySelectorAll<HTMLElement>("[data-r-on\\:click], [data-r-on\\:submit], [data-r-on\\:input], [data-r-on\\:change]")) {
+    for (const attr of el.attributes) {
+      if (!attr.name.startsWith("data-r-on:")) continue;
+      const ref = attr.value;
+      const hash = ref.indexOf("#");
+      if (hash === -1) continue;
+      const chunk = ref.slice(0, hash);
+      if (chunk && chunk !== "__page__") chunks.add(chunk);
+    }
   }
+  if (chunks.size) invalidateHandlerChunks(chunks);
   const __resuma: ResumaGlobal = {
     state,
     signals,
@@ -334,6 +344,13 @@ function initViewTransitions(scope: HTMLElement): void {
   });
 }
 
+interface ActionResponse {
+  ok?: boolean;
+  value?: unknown;
+  error?: string;
+  redirect?: string;
+}
+
 async function callServerAction(name: string, args: unknown[]): Promise<unknown> {
   const res = await fetch(`/_resuma/action/${encodeURIComponent(name)}`, {
     method: "POST",
@@ -341,9 +358,16 @@ async function callServerAction(name: string, args: unknown[]): Promise<unknown>
     headers: mutationHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({ args }),
   });
-  if (!res.ok) throw new Error(`action ${name}: ${res.status}`);
-  const data = await res.json();
-  if (data.ok === false) throw new Error(data.error ?? "action failed");
+  let data: ActionResponse;
+  try {
+    data = (await res.json()) as ActionResponse;
+  } catch {
+    if (!res.ok) throw new Error(`action ${name}: ${res.status}`);
+    throw new Error(`action ${name}: invalid response`);
+  }
+  if (!res.ok || data.ok === false) {
+    throw new Error(data.error ?? `action ${name}: ${res.status}`);
+  }
   if (data.redirect) followRedirect(data.redirect);
   return data.value;
 }

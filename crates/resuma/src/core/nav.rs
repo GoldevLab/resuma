@@ -3,46 +3,75 @@
 use super::view::{Attr, AttrValue, Child, Element, View};
 
 /// Render an `<a>` that adds `active_class` when `href` matches `current_path`.
+/// When `exact` is true, only the precise path matches (no prefix / child routes).
 pub fn nav_link(
     href: impl Into<String>,
     current_path: &str,
     active_class: impl Into<String>,
     class: impl Into<String>,
+    exact: bool,
     children: Vec<Child>,
 ) -> View {
     let href = href.into();
     let active_class = active_class.into();
     let class = class.into();
-    let is_active = paths_match(&href, current_path);
+    let is_active = if exact {
+        paths_match_exact(&href, current_path)
+    } else {
+        paths_match(&href, current_path)
+    };
     let merged_class = if is_active && !active_class.is_empty() {
         format!("{class} {active_class}")
     } else {
         class
     };
 
+    let mut attrs = vec![
+        Attr {
+            name: "href".into(),
+            value: AttrValue::Static(href),
+        },
+        Attr {
+            name: "class".into(),
+            value: AttrValue::Static(merged_class),
+        },
+        Attr {
+            name: "data-r-nav".into(),
+            value: AttrValue::Static("true".into()),
+        },
+        Attr {
+            name: "data-r-active-class".into(),
+            value: AttrValue::Static(active_class.clone()),
+        },
+    ];
+    if exact {
+        attrs.push(Attr {
+            name: "data-r-nav-exact".into(),
+            value: AttrValue::Static("true".into()),
+        });
+    }
+    if is_active {
+        attrs.push(Attr {
+            name: "aria-current".into(),
+            value: AttrValue::Static("page".into()),
+        });
+    }
+
     View::Element(Element {
         tag: "a".into(),
-        attrs: vec![
-            Attr {
-                name: "href".into(),
-                value: AttrValue::Static(href),
-            },
-            Attr {
-                name: "class".into(),
-                value: AttrValue::Static(merged_class),
-            },
-            Attr {
-                name: "data-r-nav".into(),
-                value: AttrValue::Static("true".into()),
-            },
-            Attr {
-                name: "data-r-active-class".into(),
-                value: AttrValue::Static(active_class.clone()),
-            },
-        ],
+        attrs,
         children,
         dom_id: None,
     })
+}
+
+fn paths_match_exact(href: &str, current: &str) -> bool {
+    if href == current {
+        return true;
+    }
+    let (href_path, href_query) = split_path_query(href);
+    let (cur_path, cur_query) = split_path_query(current);
+    href_path == cur_path && href_query == cur_query
 }
 
 fn paths_match(href: &str, current: &str) -> bool {
@@ -75,7 +104,15 @@ fn split_path_query(s: &str) -> (&str, Option<&str>) {
 
 #[cfg(test)]
 mod tests {
-    use super::paths_match;
+    use super::{paths_match, paths_match_exact};
+
+    #[test]
+    fn exact_match_rejects_child_paths() {
+        assert!(paths_match_exact("/docs/security", "/docs/security"));
+        assert!(!paths_match_exact("/docs/security", "/docs/security/todo"));
+        assert!(paths_match_exact("/docs", "/docs"));
+        assert!(!paths_match_exact("/docs", "/docs/getting_started"));
+    }
 
     #[test]
     fn path_only_active_with_query_on_current() {

@@ -59,7 +59,17 @@ function isSameOrigin(href: string): boolean {
   }
 }
 
-function pathsMatch(href: string, current: string): boolean {
+function pathsMatch(href: string, current: string, exact = false): boolean {
+  if (exact) {
+    if (href === current) return true;
+    const base = "http://resuma.local";
+    const a = new URL(href, base);
+    const b = new URL(current, base);
+    if (a.search) {
+      return a.pathname + a.search === b.pathname + b.search;
+    }
+    return a.pathname === b.pathname;
+  }
   if (href === current) return true;
   const base = "http://resuma.local";
   const a = new URL(href, base);
@@ -86,7 +96,8 @@ function updateNavActiveClasses(path: string): void {
       .filter((c) => c && c !== activeClass)
       .join(" ");
     a.setAttribute("data-r-base-class", base);
-    a.className = pathsMatch(href, path) ? `${base} ${activeClass}`.trim() : base;
+    const exact = a.hasAttribute("data-r-nav-exact");
+    a.className = pathsMatch(href, path, exact) ? `${base} ${activeClass}`.trim() : base;
   });
 }
 

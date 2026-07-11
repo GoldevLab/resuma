@@ -28,22 +28,51 @@ function resumaHandlers(): ResumaHandlerState {
   return (window as unknown as { __resuma: ResumaHandlerState }).__resuma;
 }
 
-async function loadChunkModule(chunk: string): Promise<Record<string, Function>> {
-  const r = resumaHandlers();
-  let mod = r.loaded.get(chunk);
-  if (mod) return mod;
+function chunkUrl(chunk: string, bust: boolean): string {
+  const base = `/_resuma/handler/${encodeURIComponent(chunk)}.js`;
+  return bust ? `${base}?_=${Date.now()}` : base;
+}
 
-  let pending = inFlight.get(chunk);
+/** Drop in-memory and in-flight imports so merged server chunks can be refetched. */
+export function invalidateHandlerChunks(chunks: Iterable<string>): void {
+  const r = resumaHandlers();
+  for (const chunk of chunks) {
+    if (!chunk) continue;
+    r.loaded.delete(chunk);
+    inFlight.delete(chunk);
+    inFlight.delete(`${chunk}:bust`);
+  }
+}
+
+async function loadChunkModule(chunk: string, bust = false): Promise<Record<string, Function>> {
+  const r = resumaHandlers();
+  const flightKey = bust ? `${chunk}:bust` : chunk;
+
+  if (!bust) {
+    const cached = r.loaded.get(chunk);
+    if (cached) return cached;
+  }
+
+  let pending = inFlight.get(flightKey);
   if (!pending) {
-    pending = import(`/_resuma/handler/${chunk}.js`) as Promise<
+    pending = import(/* @vite-ignore */ chunkUrl(chunk, bust)) as Promise<
       Record<string, Function>
     >;
-    inFlight.set(chunk, pending);
-    void pending.finally(() => inFlight.delete(chunk));
+    inFlight.set(flightKey, pending);
+    void pending.finally(() => inFlight.delete(flightKey));
   }
-  mod = await pending;
+  const mod = await pending;
   r.loaded.set(chunk, mod);
   return mod;
+}
+
+/** Prefetch a handler chunk when a boundary enters the viewport. */
+export function prefetchHandlerChunk(chunk: string): void {
+  const r = resumaHandlers();
+  if (r.loaded.has(chunk)) return;
+  void loadChunkModule(chunk).catch(() => {
+    /* chunk may load on first interaction instead */
+  });
 }
 
 export async function resolveHandler(ref: string, inline: string | null): Promise<Handler> {
@@ -66,8 +95,15 @@ export async function resolveHandler(ref: string, inline: string | null): Promis
     if (src) return compileInline(src);
   }
 
-  const mod = await loadChunkModule(chunk);
-  const fn = mod[symbol] as Handler | undefined;
+  let mod = await loadChunkModule(chunk);
+  let fn = mod[symbol] as Handler | undefined;
+  if (!fn) {
+    // Server merges new symbols into existing chunk URLs across SSR requests;
+    // bust the browser ES module cache once and retry.
+    invalidateHandlerChunks([chunk]);
+    mod = await loadChunkModule(chunk, true);
+    fn = mod[symbol] as Handler | undefined;
+  }
   if (!fn) throw new Error(`handler ${symbol} missing in ${chunk}`);
   return fn;
 }

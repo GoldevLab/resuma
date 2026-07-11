@@ -402,6 +402,7 @@ fn emit_nav_link(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
     let mut href: Option<TokenStream> = None;
     let mut active_class = quote! { "active" };
     let mut class = quote! { "" };
+    let mut exact = quote! { false };
 
     for a in attrs {
         match a.name.as_str() {
@@ -426,6 +427,16 @@ fn emit_nav_link(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
                     AttrVal::Bool => quote! { "" },
                 };
             }
+            "exact" | "exactMatch" | "exact_match" => {
+                exact = match a.value {
+                    AttrVal::Bool => quote! { true },
+                    AttrVal::Expr(ts) => quote!({ #ts }),
+                    AttrVal::StaticStr(s) => {
+                        let lit = s.as_str();
+                        quote! { #lit != "false" && #lit != "0" }
+                    }
+                };
+            }
             _ => {}
         }
     }
@@ -443,6 +454,7 @@ fn emit_nav_link(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
                 &__path,
                 #active_class,
                 #class,
+                #exact,
                 vec![ #(#child_pushes),* ],
             )
         }
