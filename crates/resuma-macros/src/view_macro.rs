@@ -988,14 +988,79 @@ fn emit_event_handler(attr_name: String, value: AttrVal) -> TokenStream {
 }
 
 /// When `js!{...}` already contains a full `async (...) => { ... }` handler,
-/// use it verbatim. Otherwise wrap statements in the standard handler signature.
+/// use it verbatim unless it omits `state` / `__resuma` while referencing them.
+/// Otherwise wrap statements in the standard handler signature.
 fn normalize_js_escape_hatch(js: &str) -> String {
     let trimmed = js.trim();
     if trimmed.starts_with("async") && trimmed.contains("=>") {
-        trimmed.to_string()
+        if handler_missing_state_param(trimmed) && uses_handler_runtime(trimmed) {
+            inject_standard_handler_params(trimmed)
+        } else {
+            trimmed.to_string()
+        }
     } else {
         format!("async (event, state, __resuma) => {{ {} }}", js)
     }
+}
+
+fn uses_handler_runtime(js: &str) -> bool {
+    js.contains("state.") || js.contains("__resuma.")
+}
+
+fn handler_param_list(js: &str) -> Option<&str> {
+    let async_pos = js.find("async")?;
+    let mut i = async_pos + 5;
+    while i < js.len() && js.as_bytes()[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    if js.as_bytes().get(i) != Some(&b'(') {
+        return None;
+    }
+    let rest = &js[i + 1..];
+    let close = rest.find(')')?;
+    Some(&rest[..close])
+}
+
+fn handler_missing_state_param(js: &str) -> bool {
+    let Some(params) = handler_param_list(js) else {
+        return false;
+    };
+    !params.split(',').any(|p| {
+        let name = p
+            .trim()
+            .trim_start_matches('_')
+            .split(':')
+            .next()
+            .unwrap_or("")
+            .trim();
+        name == "state"
+    })
+}
+
+fn inject_standard_handler_params(js: &str) -> String {
+    let Some(async_pos) = js.find("async") else {
+        return js.to_string();
+    };
+    let mut open = async_pos + 5;
+    while open < js.len() && js.as_bytes()[open].is_ascii_whitespace() {
+        open += 1;
+    }
+    if js.as_bytes().get(open) != Some(&b'(') {
+        return js.to_string();
+    }
+    let Some(close_rel) = js[open + 1..].find(')') else {
+        return js.to_string();
+    };
+    let close = open + 1 + close_rel;
+    let after_close = js[close + 1..].trim_start();
+    if !after_close.starts_with("=>") {
+        return js.to_string();
+    }
+    let mut out = String::with_capacity(js.len() + 24);
+    out.push_str(&js[..=open]);
+    out.push_str("event, state, __resuma");
+    out.push_str(&js[close..]);
+    out
 }
 
 /// Scan a JS source string for `state.<ident>` references and return the
@@ -1197,5 +1262,28 @@ mod tests {
         assert!(!is_html_event_attr("one"));
         assert!(!is_html_event_attr("online"));
         assert!(is_html_event_attr("onclick"));
+    }
+
+    #[test]
+    fn js_escape_injects_handler_params_when_state_used() {
+        let raw = "async () => { state.count.set(1); }";
+        assert_eq!(
+            normalize_js_escape_hatch(raw),
+            "async (event, state, __resuma) => { state.count.set(1); }"
+        );
+    }
+
+    #[test]
+    fn js_escape_keeps_explicit_handler_params() {
+        let raw = "async (event, state, __resuma) => { state.count.set(1); }";
+        assert_eq!(normalize_js_escape_hatch(raw), raw);
+    }
+
+    #[test]
+    fn js_escape_wraps_bare_statements() {
+        assert_eq!(
+            normalize_js_escape_hatch("state.count.set(1);"),
+            "async (event, state, __resuma) => { state.count.set(1); }"
+        );
     }
 }
