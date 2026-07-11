@@ -42,6 +42,7 @@ function resumaAction(name: string, args: unknown[]): Promise<unknown> {
 // must tear down the previous page's timers/EventSources — otherwise every
 // navigation leaks a running interval and an open SSE stream to detached DOM.
 const flowCleanups: Array<() => void> = [];
+const eventStreamOwners = new Map<string, () => void>();
 
 function registerFlowCleanup(fn: () => void): void {
   flowCleanups.push(fn);
@@ -483,6 +484,9 @@ function mountEventStream(el: HTMLElement): void {
     append(formatEvent(ev));
   };
 
+  eventStreamOwners.get(graphId)?.();
+  eventStreamOwners.delete(graphId);
+
   if (el.dataset.rFlowMounted === "1") {
     el.dispatchEvent(new Event("resuma:disconnect"));
   }
@@ -495,7 +499,11 @@ function mountEventStream(el: HTMLElement): void {
     closeSse?.();
     closeSse = null;
     delete el.dataset.rFlowMounted;
+    if (eventStreamOwners.get(graphId) === stop) {
+      eventStreamOwners.delete(graphId);
+    }
   };
+  eventStreamOwners.set(graphId, stop);
   el.addEventListener("resuma:disconnect", stop, { once: true });
   registerFlowCleanup(stop);
 
@@ -540,10 +548,66 @@ function mountEventStream(el: HTMLElement): void {
   })();
 }
 
+async function syncWorkerControls(
+  el: HTMLElement,
+  graphId: string,
+  token: string,
+  hint?: string,
+): Promise<void> {
+  const statusEl = el.querySelector<HTMLElement>("[data-r-worker-status]");
+  const pauseBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-pause]");
+  const resumeBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-resume]");
+  const cancelBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-cancel]");
+  const replayBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-replay]");
+
+  const path = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}`, token);
+  try {
+    const res = await fetch(path, { headers: graphFetchHeaders(token), credentials: "same-origin" });
+    if (!res.ok) {
+      if (statusEl) statusEl.textContent = hint ?? `Could not load graph (HTTP ${res.status}).`;
+      return;
+    }
+    const snap = (await res.json()) as { status?: string };
+    const st = snap.status ?? "unknown";
+    const terminal = st === "done" || st === "failed";
+    const paused = st === "paused";
+
+    if (pauseBtn) pauseBtn.disabled = terminal || paused;
+    if (resumeBtn) resumeBtn.disabled = !paused;
+    if (cancelBtn) cancelBtn.disabled = terminal;
+    if (replayBtn) replayBtn.disabled = false;
+
+    if (statusEl) {
+      if (hint) statusEl.textContent = hint;
+      else if (terminal) statusEl.textContent = `Graph ${st} — controls locked. Run again for a new graph.`;
+      else if (paused) statusEl.textContent = "Paused — click Resume to continue from checkpoint.";
+      else statusEl.textContent = "Running — Pause stops cooperatively at the next checkpoint.";
+    }
+  } catch {
+    if (statusEl && hint) statusEl.textContent = hint;
+  }
+}
+
 function mountWorkerPanel(el: HTMLElement): void {
   const graphId = graphIdFrom(el);
   const token = graphTokenFrom(el);
   if (!graphId) return;
+
+  if (el.dataset.rFlowMounted === "1") {
+    el.dispatchEvent(new Event("resuma:disconnect"));
+  }
+  el.dataset.rFlowMounted = "1";
+
+  let aborted = false;
+  const stop = () => {
+    aborted = true;
+    delete el.dataset.rFlowMounted;
+  };
+  el.addEventListener("resuma:disconnect", stop, { once: true });
+  registerFlowCleanup(stop);
+
+  void syncWorkerControls(el, graphId, token);
+
   const postOpts = (): RequestInit => ({
     method: "POST",
     credentials: "same-origin",
@@ -551,13 +615,25 @@ function mountWorkerPanel(el: HTMLElement): void {
   });
   const graphRoot = el.closest("[data-r-flow-execution]");
   const postControl = async (path: "pause" | "resume" | "cancel") => {
+    const statusEl = el.querySelector<HTMLElement>("[data-r-worker-status]");
+    if (statusEl) statusEl.textContent = `${path}…`;
     const res = await fetch(
       withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}/${path}`, token),
       postOpts(),
     );
-    if (!res.ok) return;
+    if (aborted) return;
+    if (!res.ok) {
+      const msg =
+        res.status === 422
+          ? "Graph already finished — run the worker again."
+          : `Control failed (HTTP ${res.status}).`;
+      await syncWorkerControls(el, graphId, token, msg);
+      return;
+    }
     const graphEl = graphRoot?.querySelector<HTMLElement>("[data-r-flow-graph]");
     if (graphEl) void refreshGraph(graphEl, graphId, token);
+    const labels = { pause: "Paused", resume: "Resumed", cancel: "Cancelled" } as const;
+    await syncWorkerControls(el, graphId, token, `${labels[path]} — refreshing graph…`);
   };
   el.querySelector("[data-r-worker-pause]")?.addEventListener("click", () => {
     void postControl("pause");
@@ -577,12 +653,17 @@ function mountWorkerPanel(el: HTMLElement): void {
     const events = (await res.json()) as WorkerEvent[];
     const stream = el.closest("[data-r-flow-execution]")?.querySelector("[data-r-event-stream] ul");
     if (!stream) return;
+    const seen = new Set<string>();
     stream.innerHTML = "";
     for (const ev of events) {
+      const key = eventKey(ev);
+      if (seen.has(key)) continue;
+      seen.add(key);
       const li = document.createElement("li");
       li.textContent = formatEvent(ev);
       stream.appendChild(li);
     }
+    await syncWorkerControls(el, graphId, token, "Replay loaded.");
   });
 }
 

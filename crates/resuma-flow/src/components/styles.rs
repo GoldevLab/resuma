@@ -38,9 +38,13 @@ pub const FLOW_CSS: &str = r#"
 .r-event-stream-list{list-style:none;margin:0;padding:0;max-height:280px;overflow-y:auto;font-family:ui-monospace,monospace;font-size:.72rem}
 .r-event-stream-list li{padding:.35rem .5rem;border-bottom:1px solid #1e293b;color:#94a3b8}
 .r-event-stream-list li:nth-child(odd){background:#0b1020}
-.r-worker-panel{display:flex;flex-wrap:wrap;gap:.5rem;margin:.75rem 0}
+.r-worker-panel{display:flex;flex-direction:column;gap:.65rem;margin:.5rem 0 0}
+.r-worker-panel__actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem}
+@media(min-width:520px){.r-worker-panel__actions{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.r-worker-panel__status{margin:0;font-size:.75rem;color:#64748b;line-height:1.4;min-height:1.1rem}
+.r-worker-panel button:disabled{opacity:.45;cursor:not-allowed}
 .r-worker-panel button{font-size:.78rem;padding:.4rem .85rem;border-radius:6px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;cursor:pointer}
-.r-worker-panel button:hover{background:#334155}
+.r-worker-panel button:hover:not(:disabled){background:#334155}
 @keyframes r-flow-pulse{0%,100%{opacity:1}50%{opacity:.65}}
 "#;
 
