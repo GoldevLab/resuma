@@ -54,6 +54,8 @@ interface GraphSseHub {
   terminal: boolean;
 }
 const graphSseHubs = new Map<string, GraphSseHub>();
+/** Graphs that finished — survives hub teardown so remounts do not reopen SSE replay. */
+const completedGraphIds = new Set<string>();
 
 function seenForList(list: HTMLElement): Set<string> {
   let seen = streamSeenKeys.get(list);
@@ -73,6 +75,7 @@ function closeGraphSseHub(graphId: string): void {
 }
 
 function markGraphTerminal(graphId: string): void {
+  if (graphId) completedGraphIds.add(graphId);
   const hub = graphSseHubs.get(graphId);
   if (hub) {
     hub.terminal = true;
@@ -122,11 +125,16 @@ function eventKey(ev: WorkerEvent): string {
   const ts = (ev as { timestamp_ms?: number }).timestamp_ms ?? 0;
   switch (t) {
     case "log":
-      return `${t}:${ts}:${(ev as { message?: string }).message ?? ""}`;
+      // Content-keyed — SSE replay after live stream uses new timestamps.
+      return `${t}:${(ev as { message?: string }).message ?? ""}`;
     case "progress":
-      return `${t}:${ts}:${(ev as { value?: number }).value ?? ""}`;
+      return `${t}:${(ev as { value?: number }).value ?? ""}`;
+    case "result":
+      return `${t}:${JSON.stringify((ev as { data?: unknown }).data ?? null)}`;
     case "node_done":
-      return `${t}:${ts}:${(ev as { duration_ms?: number }).duration_ms ?? ""}`;
+      return `${t}:${(ev as { duration_ms?: number }).duration_ms ?? ts}`;
+    case "graph_done":
+      return `${t}:done`;
     default:
       return `${t}:${ts}`;
   }
@@ -348,6 +356,7 @@ function subscribeGraphEvents(
   opts?: { closeOnError?: boolean },
 ): () => void {
   if (!graphId || typeof EventSource === "undefined") return () => {};
+  if (completedGraphIds.has(graphId)) return () => {};
 
   let hub = graphSseHubs.get(graphId);
   if (!hub) {
@@ -599,11 +608,15 @@ function mountEventStream(el: HTMLElement): void {
   };
   const appendEvent = (ev: WorkerEvent, smooth = false) => {
     if (!isActive()) return;
+    if (el.dataset.rStreamTerminal === "1" && ev.type !== "graph_done") return;
     const key = eventKey(ev);
     if (seen.has(key)) return;
     seen.add(key);
     append(formatEvent(ev), smooth);
-    if (ev.type === "graph_done") markGraphTerminal(graphId);
+    if (ev.type === "graph_done") {
+      el.dataset.rStreamTerminal = "1";
+      markGraphTerminal(graphId);
+    }
   };
 
   eventStreamOwners.get(graphId)?.();
@@ -648,13 +661,16 @@ function mountEventStream(el: HTMLElement): void {
         for (const ev of events) appendEvent(ev, false);
         scrollStreamToEnd(viewport, false);
         terminal = events.some((ev) => ev.type === "graph_done");
-        if (terminal) markGraphTerminal(graphId);
+        if (terminal) {
+          el.dataset.rStreamTerminal = "1";
+          markGraphTerminal(graphId);
+        }
       }
     } catch {
       /* ignore */
     }
 
-    if (!isActive() || aborted || terminal) return;
+    if (!isActive() || aborted || terminal || completedGraphIds.has(graphId)) return;
 
     try {
       const graphPath = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}`, token);
@@ -663,6 +679,7 @@ function mountEventStream(el: HTMLElement): void {
       if (snapRes.ok) {
         const snap = (await snapRes.json()) as { status?: string };
         if (graphTerminalStatus(snap.status)) {
+          el.dataset.rStreamTerminal = "1";
           markGraphTerminal(graphId);
           return;
         }
@@ -833,6 +850,7 @@ function mountWorkerPanel(el: HTMLElement): void {
     const seen = seenForList(listEl as HTMLElement);
     seen.clear();
     listEl.innerHTML = "";
+    delete (stream as HTMLElement).dataset.rStreamTerminal;
     for (const ev of events) {
       const key = eventKey(ev);
       if (seen.has(key)) continue;
