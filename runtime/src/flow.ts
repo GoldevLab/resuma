@@ -163,6 +163,26 @@ function graphMutationHeaders(token: string): HeadersInit {
   return headers;
 }
 
+function graphControlPath(graphId: string, action: "pause" | "resume" | "cancel"): string {
+  return `/_resuma/graph/${encodeURIComponent(graphId)}/${action}`;
+}
+
+async function controlErrorMessage(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { error?: string };
+    if (body.error) return body.error;
+  } catch {
+    /* ignore */
+  }
+  if (res.status === 422) {
+    return "Graph already finished — run the worker again.";
+  }
+  if (res.status === 401 || res.status === 403) {
+    return "Unauthorized — refresh the page and run the worker again.";
+  }
+  return `Control failed (HTTP ${res.status}).`;
+}
+
 function formatUptime(ms: number): string {
   const s = Math.floor(ms / 1000);
   const h = Math.floor(s / 3600);
@@ -621,14 +641,33 @@ function mountWorkerPanel(el: HTMLElement): void {
   el.dataset.rFlowMounted = "1";
 
   let aborted = false;
+  let closeSse: (() => void) | null = null;
   const stop = () => {
     aborted = true;
+    closeSse?.();
+    closeSse = null;
     delete el.dataset.rFlowMounted;
   };
   el.addEventListener("resuma:disconnect", stop, { once: true });
   registerFlowCleanup(stop);
 
   void syncWorkerControls(el, graphId, token);
+
+  const scheduleControlSync = debounce(() => {
+    if (!aborted) void syncWorkerControls(el, graphId, token);
+  }, 300);
+
+  closeSse = subscribeGraphEvents(graphId, token, (ev) => {
+    if (aborted) return;
+    if (
+      ev.type === "graph_done" ||
+      ev.type === "node_done" ||
+      ev.type === "node_failed" ||
+      ev.type === "progress"
+    ) {
+      scheduleControlSync();
+    }
+  });
 
   const postOpts = (): RequestInit => ({
     method: "POST",
@@ -638,17 +677,17 @@ function mountWorkerPanel(el: HTMLElement): void {
   const graphRoot = el.closest("[data-r-flow-execution]");
   const postControl = async (path: "pause" | "resume" | "cancel") => {
     const statusEl = el.querySelector<HTMLElement>("[data-r-worker-status]");
+    const pauseBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-pause]");
+    const resumeBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-resume]");
+    const cancelBtn = el.querySelector<HTMLButtonElement>("[data-r-worker-cancel]");
+    if (pauseBtn) pauseBtn.disabled = true;
+    if (resumeBtn) resumeBtn.disabled = true;
+    if (cancelBtn) cancelBtn.disabled = true;
     if (statusEl) statusEl.textContent = `${path}…`;
-    const res = await fetch(
-      withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}/${path}`, token),
-      postOpts(),
-    );
+    const res = await fetch(graphControlPath(graphId, path), postOpts());
     if (aborted) return;
     if (!res.ok) {
-      const msg =
-        res.status === 422
-          ? "Graph already finished — run the worker again."
-          : `Control failed (HTTP ${res.status}).`;
+      const msg = await controlErrorMessage(res);
       await syncWorkerControls(el, graphId, token, msg);
       return;
     }
