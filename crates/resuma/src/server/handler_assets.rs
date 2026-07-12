@@ -47,7 +47,8 @@ fn module_has_symbol(module: &str, symbol: &str) -> bool {
 /// Short stable digest for cache-busting lazy chunk URLs.
 pub fn chunk_digest(source: &str) -> String {
     let hash = Sha256::digest(source.as_bytes());
-    format!("{:x}", hash)[..16].to_string()
+    let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
+    hex[..16].to_string()
 }
 
 /// Attach server-side chunk digests for chunks referenced on this page.

@@ -61,8 +61,8 @@ anyhow              = { workspace = true, optional = true }
 tracing-subscriber  = { workspace = true, optional = true }
 reqwest             = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 url                 = "2"
-hmac                = "0.12"
-sha2                = "0.10"
+hmac                = { workspace = true }
+sha2                = { workspace = true }
 fs2                 = "0.4"
 
 [dev-dependencies]
