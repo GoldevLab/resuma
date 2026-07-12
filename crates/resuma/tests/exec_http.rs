@@ -1,5 +1,7 @@
 //! HTTP integration tests for Resuma OS graph routes, tokens, and SSE replay.
 
+#![allow(clippy::await_holding_lock)] // serializes exec HTTP tests via std::sync::Mutex
+
 use std::future::Future;
 use std::net::SocketAddr;
 use std::path::PathBuf;
