@@ -6,6 +6,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.13] - 2026-07-12
+
+### Added
+
+- **`chunk_digests` in resumability payload** — server-side SHA digests per lazy chunk; client invalidates/warms on digest change; `ETag` on handler chunks.
+- **`data-r-nav-exclusive`** — only the longest matching NavLink stays active inside exclusive nav groups (e.g. docs sidebar).
+- **Structured action errors** — `field_errors` on `ActionResponse`; `safeAction` returns them; `ResumaError::validation_fields`.
+- **Unified island chunk loader** — islands share generation counter, digest cache-bust, and SPA invalidation with handlers.
+
+### Fixed
+
+- **Docs sidebar multiple active links** — SPA nav no longer highlights every prefix-matching Overview + current page.
+
 ## [1.2.12] - 2026-07-11
 
 ### Fixed

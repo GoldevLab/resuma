@@ -1,10 +1,8 @@
 /**
- * Lazy handler loader.
+ * Lazy handler / island chunk loader.
  *
- * Each handler reference looks like `<chunk>#<symbol>`. If the chunk is
- * `__page__` we resolve the symbol against the inline `handlers` map embedded
- * in the resumability payload. Otherwise we dynamically import
- * `/_resuma/handler/<chunk>.js` and grab the named export.
+ * Handler refs look like `<chunk>#<symbol>`. Island chunks export `resume`.
+ * Chunk digests from the SSR payload drive deterministic cache-busting.
  */
 
 export type Handler = (
@@ -16,23 +14,48 @@ export type Handler = (
   },
 ) => unknown | Promise<unknown>;
 
+export type ChunkKind = "handler" | "island";
+
 const inlineCache = new Map<string, Handler>();
 const inFlight = new Map<string, Promise<Record<string, Function>>>();
-/** Bumped on SPA navigation so stale in-flight imports cannot repopulate `loaded`. */
+/** Bumped on SPA navigation so stale in-flight imports cannot repopulate caches. */
 let loadGeneration = 0;
 
-type ResumaHandlerState = {
+type ResumaChunkState = {
   handlers: Record<string, Record<string, string>>;
   loaded: Map<string, Record<string, Function>>;
+  islandLoaded: Map<string, Record<string, Function>>;
+  chunkDigests: Record<string, string>;
 };
 
-function resumaHandlers(): ResumaHandlerState {
-  return (window as unknown as { __resuma: ResumaHandlerState }).__resuma;
+function resumaChunks(): ResumaChunkState {
+  return (window as unknown as { __resuma: ResumaChunkState }).__resuma;
 }
 
-function chunkUrl(chunk: string, bust: boolean): string {
-  const base = `/_resuma/handler/${encodeURIComponent(chunk)}.js`;
-  return bust ? `${base}?_=${Date.now()}` : base;
+function moduleKey(kind: ChunkKind, chunk: string): string {
+  return `${kind}:${chunk}`;
+}
+
+function loadedMap(kind: ChunkKind): Map<string, Record<string, Function>> {
+  const r = resumaChunks();
+  return kind === "handler" ? r.loaded : r.islandLoaded;
+}
+
+function chunkUrl(kind: ChunkKind, chunk: string, rev?: string): string {
+  const base =
+    kind === "handler"
+      ? `/_resuma/handler/${encodeURIComponent(chunk)}.js`
+      : `/_resuma/island-chunk/${encodeURIComponent(chunk)}.js`;
+  if (rev) return `${base}?v=${encodeURIComponent(rev)}`;
+  return base;
+}
+
+function chunkRevision(chunk: string, bust: boolean): string | undefined {
+  if (bust) {
+    const digest = resumaChunks().chunkDigests?.[chunk];
+    return digest || String(Date.now());
+  }
+  return resumaChunks().chunkDigests?.[chunk];
 }
 
 /** Drop in-memory and in-flight imports so merged server chunks can be refetched. */
@@ -40,29 +63,47 @@ export function invalidateHandlerChunks(
   chunks: Iterable<string>,
   loaded?: Map<string, Record<string, Function>>,
 ): void {
+  invalidateLazyChunks(
+    [...chunks].map((chunk) => ({ kind: "handler" as const, chunk })),
+    loaded,
+  );
+}
+
+export function invalidateLazyChunks(
+  entries: Iterable<{ kind: ChunkKind; chunk: string }>,
+  handlerLoaded?: Map<string, Record<string, Function>>,
+  islandLoaded?: Map<string, Record<string, Function>>,
+): void {
   loadGeneration++;
-  const map = loaded ?? window.__resuma?.loaded;
-  for (const chunk of chunks) {
+  for (const { kind, chunk } of entries) {
     if (!chunk) continue;
+    const map = kind === "handler" ? handlerLoaded : islandLoaded;
     map?.delete(chunk);
-    inFlight.delete(chunk);
-    inFlight.delete(`${chunk}:bust`);
+    const key = moduleKey(kind, chunk);
+    inFlight.delete(key);
+    inFlight.delete(`${key}:bust`);
   }
 }
 
-async function loadChunkModule(chunk: string, bust = false): Promise<Record<string, Function>> {
-  const r = resumaHandlers();
-  const flightKey = bust ? `${chunk}:bust` : chunk;
+async function loadChunkModule(
+  kind: ChunkKind,
+  chunk: string,
+  bust = false,
+): Promise<Record<string, Function>> {
+  const r = resumaChunks();
+  const map = kind === "handler" ? r.loaded : r.islandLoaded;
+  const flightKey = bust ? `${moduleKey(kind, chunk)}:bust` : moduleKey(kind, chunk);
   const generation = loadGeneration;
+  const rev = chunkRevision(chunk, bust);
 
   if (!bust) {
-    const cached = r.loaded.get(chunk);
+    const cached = map.get(chunk);
     if (cached) return cached;
   }
 
   let pending = inFlight.get(flightKey);
   if (!pending) {
-    pending = import(/* @vite-ignore */ chunkUrl(chunk, bust)) as Promise<
+    pending = import(/* @vite-ignore */ chunkUrl(kind, chunk, rev)) as Promise<
       Record<string, Function>
     >;
     inFlight.set(flightKey, pending);
@@ -70,21 +111,21 @@ async function loadChunkModule(chunk: string, bust = false): Promise<Record<stri
   }
   const mod = await pending;
   if (generation !== loadGeneration) {
-    return loadChunkModule(chunk, true);
+    return loadChunkModule(kind, chunk, true);
   }
   if (!bust) {
-    const cached = r.loaded.get(chunk);
+    const cached = map.get(chunk);
     if (cached) return cached;
   }
-  r.loaded.set(chunk, mod);
+  map.set(chunk, mod);
   return mod;
 }
 
 /** Prefetch a handler chunk when a boundary enters the viewport. */
 export function prefetchHandlerChunk(chunk: string): void {
-  const r = resumaHandlers();
+  const r = resumaChunks();
   if (r.loaded.has(chunk)) return;
-  void loadChunkModule(chunk).catch(() => {
+  void loadChunkModule("handler", chunk).catch(() => {
     /* chunk may load on first interaction instead */
   });
 }
@@ -93,10 +134,27 @@ export function prefetchHandlerChunk(chunk: string): void {
 export function warmHandlerChunks(chunks: Iterable<string>): void {
   for (const chunk of chunks) {
     if (!chunk) continue;
-    void loadChunkModule(chunk, true).catch(() => {
+    void loadChunkModule("handler", chunk, true).catch(() => {
       /* first click will retry */
     });
   }
+}
+
+export function warmIslandChunks(chunks: Iterable<string>): void {
+  for (const chunk of chunks) {
+    if (!chunk) continue;
+    void loadChunkModule("island", chunk, true).catch(() => {
+      /* resume may load on first visibility instead */
+    });
+  }
+}
+
+export function clearInlineHandlerCache(): void {
+  inlineCache.clear();
+}
+
+export async function loadIslandModule(chunk: string): Promise<Record<string, Function>> {
+  return loadChunkModule("island", chunk);
 }
 
 export async function resolveHandler(ref: string, inline: string | null): Promise<Handler> {
@@ -112,20 +170,18 @@ export async function resolveHandler(ref: string, inline: string | null): Promis
   const hash = ref.indexOf("#");
   const chunk = hash === -1 ? ref : ref.slice(0, hash);
   const symbol = hash === -1 ? ref : ref.slice(hash + 1);
-  const r = resumaHandlers();
+  const r = resumaChunks();
 
   if (chunk === "__page__") {
     const src = r.handlers[chunk]?.[symbol];
     if (src) return compileInline(src);
   }
 
-  let mod = await loadChunkModule(chunk);
+  let mod = await loadChunkModule("handler", chunk);
   let fn = mod[symbol] as Handler | undefined;
   if (!fn) {
-    // Server merges new symbols into existing chunk URLs across SSR requests;
-    // bust the browser ES module cache once and retry.
     invalidateHandlerChunks([chunk]);
-    mod = await loadChunkModule(chunk, true);
+    mod = await loadChunkModule("handler", chunk, true);
     fn = mod[symbol] as Handler | undefined;
   }
   if (!fn) throw new Error(`handler ${symbol} missing in ${chunk}`);

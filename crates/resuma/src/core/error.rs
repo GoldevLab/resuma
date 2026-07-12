@@ -117,6 +117,18 @@ impl ResumaError {
     pub fn validation(message: impl Into<String>) -> Self {
         Self::Validation(message.into())
     }
+
+    /// Validation failure with per-field messages (encoded for action JSON responses).
+    pub fn validation_fields(
+        message: impl Into<String>,
+        field_errors: std::collections::BTreeMap<String, String>,
+    ) -> Self {
+        let se = crate::flow::SubmitError {
+            message: message.into(),
+            field_errors,
+        };
+        Self::Validation(serde_json::to_string(&se).unwrap_or(se.message))
+    }
 }
 
 pub type Result<T> = std::result::Result<T, ResumaError>;

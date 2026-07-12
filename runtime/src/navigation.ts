@@ -86,29 +86,73 @@ function pathsMatch(href: string, current: string, exact = false): boolean {
   return false;
 }
 
-export function updateNavActiveClasses(path: string): void {
-  document.querySelectorAll<HTMLAnchorElement>("a[data-r-nav]").forEach((a) => {
+function applyNavLinkActive(
+  a: HTMLAnchorElement,
+  path: string,
+  activeClass: string,
+  isActive: boolean,
+): void {
+  let base = a.getAttribute("data-r-base-class");
+  if (!base) {
+    base = a.className
+      .split(/\s+/)
+      .filter((c) => c && c !== activeClass)
+      .join(" ");
+    if (!base) base = a.className;
+    a.setAttribute("data-r-base-class", base);
+  }
+  a.className = isActive ? `${base} ${activeClass}`.trim() : base;
+  if (isActive) a.setAttribute("aria-current", "page");
+  else a.removeAttribute("aria-current");
+}
+
+function bestNavMatch(
+  links: HTMLAnchorElement[],
+  path: string,
+): HTMLAnchorElement | null {
+  let best: HTMLAnchorElement | null = null;
+  let bestLen = -1;
+  for (const a of links) {
     const href = a.getAttribute("href");
-    if (!href) return;
-    const activeClass = a.getAttribute("data-r-active-class");
-    if (!activeClass) return;
-
-    let base = a.getAttribute("data-r-base-class");
-    if (!base) {
-      base = a.className
-        .split(/\s+/)
-        .filter((c) => c && c !== activeClass)
-        .join(" ");
-      if (!base) base = a.className;
-      a.setAttribute("data-r-base-class", base);
-    }
-
+    if (!href) continue;
     const exact = a.hasAttribute("data-r-nav-exact");
-    const isActive = pathsMatch(href, path, exact);
-    a.className = isActive ? `${base} ${activeClass}`.trim() : base;
-    if (isActive) a.setAttribute("aria-current", "page");
-    else a.removeAttribute("aria-current");
-  });
+    if (!pathsMatch(href, path, exact)) continue;
+    if (href.length > bestLen) {
+      best = a;
+      bestLen = href.length;
+    }
+  }
+  return best;
+}
+
+export function updateNavActiveClasses(path: string): void {
+  const links = [...document.querySelectorAll<HTMLAnchorElement>("a[data-r-nav]")];
+  const exclusiveRoots = new Set<Element>();
+  for (const root of document.querySelectorAll("[data-r-nav-exclusive]")) {
+    exclusiveRoots.add(root);
+  }
+
+  const handled = new Set<HTMLAnchorElement>();
+  for (const root of exclusiveRoots) {
+    const group = links.filter((a) => root.contains(a));
+    const best = bestNavMatch(group, path);
+    for (const a of group) {
+      const activeClass = a.getAttribute("data-r-active-class");
+      if (!activeClass) continue;
+      applyNavLinkActive(a, path, activeClass, a === best);
+      handled.add(a);
+    }
+  }
+
+  for (const a of links) {
+    if (handled.has(a)) continue;
+    const href = a.getAttribute("href");
+    if (!href) continue;
+    const activeClass = a.getAttribute("data-r-active-class");
+    if (!activeClass) continue;
+    const exact = a.hasAttribute("data-r-nav-exact");
+    applyNavLinkActive(a, path, activeClass, pathsMatch(href, path, exact));
+  }
 }
 
 /** Re-mount signals and bindings after swapping page HTML. */

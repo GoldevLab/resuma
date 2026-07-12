@@ -5,6 +5,7 @@
  */
 
 import type { SignalCell } from "./signals.js";
+import { loadIslandModule } from "./handler-loader.js";
 import { registerMountCleanup } from "./mount-cleanups.js";
 
 const ISLAND_TAG = "resuma-island";
@@ -65,9 +66,7 @@ async function hydrateIsland(
 ): Promise<void> {
   if (el.dataset.rHydrated === "true") return;
   try {
-    const mod: {
-      resume?: (p: unknown, s: Map<string, SignalCell<unknown>>, root: HTMLElement) => void;
-    } = await import(`/_resuma/island-chunk/${chunk}.js`);
+    const mod = await loadIslandModule(chunk);
     if (typeof mod.resume === "function") {
       mod.resume(props, signals, el);
       el.dataset.rHydrated = "true";

@@ -119,6 +119,7 @@ async fn pre_registered_island_chunk_keeps_custom_resume() {
         visible_tasks: Default::default(),
         effects: vec![],
         lazy_chunks: vec![],
+        chunk_digests: Default::default(),
         csrf_token: None,
         serialization_error: None,
     };
@@ -149,6 +150,7 @@ async fn handler_chunks_merge_new_symbols_for_existing_chunk() {
         visible_tasks: Default::default(),
         effects: vec![],
         lazy_chunks: vec![],
+        chunk_digests: Default::default(),
         csrf_token: None,
         serialization_error: None,
     };
@@ -169,6 +171,7 @@ async fn handler_chunks_merge_new_symbols_for_existing_chunk() {
         visible_tasks: Default::default(),
         effects: vec![],
         lazy_chunks: vec![],
+        chunk_digests: Default::default(),
         csrf_token: None,
         serialization_error: None,
     };

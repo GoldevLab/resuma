@@ -360,6 +360,7 @@ impl RenderContext {
                 .filter(|k| *k != "__page__")
                 .cloned()
                 .collect(),
+            chunk_digests: BTreeMap::new(),
             csrf_token: None,
             serialization_error: None,
         }
@@ -450,6 +451,9 @@ pub struct ResumePayload {
     /// Handler chunk ids fetched lazily from `/_resuma/handler/:chunk.js`.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub lazy_chunks: Vec<String>,
+    /// Per-chunk content digests for client cache invalidation.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
+    pub chunk_digests: BTreeMap<String, String>,
     /// Double-submit CSRF token (sent as `X-Resuma-CSRF` on POST requests).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub csrf_token: Option<String>,
@@ -468,6 +472,7 @@ impl ResumePayload {
             || !self.visible_tasks.is_empty()
             || !self.effects.is_empty()
             || !self.lazy_chunks.is_empty()
+            || !self.chunk_digests.is_empty()
     }
 }
 
@@ -632,6 +637,7 @@ mod tests {
             visible_tasks: Default::default(),
             effects: vec![],
             lazy_chunks: vec![],
+            chunk_digests: Default::default(),
             csrf_token: None,
             serialization_error: None,
         };
@@ -650,6 +656,7 @@ mod tests {
             visible_tasks: Default::default(),
             effects: vec![],
             lazy_chunks: vec![],
+            chunk_digests: Default::default(),
             csrf_token: None,
             serialization_error: None,
         };

@@ -1,5 +1,6 @@
 //! `ResumaApp` — high-level builder used by example apps & the CLI dev server.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::rc::Rc;
@@ -10,6 +11,7 @@ use crate::core::view::View;
 use crate::core::Component;
 use crate::core::{FlowRequest, ResumaError};
 use crate::flow::extract_redirect;
+use crate::flow::submit::SubmitError;
 use crate::flow::runtime::with_request;
 use crate::ssr::PageOptions;
 use axum::body::Body;
@@ -452,6 +454,12 @@ fn render_page_response(
             &state.island_chunks,
             &payload,
         );
+        let mut payload = payload;
+        super::handler_assets::attach_chunk_digests(
+            &mut payload,
+            &state.handler_chunks,
+            &state.island_chunks,
+        );
 
         let stream =
             if let Some(deferred) = try_deferred_stream(view.clone(), &opts, path, &payload) {
@@ -481,13 +489,18 @@ fn render_page_response(
         };
         attach_page_security(res, &opts, https, set_csrf_cookie)
     } else {
-        let payload = ctx.snapshot_full();
-        let html = crate::ssr::render_prebuilt_document(&opts, path, &view, &payload);
+        let mut payload = ctx.snapshot_full();
         super::handler_assets::merge_payload_handlers(
             &state.handler_chunks,
             &state.island_chunks,
             &payload,
         );
+        super::handler_assets::attach_chunk_digests(
+            &mut payload,
+            &state.handler_chunks,
+            &state.island_chunks,
+        );
+        let html = crate::ssr::render_prebuilt_document(&opts, path, &view, &payload);
         let mut res = (status_code, Html(html)).into_response();
         if let Some(cache) = cache {
             res.headers_mut().insert(
@@ -628,6 +641,8 @@ struct ActionResponse {
     ok: bool,
     value: Option<serde_json::Value>,
     error: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    field_errors: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     redirect: Option<String>,
 }
@@ -688,6 +703,7 @@ async fn serve_action(
                     ok: true,
                     value: Some(value),
                     error: None,
+                    field_errors: BTreeMap::new(),
                     redirect,
                 }),
             )
@@ -700,12 +716,24 @@ async fn serve_action(
 fn action_error(err: ResumaError) -> Response {
     let cfg = security::config();
     let status = http_status(&err);
+    let mut field_errors = BTreeMap::new();
+    let message = if let ResumaError::Validation(ref raw) = err {
+        if let Ok(se) = serde_json::from_str::<SubmitError>(raw) {
+            field_errors = se.field_errors;
+            se.message
+        } else {
+            err.client_message(cfg.production)
+        }
+    } else {
+        err.client_message(cfg.production)
+    };
     (
         status,
         Json(ActionResponse {
             ok: false,
             value: None,
-            error: Some(err.client_message(cfg.production)),
+            error: Some(message),
+            field_errors,
             redirect: None,
         }),
     )
@@ -722,6 +750,7 @@ async fn serve_handler_chunk(
     }
     match state.handler_chunks.read().get(&key).cloned() {
         Some(src) => {
+            let digest = super::handler_assets::chunk_digest(&src);
             let mut res = Response::new(src.into());
             res.headers_mut().insert(
                 header::CONTENT_TYPE,
@@ -729,6 +758,9 @@ async fn serve_handler_chunk(
             );
             res.headers_mut()
                 .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+            if let Ok(etag) = HeaderValue::from_str(&format!("\"{digest}\"")) {
+                res.headers_mut().insert(header::ETAG, etag);
+            }
             res
         }
         None => {

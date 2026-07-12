@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 use crate::core::ResumePayload;
 use parking_lot::RwLock;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -41,6 +42,29 @@ fn is_function_expression(source: &str) -> bool {
 fn module_has_symbol(module: &str, symbol: &str) -> bool {
     module.contains(&format!("export const {symbol} "))
         || module.contains(&format!("export function {symbol}("))
+}
+
+/// Short stable digest for cache-busting lazy chunk URLs.
+pub fn chunk_digest(source: &str) -> String {
+    let hash = Sha256::digest(source.as_bytes());
+    format!("{:x}", hash)[..16].to_string()
+}
+
+/// Attach server-side chunk digests for chunks referenced on this page.
+pub fn attach_chunk_digests(
+    payload: &mut ResumePayload,
+    handler_chunks: &Arc<RwLock<HashMap<String, String>>>,
+    island_chunks: &Arc<RwLock<HashMap<String, String>>>,
+) {
+    let handlers = handler_chunks.read();
+    let islands = island_chunks.read();
+    let mut digests = BTreeMap::new();
+    for chunk in payload.lazy_chunks.iter().chain(payload.islands.iter()) {
+        if let Some(src) = handlers.get(chunk).or_else(|| islands.get(chunk)) {
+            digests.insert(chunk.clone(), chunk_digest(src));
+        }
+    }
+    payload.chunk_digests = digests;
 }
 
 /// Merge SSR handler chunks into the server's lazy-load map.

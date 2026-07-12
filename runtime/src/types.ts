@@ -13,8 +13,13 @@ export interface ResumaGlobal {
   safeAction: (
     name: string,
     args: unknown[],
-  ) => Promise<{ ok: true; value: unknown } | { ok: false; error: string }>;
+  ) => Promise<
+    | { ok: true; value: unknown }
+    | { ok: false; error: string; field_errors?: Record<string, string> }
+  >;
   loaded: Map<string, Record<string, Function>>;
+  islandLoaded: Map<string, Record<string, Function>>;
+  chunkDigests: Record<string, string>;
   refreshIsland: (id: string) => Promise<void>;
   context: (key: string) => unknown;
   navigate: (href: string, pushState?: boolean) => Promise<void>;

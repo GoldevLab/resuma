@@ -7,7 +7,7 @@ import { initSignals, signalId, type SignalCell, bindReactiveText, bindReactiveA
 import { initIslands } from "./islands.js";
 import { initEffects, flushEffectCleanups, type ClientEffectSpec } from "./effects.js";
 import { prefetchLazyChunks } from "./boundaries.js";
-import { invalidateHandlerChunks, warmHandlerChunks } from "./handler-loader.js";
+import { invalidateLazyChunks, warmHandlerChunks, warmIslandChunks, clearInlineHandlerCache } from "./handler-loader.js";
 import { resolveHandler, type Handler } from "./handler-loader.js";
 import { initNavLinks, followRedirect, navigate, buildUrl, invalidate, setPageMounter, updateNavActiveClasses } from "./navigation.js";
 import { runVisibleTasks, type VisibleTaskEntry } from "./visible-tasks.js";
@@ -55,6 +55,7 @@ interface ResumePayload {
   visible_tasks?: Record<string, VisibleTaskEntry>;
   effects?: ClientEffectSpec[];
   lazy_chunks?: string[];
+  chunk_digests?: Record<string, string>;
   csrf_token?: string;
   serialization_error?: boolean;
 }
@@ -127,9 +128,12 @@ export function mountPage(): void {
 
   const prev = window.__resuma;
   const loaded = prev?.loaded ?? new Map<string, Record<string, Function>>();
-  // Handler chunks grow server-side as new pages SSR; invalidate client cache on
-  // SPA navigation so merged symbols resolve from a fresh import.
-  const chunks = new Set(payload.lazy_chunks ?? []);
+  const islandLoaded = prev?.islandLoaded ?? new Map<string, Record<string, Function>>();
+  const prevDigests = prev?.chunkDigests ?? {};
+  const newDigests = payload.chunk_digests ?? {};
+
+  const handlerChunks = new Set(payload.lazy_chunks ?? []);
+  const islandChunks = new Set(payload.islands ?? []);
   for (const el of document.querySelectorAll<HTMLElement>("[data-r-on\\:click], [data-r-on\\:submit], [data-r-on\\:input], [data-r-on\\:change]")) {
     for (const attr of el.attributes) {
       if (!attr.name.startsWith("data-r-on:")) continue;
@@ -137,16 +141,49 @@ export function mountPage(): void {
       const hash = ref.indexOf("#");
       if (hash === -1) continue;
       const chunk = ref.slice(0, hash);
-      if (chunk && chunk !== "__page__") chunks.add(chunk);
+      if (chunk && chunk !== "__page__") handlerChunks.add(chunk);
     }
   }
-  if (chunks.size) invalidateHandlerChunks(chunks, loaded);
+
+  const scope = root();
+  for (const el of scope.querySelectorAll<HTMLElement>("resuma-island[data-r-chunk]")) {
+    const chunk = el.getAttribute("data-r-chunk");
+    if (chunk) islandChunks.add(chunk);
+    delete el.dataset.rHydrated;
+  }
+
+  const staleHandlers: string[] = [];
+  for (const chunk of handlerChunks) {
+    if (!newDigests[chunk] || prevDigests[chunk] !== newDigests[chunk]) {
+      staleHandlers.push(chunk);
+    }
+  }
+  const staleIslands: string[] = [];
+  for (const chunk of islandChunks) {
+    if (!newDigests[chunk] || prevDigests[chunk] !== newDigests[chunk]) {
+      staleIslands.push(chunk);
+    }
+  }
+  if (staleHandlers.length || staleIslands.length) {
+    invalidateLazyChunks(
+      [
+        ...staleHandlers.map((chunk) => ({ kind: "handler" as const, chunk })),
+        ...staleIslands.map((chunk) => ({ kind: "island" as const, chunk })),
+      ],
+      loaded,
+      islandLoaded,
+    );
+  }
+  clearInlineHandlerCache();
+
   const __resuma: ResumaGlobal = {
     state,
     signals,
     handlers: payload.handlers,
     contexts: payload.contexts ?? {},
     loaded,
+    islandLoaded,
+    chunkDigests: newDigests,
     action: callServerAction,
     safeAction: callServerActionSafe,
     refreshIsland,
@@ -156,9 +193,9 @@ export function mountPage(): void {
     invalidate,
   };
   window.__resuma = __resuma;
-  if (chunks.size) warmHandlerChunks(chunks);
+  if (handlerChunks.size) warmHandlerChunks(handlerChunks);
+  if (islandChunks.size) warmIslandChunks(islandChunks);
 
-  const scope = root();
   bindReactiveText(scope, signals);
   bindReactiveAttrs(scope, signals);
   bindShows(scope, signals);
@@ -350,6 +387,7 @@ interface ActionResponse {
   ok?: boolean;
   value?: unknown;
   error?: string;
+  field_errors?: Record<string, string>;
   redirect?: string;
 }
 
@@ -377,13 +415,52 @@ async function callServerAction(name: string, args: unknown[]): Promise<unknown>
 async function callServerActionSafe(
   name: string,
   args: unknown[],
-): Promise<{ ok: true; value: unknown } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; value: unknown }
+  | { ok: false; error: string; field_errors?: Record<string, string> }
+> {
   try {
-    const value = await callServerAction(name, args);
-    return { ok: true, value };
+    const res = await fetch(`/_resuma/action/${encodeURIComponent(name)}`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: mutationHeaders({ "content-type": "application/json" }),
+      body: JSON.stringify({ args }),
+    });
+    let data: ActionResponse;
+    try {
+      data = (await res.json()) as ActionResponse;
+    } catch {
+      return { ok: false, error: `action ${name}: ${res.status}` };
+    }
+    if (!res.ok || data.ok === false) {
+      return {
+        ok: false,
+        error: data.error ?? `action ${name}: ${res.status}`,
+        field_errors: data.field_errors,
+      };
+    }
+    if (data.redirect) followRedirect(data.redirect);
+    return { ok: true, value: data.value };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     return { ok: false, error };
+  }
+}
+
+/** Show field-level errors returned by `safeAction` near matching named inputs. */
+export function showActionFieldErrors(
+  scope: ParentNode,
+  fieldErrors: Record<string, string>,
+): void {
+  scope.querySelectorAll("[data-r-field-error]").forEach((n) => n.remove());
+  for (const [name, message] of Object.entries(fieldErrors)) {
+    const input = scope.querySelector(`[name="${CSS.escape(name)}"]`) as HTMLElement | null;
+    if (!input) continue;
+    const el = document.createElement("span");
+    el.className = "resuma-field-error";
+    el.setAttribute("data-r-field-error", name);
+    el.textContent = message;
+    input.insertAdjacentElement("afterend", el);
   }
 }
 
