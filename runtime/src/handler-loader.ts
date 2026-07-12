@@ -18,6 +18,8 @@ export type Handler = (
 
 const inlineCache = new Map<string, Handler>();
 const inFlight = new Map<string, Promise<Record<string, Function>>>();
+/** Bumped on SPA navigation so stale in-flight imports cannot repopulate `loaded`. */
+let loadGeneration = 0;
 
 type ResumaHandlerState = {
   handlers: Record<string, Record<string, string>>;
@@ -34,11 +36,15 @@ function chunkUrl(chunk: string, bust: boolean): string {
 }
 
 /** Drop in-memory and in-flight imports so merged server chunks can be refetched. */
-export function invalidateHandlerChunks(chunks: Iterable<string>): void {
-  const r = resumaHandlers();
+export function invalidateHandlerChunks(
+  chunks: Iterable<string>,
+  loaded?: Map<string, Record<string, Function>>,
+): void {
+  loadGeneration++;
+  const map = loaded ?? window.__resuma?.loaded;
   for (const chunk of chunks) {
     if (!chunk) continue;
-    r.loaded.delete(chunk);
+    map?.delete(chunk);
     inFlight.delete(chunk);
     inFlight.delete(`${chunk}:bust`);
   }
@@ -47,6 +53,7 @@ export function invalidateHandlerChunks(chunks: Iterable<string>): void {
 async function loadChunkModule(chunk: string, bust = false): Promise<Record<string, Function>> {
   const r = resumaHandlers();
   const flightKey = bust ? `${chunk}:bust` : chunk;
+  const generation = loadGeneration;
 
   if (!bust) {
     const cached = r.loaded.get(chunk);
@@ -62,6 +69,13 @@ async function loadChunkModule(chunk: string, bust = false): Promise<Record<stri
     void pending.finally(() => inFlight.delete(flightKey));
   }
   const mod = await pending;
+  if (generation !== loadGeneration) {
+    return loadChunkModule(chunk, true);
+  }
+  if (!bust) {
+    const cached = r.loaded.get(chunk);
+    if (cached) return cached;
+  }
   r.loaded.set(chunk, mod);
   return mod;
 }
@@ -73,6 +87,16 @@ export function prefetchHandlerChunk(chunk: string): void {
   void loadChunkModule(chunk).catch(() => {
     /* chunk may load on first interaction instead */
   });
+}
+
+/** Cache-bust handler chunks after SPA navigation (merged symbols on the server). */
+export function warmHandlerChunks(chunks: Iterable<string>): void {
+  for (const chunk of chunks) {
+    if (!chunk) continue;
+    void loadChunkModule(chunk, true).catch(() => {
+      /* first click will retry */
+    });
+  }
 }
 
 export async function resolveHandler(ref: string, inline: string | null): Promise<Handler> {

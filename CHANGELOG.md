@@ -6,6 +6,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.12] - 2026-07-11
+
+### Fixed
+
+- **Handler chunk cache on SPA navigation** — generation counter ignores stale in-flight imports after invalidation; `warmHandlerChunks()` cache-busts page chunks on mount; non-bust prefetch can no longer overwrite a fresh bust load.
+
 ## [1.2.7] - 2026-07-11
 
 ### Fixed

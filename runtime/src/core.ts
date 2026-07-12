@@ -7,7 +7,7 @@ import { initSignals, signalId, type SignalCell, bindReactiveText, bindReactiveA
 import { initIslands } from "./islands.js";
 import { initEffects, flushEffectCleanups, type ClientEffectSpec } from "./effects.js";
 import { prefetchLazyChunks } from "./boundaries.js";
-import { invalidateHandlerChunks } from "./handler-loader.js";
+import { invalidateHandlerChunks, warmHandlerChunks } from "./handler-loader.js";
 import { resolveHandler, type Handler } from "./handler-loader.js";
 import { initNavLinks, followRedirect, navigate, buildUrl, invalidate, setPageMounter, updateNavActiveClasses } from "./navigation.js";
 import { runVisibleTasks, type VisibleTaskEntry } from "./visible-tasks.js";
@@ -140,7 +140,7 @@ export function mountPage(): void {
       if (chunk && chunk !== "__page__") chunks.add(chunk);
     }
   }
-  if (chunks.size) invalidateHandlerChunks(chunks);
+  if (chunks.size) invalidateHandlerChunks(chunks, loaded);
   const __resuma: ResumaGlobal = {
     state,
     signals,
@@ -156,6 +156,7 @@ export function mountPage(): void {
     invalidate,
   };
   window.__resuma = __resuma;
+  if (chunks.size) warmHandlerChunks(chunks);
 
   const scope = root();
   bindReactiveText(scope, signals);
