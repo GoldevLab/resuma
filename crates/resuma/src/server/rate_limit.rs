@@ -121,6 +121,15 @@ pub fn check_rate_limit_key(key: &str, limit_per_minute: u32) -> Result<()> {
         .check(key, limit_per_minute, Duration::from_secs(60))
 }
 
+/// Clear in-memory counters and force the memory backend (integration tests).
+#[doc(hidden)]
+pub fn reset_rate_limits_for_tests() {
+    configure_rate_limit_backend(Arc::new(MemoryBackend));
+    let mut state = MEMORY_STATE.write();
+    state.buckets.clear();
+    state.order.clear();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

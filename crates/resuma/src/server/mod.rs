@@ -54,7 +54,7 @@ pub use page_cache::{
     page_csp_nonce, page_csrf, sanitize_cache_for_session, stage_page_csp_nonce, stage_page_csrf,
     stage_response_cache_control, take_response_cache_control,
 };
-pub use rate_limit::{configure_rate_limit_backend, RateLimitBackend};
+pub use rate_limit::{configure_rate_limit_backend, reset_rate_limits_for_tests, RateLimitBackend};
 pub use request_path::{stage_response_path, take_response_path};
 pub use security::{
     build_content_security_policy, client_ip, client_ip_from_parts,

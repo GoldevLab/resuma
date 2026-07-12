@@ -5,7 +5,8 @@ use axum::extract::ConnectInfo;
 use axum::http::{header, HeaderValue, Request, StatusCode};
 use resuma::prelude::*;
 use resuma::server::{
-    configure_security, guard_mutation, validate_csrf, validate_origin, SecurityConfig,
+    configure_security, guard_mutation, reset_rate_limits_for_tests, validate_csrf,
+    validate_origin, SecurityConfig,
 };
 use std::net::SocketAddr;
 use tower::ServiceExt;
@@ -50,13 +51,15 @@ fn security_guards_sequential() {
         actions_per_minute: 2,
         ..SecurityConfig::from_env()
     });
+    reset_rate_limits_for_tests();
     let headers = axum::http::HeaderMap::new();
-    let ip = "10.0.0.99";
-    let bucket = "test_rate_bucket";
-    assert!(guard_mutation(&headers, "localhost", ip, bucket, 2, None).is_ok());
-    assert!(guard_mutation(&headers, "localhost", ip, bucket, 2, None).is_ok());
+    let unique = resuma::exec::id::next_id();
+    let ip = format!("10.0.0.{}", (unique % 200) + 1);
+    let bucket = format!("test_rate_bucket_{unique}");
+    assert!(guard_mutation(&headers, "localhost", &ip, &bucket, 2, None).is_ok());
+    assert!(guard_mutation(&headers, "localhost", &ip, &bucket, 2, None).is_ok());
     assert!(matches!(
-        guard_mutation(&headers, "localhost", ip, bucket, 2, None),
+        guard_mutation(&headers, "localhost", &ip, &bucket, 2, None),
         Err(ResumaError::RateLimited)
     ));
 }
