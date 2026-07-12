@@ -14,8 +14,8 @@ const dist = join(__dirname, "..", "dist");
 
 const LOADER_GZIP_BUDGET = 1024;
 // Post-1.0 reactive For/Match/Show + SPA nav; visible tasks + view transitions;
-// mount cleanup registry for SPA navigation.
-const CORE_GZIP_BUDGET = 7300;
+// mount cleanup registry; safeAction + field_errors (v1.2.13).
+const CORE_GZIP_BUDGET = 8300;
 
 const defaults = ["loader.js", "core.js", "flow.js", "runtime.js"].map((f) => join(dist, f));
 
