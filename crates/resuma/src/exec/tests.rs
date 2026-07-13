@@ -204,6 +204,12 @@ mod tests {
         assert_eq!(paused.status, crate::exec::GraphStatus::Paused);
 
         FlowEngine::resume(&started.graph_id).await.expect("resume");
+        let resumed = FlowEngine::snapshot(&started.graph_id).expect("snap");
+        assert_eq!(
+            resumed.status,
+            crate::exec::GraphStatus::Running,
+            "resume must flip graph status back to running immediately"
+        );
         tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
         let done = FlowEngine::snapshot(&started.graph_id).expect("snap");
         assert_eq!(done.status, crate::exec::GraphStatus::Done);

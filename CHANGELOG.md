@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.15] - 2026-07-13
+
+### Fixed
+
+- **Worker Resume** — `mark_running` now sets `GraphStatus::Running` (resume previously left status as `paused`, so Pause/Cancel stayed disabled and only Replay looked active).
+- **Resume EventBus reuse** — pause/resume keeps the same SSE bus so Progress/log events continue without remounting the panel.
+- **Soft-pause finalizer race** — the cancelled worker no longer overwrites durable status after a newer resume has taken over.
+
 ## [1.2.14] - 2026-07-13
 
 ### Fixed

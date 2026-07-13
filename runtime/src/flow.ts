@@ -962,10 +962,43 @@ function mountWorkerPanel(el: HTMLElement): void {
       await syncWorkerControls(el, graphId, token, msg);
       return;
     }
+    const labels = { pause: "Paused", resume: "Resumed", cancel: "Cancelled" } as const;
+    if (path === "resume") {
+      completedGraphIds.delete(graphId);
+      const hub = graphSseHubs.get(graphId);
+      if (hub) {
+        hub.terminal = false;
+        // Force a fresh EventSource in case the previous connection died while paused.
+        hub.es?.close();
+        hub.es = null;
+      }
+    }
     const graphEl = graphRoot?.querySelector<HTMLElement>("[data-r-flow-graph]");
     if (graphEl) void refreshGraph(graphEl, graphId, token);
-    const labels = { pause: "Paused", resume: "Resumed", cancel: "Cancelled" } as const;
     await syncWorkerControls(el, graphId, token, `${labels[path]} — refreshing…`);
+    // Re-subscribe after resume so the live stream attaches to the reused bus.
+    if (path === "resume" && !aborted) {
+      closeSse?.();
+      closeSse = subscribeGraphEvents(graphId, token, (ev) => {
+        if (aborted) return;
+        if (ev.type === "graph_done") {
+          markGraphTerminal(graphId);
+          void syncWorkerControls(el, graphId, token);
+          return;
+        }
+        if (
+          ev.type === "node_start" ||
+          ev.type === "node_done" ||
+          ev.type === "node_failed" ||
+          ev.type === "progress"
+        ) {
+          scheduleControlSync();
+        }
+      });
+      window.setTimeout(() => {
+        if (!aborted) void syncWorkerControls(el, graphId, token);
+      }, 200);
+    }
   };
   const signal = ac.signal;
   el.querySelector("[data-r-worker-pause]")?.addEventListener(

@@ -160,10 +160,22 @@ pub fn apply_event(snapshot: &mut GraphSnapshot, event: &WorkerEvent) {
     }
 }
 
-/// Mark root worker node running at start.
+/// Mark graph + root worker node running (start and resume).
 pub fn mark_running(snapshot: &mut GraphSnapshot) {
+    snapshot.status = GraphStatus::Running;
     if let Some(n) = snapshot.nodes.first_mut() {
         n.status = NodeStatus::Running;
+        n.duration_ms = None;
+    }
+}
+
+/// Mark graph + root worker node paused (cooperative abort).
+pub fn mark_paused(snapshot: &mut GraphSnapshot) {
+    snapshot.status = GraphStatus::Paused;
+    if let Some(n) = snapshot.nodes.first_mut() {
+        if n.status == NodeStatus::Running {
+            n.status = NodeStatus::Paused;
+        }
     }
 }
 

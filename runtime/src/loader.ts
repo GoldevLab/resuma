@@ -12,7 +12,7 @@ const ROOT_ID = "resuma-root";
 const HANDLER_PREFIX = "data-r-on:";
 const CAPTURES_PREFIX = "data-r-cap:";
 const INLINE_PREFIX = "data-r-inline:";
-const CORE_URL = "/_resuma/core.js?v=1.2.14";
+const CORE_URL = "/_resuma/core.js?v=1.2.15";
 
 interface ResumePayload {
   signals: unknown[];

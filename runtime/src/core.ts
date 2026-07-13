@@ -34,7 +34,7 @@ function hasFlowWidgets(scope: ParentNode): boolean {
 async function maybeInitFlowWidgets(scope: ParentNode): Promise<void> {
   if (!hasFlowWidgets(scope)) return;
   try {
-    const mod = await import("/_resuma/flow.js?v=1.2.14");
+    const mod = await import("/_resuma/flow.js?v=1.2.15");
     mod.initFlowWidgets(scope);
   } catch (err) {
     console.error("[r] flow load", err);

@@ -107,6 +107,7 @@ impl FlowEngine {
             run,
             None,
             None,
+            None,
         )
         .await?;
 
@@ -131,6 +132,10 @@ impl FlowEngine {
             return Err(ResumaError::validation("graph is not paused"));
         }
 
+        // Reuse the live EventBus so open SSE streams keep receiving events
+        // after Resume (pause cancels the worker but the browser stays subscribed).
+        let reuse_bus = GRAPHS.read().get(&id.0).map(|e| e.bus.clone());
+
         if let Some(exec) = GRAPHS.read().get(&id.0) {
             if exec.snapshot.read().status == GraphStatus::Running {
                 return Err(ResumaError::validation("graph already running"));
@@ -154,6 +159,7 @@ impl FlowEngine {
             run,
             Some(snapshot),
             Some(state),
+            reuse_bus,
         )
         .await?;
 
@@ -213,7 +219,7 @@ impl FlowEngine {
 
         {
             let mut snap = exec.snapshot.write();
-            snap.status = GraphStatus::Paused;
+            graph::mark_paused(&mut snap);
             let _ = durable::persist_graph(&snap);
         }
         let _ = durable::save_checkpoint(id, &exec.state);
@@ -300,18 +306,27 @@ async fn spawn_execution(
     run: WorkerFn,
     existing_snapshot: Option<GraphSnapshot>,
     existing_state: Option<StateStore>,
+    reuse_bus: Option<SharedEventBus>,
 ) -> Result<()> {
     let snapshot = existing_snapshot
         .unwrap_or_else(|| graph::materialize(graph_id.clone(), &worker_name, &intent, &plan));
-    let bus = Arc::new(EventBus::new());
+    let reused_bus = reuse_bus.is_some();
+    let bus = reuse_bus.unwrap_or_else(|| Arc::new(EventBus::new()));
 
-    if let Some(events) = durable::load_events(&graph_id) {
-        for event in events {
-            bus.emit(event);
+    // Only seed history on a fresh bus — reused buses already carry live + prior events.
+    if !reused_bus {
+        if let Some(events) = durable::load_events(&graph_id) {
+            for event in events {
+                bus.emit(event);
+            }
         }
     }
 
     let state = Arc::new(existing_state.unwrap_or_default());
+    let mut snapshot = snapshot;
+    // Mark running before the async task is scheduled so resume returns a live status.
+    graph::mark_running(&mut snapshot);
+    let _ = durable::persist_graph(&snapshot);
     let snap_arc = Arc::new(RwLock::new(snapshot));
     let cancel = cancel::new_scope();
 
@@ -396,8 +411,11 @@ async fn run_worker(
 ) {
     {
         let mut snap = snapshot.write();
-        graph::mark_running(&mut snap);
-        let _ = durable::persist_graph(&snap);
+        // Already marked running in spawn_execution; keep durable in sync if needed.
+        if snap.status != GraphStatus::Running {
+            graph::mark_running(&mut snap);
+            let _ = durable::persist_graph(&snap);
+        }
     }
 
     let ctx = WorkerContext::new(
@@ -445,7 +463,17 @@ async fn run_worker(
             let hard_cancel = durable::load_execution_record(&graph_id)
                 .map(|r| r.cancelled)
                 .unwrap_or(false);
+            // Resume replaces GRAPHS with a fresh snapshot Arc — skip durable
+            // writes so the soft-pause finalizer cannot clobber the new run.
+            let superseded = GRAPHS
+                .read()
+                .get(&graph_id.0)
+                .map(|e| !Arc::ptr_eq(&e.snapshot, &snapshot))
+                .unwrap_or(true);
             if hard_cancel {
+                if superseded {
+                    return;
+                }
                 ctx.log("execution cancelled");
                 let mut snap = snapshot.write();
                 graph::mark_failed(&mut snap);
@@ -461,12 +489,12 @@ async fn run_worker(
                 );
                 bus.emit(emit::graph_done(graph_id.clone()));
                 release_live_graph(&graph_id);
+            } else if superseded {
+                // A resume already took over — leave the new execution alone.
             } else {
                 ctx.log("execution paused (cancelled)");
                 let mut snap = snapshot.write();
-                if snap.status != GraphStatus::Paused {
-                    snap.status = GraphStatus::Paused;
-                }
+                graph::mark_paused(&mut snap);
                 let _ = durable::persist_graph(&snap);
                 let _ = durable::persist_events(&graph_id, &bus.history());
                 let final_snap = snap.clone();
