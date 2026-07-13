@@ -12,9 +12,9 @@
   ],
   "scripts": {
     "build:loader": "esbuild src/loader.ts --bundle --format=esm --target=es2020 --minify --outfile=dist/loader.js",
-    "build:core": "esbuild src/core.ts --bundle --format=esm --target=es2020 --minify --outfile=dist/core.js",
+    "build:core": "esbuild src/core.ts --bundle --format=esm --target=es2020 --minify --external:/_resuma/* --outfile=dist/core.js",
     "build:flow": "esbuild src/flow.ts --bundle --format=esm --target=es2020 --minify --outfile=dist/flow.js",
-    "build:legacy": "esbuild src/runtime.ts --bundle --format=esm --target=es2020 --minify --sourcemap --outfile=dist/runtime.js",
+    "build:legacy": "esbuild src/runtime.ts --bundle --format=esm --target=es2020 --minify --sourcemap --external:/_resuma/* --outfile=dist/runtime.js",
     "build": "npm run build:loader && npm run build:core && npm run build:flow && npm run build:legacy",
     "build:dev": "esbuild src/loader.ts --bundle --format=esm --target=es2020 --sourcemap --outfile=dist/loader.dev.js",
     "watch": "esbuild src/loader.ts --bundle --format=esm --target=es2020 --sourcemap --watch --outfile=dist/loader.dev.js",

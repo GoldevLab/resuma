@@ -193,7 +193,8 @@ function applyWorkerControlState(el: HTMLElement, st: string, hint?: string): vo
 
   if (pauseBtn) pauseBtn.disabled = !running;
   if (resumeBtn) resumeBtn.disabled = !paused;
-  if (cancelBtn) cancelBtn.disabled = terminal;
+  // Cancel only while the graph can still be aborted (running or paused).
+  if (cancelBtn) cancelBtn.disabled = !(running || paused);
   if (replayBtn) replayBtn.disabled = false;
 
   for (const btn of [pauseBtn, resumeBtn, cancelBtn, replayBtn]) {
@@ -847,6 +848,7 @@ function mountWorkerPanel(el: HTMLElement): void {
     aborted = true;
     ac.abort();
     if (pollTimer !== undefined) clearInterval(pollTimer);
+    statusObserver?.disconnect();
     closeSse?.();
     closeSse = null;
     delete el.dataset.rFlowMounted;
@@ -859,6 +861,26 @@ function mountWorkerPanel(el: HTMLElement): void {
   const scheduleControlSync = debounce(() => {
     if (!aborted) void syncWorkerControls(el, graphId, token);
   }, 250);
+
+  // Mirror graph status text immediately when the sibling graph widget updates
+  // (covers laggy fetches / cached clients still showing SSR "Waiting…").
+  const statusNode = el
+    .closest("[data-r-flow-execution]")
+    ?.querySelector("[data-r-flow-graph-status]");
+  let statusObserver: MutationObserver | undefined;
+  if (statusNode && typeof MutationObserver !== "undefined") {
+    statusObserver = new MutationObserver(() => {
+      if (aborted) return;
+      const fallback = graphStatusFromPanel(el);
+      if (fallback) applyWorkerControlState(el, fallback);
+      else scheduleControlSync();
+    });
+    statusObserver.observe(statusNode, {
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+  }
 
   pollTimer = window.setInterval(() => {
     if (aborted || completedGraphIds.has(graphId)) {

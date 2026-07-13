@@ -6,6 +6,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.14] - 2026-07-13
+
+### Fixed
+
+- **Runtime asset caching** — `/_resuma/{loader,core,flow,runtime}.js` no longer ship
+  `Cache-Control: immutable` on fixed URLs (browsers kept stale Flow widgets for a year).
+  Imports now cache-bust with `?v=1.2.14`.
+- **Worker Cancel button** — enabled only while `running` or `paused` (not while syncing / done).
+- **Worker controls sync** — MutationObserver mirrors graph status into Pause/Resume/Cancel
+  when the sibling graph widget updates.
+
 ## [1.2.13] - 2026-07-12
 
 ### Added

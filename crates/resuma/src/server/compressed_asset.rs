@@ -74,7 +74,9 @@ pub(crate) fn serve_js(
     }
     h.insert(
         header::CACHE_CONTROL,
-        HeaderValue::from_static("public, max-age=31536000, immutable"),
+        // Fixed paths (/_resuma/flow.js etc.) change across releases — never mark
+        // them immutable or browsers keep stale bundles for a year.
+        HeaderValue::from_static("public, max-age=60, must-revalidate"),
     );
     res
 }
