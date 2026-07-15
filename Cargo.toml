@@ -27,15 +27,15 @@ categories = ["web-programming", "asynchronous"]
 readme = "README.md"
 
 [workspace.dependencies]
-resuma-macros = { path = "crates/resuma-macros", version = "1.2.5" }
-resuma = { path = "crates/resuma", version = "1.2.5" }
-resuma-flow = { path = "crates/resuma-flow", version = "1.2.5" }
+resuma-macros = { path = "crates/resuma-macros", version = "1.2.15" }
+resuma = { path = "crates/resuma", version = "1.2.15" }
+resuma-flow = { path = "crates/resuma-flow", version = "1.2.15" }
 
 # 3rd-party
 serde       = { version = "1", features = ["derive"] }
 serde_json  = "1"
 tokio       = { version = "1", features = ["full"] }
-axum        = { version = "0.8", features = ["ws"] }
+axum        = { version = "0.8", features = ["ws", "multipart"] }
 tower       = { version = "0.5", features = ["util", "limit"] }
 tower-http  = { version = "0.7", features = ["fs", "trace", "timeout"] }
 tracing     = "0.1"

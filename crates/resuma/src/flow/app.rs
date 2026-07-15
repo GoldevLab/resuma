@@ -79,6 +79,13 @@ impl FlowServeOptions {
         }
     }
 
+    /// Enable [`CspConfig::webgpu`] — `blob:` workers/images for ClientComponents
+    /// that boot WebGPU canvases (games, planets, editors).
+    pub fn with_webgpu_csp(mut self) -> Self {
+        self.security.csp = crate::server::CspConfig::webgpu();
+        self
+    }
+
     fn addr_from_env() -> SocketAddr {
         crate::server::listen::listen_addr_from_env()
     }
@@ -493,14 +500,15 @@ impl FlowApp {
 
         for asset in public_assets {
             let path = asset.url_path.clone();
-            let body = asset.body.clone();
-            let ct = asset.content_type.clone();
+            let asset = asset.clone();
             router = router.route(
                 &path,
                 get(move || {
-                    let body = body.clone();
-                    let ct = ct.clone();
-                    async move { public_asset_response(&ct, &body) }
+                    let asset = asset.clone();
+                    async move {
+                        let body = asset.bytes().unwrap_or_default();
+                        public_asset_response(&asset.content_type, &body)
+                    }
                 }),
             );
         }
