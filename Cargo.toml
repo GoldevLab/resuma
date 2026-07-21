@@ -40,7 +40,7 @@ tower       = { version = "0.5", features = ["util", "limit"] }
 tower-http  = { version = "0.7", features = ["fs", "trace", "timeout"] }
 tracing     = "0.1"
 tracing-subscriber = "0.3"
-syn         = { version = "2", features = ["full", "extra-traits", "visit"] }
+syn         = { version = "3", features = ["full", "extra-traits", "visit"] }
 quote       = "1"
 proc-macro2 = "1"
 anyhow      = "1"
