@@ -56,6 +56,8 @@ pub struct CspConfig {
     pub connect_src: Vec<String>,
     /// Extra `font-src` origins.
     pub font_src: Vec<String>,
+    /// `worker-src` allowlist (Web Workers / Worklets). Empty = omit directive.
+    pub worker_src: Vec<String>,
 }
 
 impl Default for CspConfig {
@@ -68,6 +70,10 @@ impl CspConfig {
     pub fn from_env() -> Self {
         let enabled = !env_flag_off("RESUMA_CSP")
             && (env_flag_on("RESUMA_CSP_DEV") || !crate::server::dev::dev_mode_enabled());
+        let mut worker_src = parse_csp_list_env("RESUMA_CSP_WORKER_SRC");
+        if env_flag_on("RESUMA_CSP_WEBGPU") && worker_src.is_empty() {
+            worker_src = vec!["'self'".into(), "blob:".into()];
+        }
         Self {
             enabled,
             report_only: env_flag_on("RESUMA_CSP_REPORT_ONLY"),
@@ -78,6 +84,7 @@ impl CspConfig {
             style_src: parse_csp_list_env("RESUMA_CSP_STYLE_SRC"),
             connect_src: parse_csp_list_env("RESUMA_CSP_CONNECT_SRC"),
             font_src: parse_csp_list_env("RESUMA_CSP_FONT_SRC"),
+            worker_src,
         }
     }
 
@@ -85,6 +92,28 @@ impl CspConfig {
     pub fn disabled() -> Self {
         let mut c = Self::from_env();
         c.enabled = false;
+        c
+    }
+
+    /// CSP preset for WebGPU ClientComponents (workers + blob images/textures).
+    ///
+    /// GLTF/VRM loaders create `blob:` object URLs and `fetch()` them — that needs
+    /// `connect-src … blob:` in addition to `img-src` / `worker-src`.
+    pub fn webgpu() -> Self {
+        let mut c = Self::from_env();
+        c.enabled = true;
+        if !c.worker_src.iter().any(|s| s == "'self'") {
+            c.worker_src.push("'self'".into());
+        }
+        if !c.worker_src.iter().any(|s| s == "blob:") {
+            c.worker_src.push("blob:".into());
+        }
+        if !c.img_src.iter().any(|s| s == "blob:") {
+            c.img_src.push("blob:".into());
+        }
+        if !c.connect_src.iter().any(|s| s == "blob:") {
+            c.connect_src.push("blob:".into());
+        }
         c
     }
 
@@ -143,7 +172,7 @@ impl SecurityConfig {
             body_limit_bytes: std::env::var("RESUMA_BODY_LIMIT")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(1024 * 1024),
+                .unwrap_or(10 * 1024 * 1024),
             actions_per_minute: parse_rate_limit("RESUMA_RATE_ACTIONS", 120),
             submits_per_minute: parse_rate_limit("RESUMA_RATE_SUBMITS", 60),
             hide_benchmark: production,
@@ -632,6 +661,10 @@ pub fn build_content_security_policy(nonce: Option<&str>, https: bool, csp: &Csp
     let mut connect_src = vec!["'self'"];
     connect_src.extend(csp.connect_src.iter().map(String::as_str));
     directives.push(format!("connect-src {}", connect_src.join(" ")));
+
+    if !csp.worker_src.is_empty() {
+        directives.push(format!("worker-src {}", csp.worker_src.join(" ")));
+    }
 
     if https {
         directives.push("upgrade-insecure-requests".into());

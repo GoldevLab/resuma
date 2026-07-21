@@ -1,20 +1,41 @@
 //! Serve files from a project `public/` directory at URL paths.
 //!
-//! **Security:** `public/` is for trusted static assets only (icons, fonts, robots.txt).
-//! Do not place user-uploaded content here — `.html` and `.svg` files are served with
-//! executable Content-Types and can cause stored XSS when opened directly.
+//! **Security:** `public/` is for trusted static assets only (icons, fonts, robots.txt,
+//! heightmaps). Do not place user-uploaded content here — use `POST /_resuma/upload`
+//! instead. `.html` is served as `text/plain` and `.svg` as `application/octet-stream`
+//! to reduce stored-XSS risk when opened directly.
+//!
+//! Large trees: set `RESUMA_PUBLIC_DISK=1` so files larger than 512 KiB are served
+//! from disk on each request instead of being loaded fully into RAM at startup.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use walkdir::WalkDir;
 
+/// How a public file is backed.
+#[derive(Clone)]
+pub enum PublicBody {
+    Memory(Arc<Vec<u8>>),
+    /// Absolute path read on each request (large assets).
+    Disk(PathBuf),
+}
+
 /// A file read from `public/` to register as a GET route.
 #[derive(Clone)]
 pub struct PublicAsset {
     pub url_path: String,
-    pub body: Arc<Vec<u8>>,
+    pub body: PublicBody,
     pub content_type: String,
+}
+
+impl PublicAsset {
+    pub fn bytes(&self) -> Option<Arc<Vec<u8>>> {
+        match &self.body {
+            PublicBody::Memory(b) => Some(b.clone()),
+            PublicBody::Disk(path) => std::fs::read(path).ok().map(Arc::new),
+        }
+    }
 }
 
 /// Relative paths (under `public/`) that override generated PWA SVG icons when present.
@@ -36,12 +57,28 @@ pub const PWA_ICON_CANDIDATES: &[(&str, &str, &str)] = &[
     ("icon.png", "/icons/icon-192.png", "192x192"),
 ];
 
+fn public_disk_mode() -> bool {
+    matches!(
+        std::env::var("RESUMA_PUBLIC_DISK").as_deref(),
+        Ok("1") | Ok("true") | Ok("TRUE")
+    )
+}
+
+fn inline_max_bytes() -> usize {
+    std::env::var("RESUMA_PUBLIC_INLINE_MAX")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(512 * 1024)
+}
+
 /// Walk `dir` (typically `public/`) and collect servable assets.
 pub fn collect_public_dir(dir: &Path) -> Vec<PublicAsset> {
     if !dir.is_dir() {
         return Vec::new();
     }
     let root = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+    let disk = public_disk_mode();
+    let inline_max = inline_max_bytes();
     let mut out = Vec::new();
     for entry in WalkDir::new(&root)
         .min_depth(1)
@@ -53,8 +90,6 @@ pub fn collect_public_dir(dir: &Path) -> Vec<PublicAsset> {
             continue;
         }
         let path = entry.path();
-        // Defense in depth: never serve anything that resolves outside `public/`
-        // (e.g. a symlinked parent directory pointing at /etc).
         match path.canonicalize() {
             Ok(canonical) if canonical.starts_with(&root) => {}
             _ => continue,
@@ -68,11 +103,19 @@ pub fn collect_public_dir(dir: &Path) -> Vec<PublicAsset> {
             continue;
         }
         let url_path = format!("/{}", rel_str.replace('\\', "/"));
-        let body = match std::fs::read(path) {
-            Ok(b) => Arc::new(b),
+        let meta = match std::fs::metadata(path) {
+            Ok(m) => m,
             Err(_) => continue,
         };
         let content_type = content_type_for_path(path);
+        let body = if disk && meta.len() as usize > inline_max {
+            PublicBody::Disk(path.to_path_buf())
+        } else {
+            match std::fs::read(path) {
+                Ok(b) => PublicBody::Memory(Arc::new(b)),
+                Err(_) => continue,
+            }
+        };
         out.push(PublicAsset {
             url_path,
             body,
