@@ -12,6 +12,8 @@
 //! | [`effect!`](effect) | Client-replayable side effect (rs2js) |
 //! | [`debounce!`](debounce) | Debounced client reaction |
 //! | [`#[island]`](island) | Optional heavy lazy boundary (`load = "visible"`) |
+//! | [`#[worker]`](worker) | Execution-layer async worker |
+//! | [`#[upload]`](upload) | Named multipart at `POST /_resuma/upload/:name` |
 //! | [`js!`](js) | Raw JavaScript handler escape hatch |
 
 mod component_macro;
@@ -29,6 +31,7 @@ mod rs2js;
 mod server_macro;
 mod store_macro;
 mod submit_macro;
+mod upload_macro;
 mod view_macro;
 mod worker_macro;
 
@@ -103,6 +106,19 @@ pub fn middleware(args: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn worker(args: TokenStream, input: TokenStream) -> TokenStream {
     worker_macro::expand(args.into(), input.into()).into()
+}
+
+/// `#[upload]` — registers an async multipart handler at `POST /_resuma/upload/{fn_name}`.
+///
+/// ```ignore
+/// #[upload(max_bytes = 4_000_000, mime = "image/png,image/jpeg")]
+/// async fn heightmap(file: UploadedFile) -> Result<UploadReceipt> {
+///     Ok(store_upload(file.bytes, &file.content_type)?)
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn upload(args: TokenStream, input: TokenStream) -> TokenStream {
+    upload_macro::expand(args.into(), input.into()).into()
 }
 
 /// `js!` — raw JavaScript escape hatch for event handlers.

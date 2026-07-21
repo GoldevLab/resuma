@@ -4,9 +4,10 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use once_cell::sync::Lazy;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
@@ -19,6 +20,25 @@ use super::resources::Resources;
 use super::state::StateStore;
 use super::tools;
 use super::types::{GraphId, NodeId, NodeKind};
+
+/// Min interval between progress SSE/log emissions (snapshot still updates every call).
+const PROGRESS_MIN_INTERVAL: Duration = Duration::from_millis(100);
+
+struct ProgressThrottle {
+    last_emit: Instant,
+    last_value: Option<u8>,
+}
+
+impl Default for ProgressThrottle {
+    fn default() -> Self {
+        Self {
+            last_emit: Instant::now()
+                .checked_sub(PROGRESS_MIN_INTERVAL)
+                .unwrap_or_else(Instant::now),
+            last_value: None,
+        }
+    }
+}
 
 pub type WorkerFuture = Pin<Box<dyn Future<Output = Result<Value>> + Send>>;
 pub type WorkerFn = fn(Value, WorkerContext) -> WorkerFuture;
@@ -69,6 +89,7 @@ pub struct WorkerContext {
     state: Arc<StateStore>,
     snapshot: Arc<RwLock<super::types::GraphSnapshot>>,
     cancel: CancellationToken,
+    progress_throttle: Arc<Mutex<ProgressThrottle>>,
 }
 
 impl WorkerContext {
@@ -86,6 +107,35 @@ impl WorkerContext {
             state,
             snapshot,
             cancel,
+            progress_throttle: Arc::new(Mutex::new(ProgressThrottle::default())),
+        }
+    }
+
+    /// Update snapshot progress always; emit SSE/log at most ~10 Hz (always at 0/100).
+    fn emit_progress_throttled(&self, node: &NodeId, value: u8) {
+        let value = value.min(100);
+        {
+            let mut s = self.snapshot.write();
+            s.progress = value;
+        }
+        let should_emit = {
+            let mut t = self.progress_throttle.lock();
+            let changed = t.last_value != Some(value);
+            let elapsed = t.last_emit.elapsed() >= PROGRESS_MIN_INTERVAL;
+            let milestone = value == 0 || value == 100;
+            if (changed && elapsed)
+                || (changed && milestone)
+                || (milestone && t.last_value != Some(value))
+            {
+                t.last_emit = Instant::now();
+                t.last_value = Some(value);
+                true
+            } else {
+                false
+            }
+        };
+        if should_emit {
+            self.bus.emit(emit::progress(node.clone(), value));
         }
     }
 
@@ -109,7 +159,94 @@ impl WorkerContext {
     }
 
     pub fn progress(&self, value: u8) {
-        self.emit(emit::progress(self.node_id.clone(), value));
+        self.emit_progress_throttled(&self.node_id, value);
+    }
+
+    /// Run CPU-bound work off the Tokio worker threads (`spawn_blocking`).
+    ///
+    /// Checks cooperative cancel before and after the blocking section.
+    pub async fn run_blocking<F, T>(&self, f: F) -> Result<T>
+    where
+        F: FnOnce() -> T + Send + 'static,
+        T: Send + 'static,
+    {
+        self.check_cancelled()?;
+        let cancel = self.cancel.clone();
+        let out = tokio::task::spawn_blocking(move || {
+            if cancel.is_cancelled() {
+                None
+            } else {
+                Some(f())
+            }
+        })
+        .await
+        .map_err(|e| crate::core::ResumaError::Other(format!("blocking join: {e}")))?;
+        self.check_cancelled()?;
+        out.ok_or_else(|| crate::core::ResumaError::Cancelled)
+    }
+
+    /// Like [`run_blocking`], with a progress callback (`0..=100`) safe from the blocking thread.
+    pub async fn run_blocking_with_progress<F, T>(&self, f: F) -> Result<T>
+    where
+        F: FnOnce(&dyn Fn(u8)) -> T + Send + 'static,
+        T: Send + 'static,
+    {
+        self.check_cancelled()?;
+        let cancel = self.cancel.clone();
+        let bus = self.bus.clone();
+        let node = self.node_id.clone();
+        let snap = self.snapshot.clone();
+        let throttle = self.progress_throttle.clone();
+        let out = tokio::task::spawn_blocking(move || {
+            if cancel.is_cancelled() {
+                return None;
+            }
+            let progress = |value: u8| {
+                let value = value.min(100);
+                {
+                    let mut s = snap.write();
+                    s.progress = value;
+                }
+                let should_emit = {
+                    let mut t = throttle.lock();
+                    let changed = t.last_value != Some(value);
+                    let elapsed = t.last_emit.elapsed() >= PROGRESS_MIN_INTERVAL;
+                    let milestone = value == 0 || value == 100;
+                    if (changed && elapsed) || (changed && milestone) {
+                        t.last_emit = Instant::now();
+                        t.last_value = Some(value);
+                        true
+                    } else {
+                        false
+                    }
+                };
+                if should_emit {
+                    bus.emit(emit::progress(node.clone(), value));
+                }
+            };
+            Some(f(&progress))
+        })
+        .await
+        .map_err(|e| crate::core::ResumaError::Other(format!("blocking join: {e}")))?;
+        self.check_cancelled()?;
+        out.ok_or_else(|| crate::core::ResumaError::Cancelled)
+    }
+
+    /// Persist a large result outside durable graph JSON (bound to this graph).
+    pub fn artifact_put(
+        &self,
+        bytes: Vec<u8>,
+        content_type: &str,
+    ) -> Result<super::artifacts::ArtifactRef> {
+        super::artifacts::put_bound(bytes, content_type, Some(&self.graph_id))
+    }
+
+    /// Persist JSON as an artifact (`application/json`), bound to this graph.
+    pub fn artifact_json<T: serde::Serialize>(
+        &self,
+        value: &T,
+    ) -> Result<super::artifacts::ArtifactRef> {
+        super::artifacts::put_json_bound(value, &self.graph_id)
     }
 
     pub async fn tool(&self, name: &str, args: Value) -> Result<Value> {

@@ -23,7 +23,7 @@ impl Parse for WorkerAttrs {
             } else if key == "resources" {
                 resources = Some(input.parse()?);
             } else {
-                return Err(syn::Error::new(key.span(), "unknown #[worker] attribute; use intent = \"...\" and optional resources = \"auto\""));
+                return Err(syn::Error::new(key.span(), "unknown #[worker] attribute; use intent = \"...\" and optional resources = \"auto\" | \"extended\" | \"none\" | \"<secs>\""));
             }
             if input.peek(Token![,]) {
                 input.parse::<Token![,]>()?;
@@ -85,10 +85,29 @@ pub fn expand(args: TokenStream, input: TokenStream) -> TokenStream {
     let input_ident = &call_idents[0];
     let intent_str = attrs.intent.value();
     let resources_expr = match &attrs.resources {
-        Some(lit) if lit.value() == "auto" => quote!(::resuma::exec::Resources::auto()),
         Some(lit) => {
-            return syn::Error::new(lit.span(), "resources must be \"auto\" or omitted")
-                .to_compile_error();
+            let v = lit.value();
+            match v.as_str() {
+                "auto" => quote!(::resuma::exec::Resources::auto()),
+                "extended" => quote!(::resuma::exec::Resources::extended()),
+                "none" | "unlimited" => quote!(::resuma::exec::Resources::unlimited()),
+                other => {
+                    // Allow numeric strings: resources = "600" → 600s wall timeout.
+                    if other.parse::<u64>().is_ok() {
+                        let s = other.to_string();
+                        quote!(::resuma::exec::Resources {
+                            timeout: ::resuma::exec::ResourceLevel::Named(#s.into()),
+                            ..::resuma::exec::Resources::auto()
+                        })
+                    } else {
+                        return syn::Error::new(
+                            lit.span(),
+                            "resources must be \"auto\" | \"extended\" | \"none\" | \"<secs>\"",
+                        )
+                        .to_compile_error();
+                    }
+                }
+            }
         }
         None => quote!(::resuma::exec::Resources::auto()),
     };

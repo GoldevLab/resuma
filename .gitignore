@@ -1,5 +1,4 @@
 target/
-Cargo.lock
 node_modules/
 .npm-cache/
 .playwright-browsers/
@@ -13,3 +12,5 @@ dist/
 .env
 .env.*
 !.env.example
+
+.cursor/

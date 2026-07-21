@@ -71,7 +71,7 @@ pub mod cli;
 
 pub use resuma_macros::{
     component, computed, data, debounce, effect, island, js, layout, load, middleware, server,
-    submit, view, worker, Store,
+    submit, upload, view, worker, Store,
 };
 
 pub use crate::client::{
@@ -100,23 +100,25 @@ pub use crate::ssr::seo_kit::{AiCrawlerPolicy, MetaTag, SeoKit};
 pub use crate::ssr::{render_to_stream, render_to_string, render_view, PageOptions};
 
 pub use crate::flow::{
-    apply_layouts, build_query_href, collect_public_dir, current_location_href, current_request,
-    discover_pages, encode_submit_result, error_page, extract_redirect, flash_message, form,
-    invalidate_href, invalidate_href_now, invalidate_link, load_boundary, loader_refresh_form,
-    loader_refresh_input, not_found_page, query_nav_link, redirect, redirect_with_flash,
-    register_layout, register_loader, register_loader_cache, register_middleware,
-    register_stream_chunk, register_stream_loader, register_submit, theme_into_pwa, try_use_load,
-    try_use_load_value, use_load, with_request, DiscoveredPage, FlowApp, FlowError, FlowExtensions,
-    FlowPageRegistry, FlowPwaConfig, FlowServeOptions, FromFlowRequest, LoadValue, LoaderError,
-    Path, PublicAsset, PwaShortcut, Query, Redirect, SubmitError, SubmitValue,
+    apply_layouts, build_query_href, clear_cookie, collect_public_dir, cookie_value,
+    current_location_href, current_request, discover_pages, encode_submit_result, error_page,
+    extract_redirect, flash_message, form, invalidate_href, invalidate_href_now, invalidate_link,
+    load_boundary, loader_refresh_form, loader_refresh_input, not_found_page, query_nav_link,
+    redirect, redirect_with_flash, register_layout, register_loader, register_loader_cache,
+    register_middleware, register_stream_chunk, register_stream_loader, register_submit,
+    set_cookie, theme_into_pwa, try_use_load, try_use_load_value, use_load, with_request,
+    CookieOptions, DiscoveredPage, FlowApp, FlowError, FlowExtensions, FlowPageRegistry,
+    FlowPwaConfig, FlowServeOptions, FromFlowRequest, LoadValue, LoaderError, Path, PublicAsset,
+    PwaShortcut, Query, Redirect, SameSite, SubmitError, SubmitValue,
 };
 
 pub use crate::exec::{
-    attach_exec_routes, dispatch_tool, durable_get, durable_set, enqueue, init_exec,
-    plan as plan_execution, queue_stats, register_tool, register_worker, resolve_resources,
+    artifact_get, artifact_put, artifact_put_json, attach_exec_routes, dispatch_tool, durable_get,
+    durable_set, enqueue, init_exec, plan as plan_execution, queue_stats, register_tool,
+    register_upload, register_worker, resolve_resources, store_upload, take_upload, ArtifactRef,
     ExecutionRecord, FlowEngine, GraphId, GraphSnapshot, PlannerHints, QueueMessage, QueueStats,
-    ResourceProfile, Resources, RuntimeChoice, RuntimeTarget, StartWorkerResponse, WorkerContext,
-    WorkerEvent, WorkerMeta, WorkerRegistry,
+    ResourceProfile, Resources, RuntimeChoice, RuntimeTarget, StartWorkerResponse, UploadMeta,
+    UploadReceipt, UploadedFile, WorkerContext, WorkerEvent, WorkerMeta, WorkerRegistry,
 };
 
 /// CLI entry point (`cargo install resuma`).
@@ -148,21 +150,22 @@ pub mod prelude {
     //! For low-level types ([`RenderContext`](crate::RenderContext), [`ResumePayload`](crate::ResumePayload)),
     //! import from [`crate::core`].
     pub use super::{
-        build_query_href, client_component, client_script_url, combine_js, component, computed,
-        configure_security, current_request, data, debounce, effect, error_boundary, error_page,
-        extract_redirect, flash_message, for_signal, form, invalidate_href, invalidate_href_now,
-        invalidate_link, island, js, layout, load, load_boundary, loader_refresh_form,
-        loader_refresh_input, match_signal, middleware, nav_link, not_found_page, portal,
-        provide_context, provide_theme, push_slots, query_nav_link, redirect, redirect_with_flash,
-        render_to_string, render_view, resolve_slot, server, set_action_middleware, show, signal,
-        stream_slot, submit, theme_css_vars, try_use_context, try_use_load, try_use_load_value,
-        use_computed, use_computed_with_js, use_context, use_debounce, use_effect, use_load,
-        use_signal, use_store, use_task, use_theme, use_visible_task,
-        use_visible_task_with_captures, view, visible_task, with_view_transition, AttrValue, Child,
-        ClientComponent, Component, Computed, CspConfig, Effect, FlowApp, FlowError,
-        FlowPageRegistry, FlowPwaConfig, FlowRequest, FlowServeOptions, FromFlowRequest, IntoView,
-        LoadValue, LoaderError, PageOptions, Path, PublicAsset, PwaShortcut, Query, ReadSignal,
-        Redirect, Result, ResumaApp, ResumaError, SecurityConfig, ServeOptions, Signal,
+        build_query_href, clear_cookie, client_component, client_script_url, combine_js, component,
+        computed, configure_security, cookie_value, current_request, data, debounce, effect,
+        error_boundary, error_page, extract_redirect, flash_message, for_signal, form,
+        invalidate_href, invalidate_href_now, invalidate_link, island, js, layout, load,
+        load_boundary, loader_refresh_form, loader_refresh_input, match_signal, middleware,
+        nav_link, not_found_page, portal, provide_context, provide_theme, push_slots,
+        query_nav_link, redirect, redirect_with_flash, render_to_string, render_view, resolve_slot,
+        server, set_action_middleware, set_cookie, show, signal, stream_slot, submit,
+        theme_css_vars, try_use_context, try_use_load, try_use_load_value, upload, use_computed,
+        use_computed_with_js, use_context, use_debounce, use_effect, use_load, use_signal,
+        use_store, use_task, use_theme, use_visible_task, use_visible_task_with_captures, view,
+        visible_task, with_view_transition, worker, AttrValue, Child, ClientComponent, Component,
+        Computed, CookieOptions, CspConfig, Effect, FlowApp, FlowError, FlowPageRegistry,
+        FlowPwaConfig, FlowRequest, FlowServeOptions, FromFlowRequest, IntoView, LoadValue,
+        LoaderError, PageOptions, Path, PublicAsset, PwaShortcut, Query, ReadSignal, Redirect,
+        Result, ResumaApp, ResumaError, SameSite, SecurityConfig, ServeOptions, Signal,
         SlottedChild, Store, SubmitError, Theme, View, WriteSignal, CLIENT_SCRIPT_PREFIX,
         CSRF_FIELD, CSRF_HEADER,
     };

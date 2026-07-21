@@ -388,6 +388,101 @@ async fn submit_redirect_json_hint() {
     assert_eq!(json["redirect"], "/items?created=1");
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn submit_redirect_sets_httponly_cookie() {
+    fn login_submit(
+        _data: serde_json::Value,
+        _req: FlowRequest,
+    ) -> Pin<Box<dyn std::future::Future<Output = resuma::Result<serde_json::Value>> + Send>> {
+        Box::pin(async {
+            let r = Redirect::to("/dashboard").with_session_cookie("sid", "tok-1", 3600);
+            Ok(serde_json::to_value(r).unwrap())
+        })
+    }
+    resuma::register_submit("ops_flow_login_cookie", login_submit);
+
+    let app = FlowApp::new()
+        .page("/", |_req| view! { <main>"home"</main> })
+        .into_router(FlowServeOptions::default());
+
+    let res = app
+        .oneshot(
+            Request::post("/_resuma/submit/ops_flow_login_cookie")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .header("host", "localhost")
+                .header("origin", "http://localhost")
+                .header("cookie", format!("__resuma-csrf={TEST_CSRF}"))
+                .header("x-resuma-csrf", TEST_CSRF)
+                .extension(test_connect_info())
+                .body(Body::from(""))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        res.headers().get("location").and_then(|v| v.to_str().ok()),
+        Some("/dashboard")
+    );
+    let set_cookie = res
+        .headers()
+        .get_all("set-cookie")
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .find(|c| c.starts_with("sid="))
+        .expect("sid Set-Cookie");
+    assert!(set_cookie.contains("tok-1"));
+    assert!(set_cookie.contains("HttpOnly"));
+    assert!(!set_cookie.contains("__resuma_cookies"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn submit_json_ignores_app_redirect_field() {
+    fn auth_payload(
+        _data: serde_json::Value,
+        _req: FlowRequest,
+    ) -> Pin<Box<dyn std::future::Future<Output = resuma::Result<serde_json::Value>> + Send>> {
+        Box::pin(async {
+            Ok(serde_json::json!({
+                "token": "abc",
+                "redirect": "/dashboard"
+            }))
+        })
+    }
+    resuma::register_submit("ops_flow_auth_footgun", auth_payload);
+
+    let app = FlowApp::new()
+        .page("/", |_req| view! { <main>"home"</main> })
+        .into_router(FlowServeOptions::default());
+
+    let res = app
+        .oneshot(
+            Request::post("/_resuma/submit/ops_flow_auth_footgun")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .header("accept", "application/json")
+                .header("host", "localhost")
+                .header("origin", "http://localhost")
+                .header("cookie", format!("__resuma-csrf={TEST_CSRF}"))
+                .header("x-resuma-csrf", TEST_CSRF)
+                .extension(test_connect_info())
+                .body(Body::from(""))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["ok"], serde_json::Value::Bool(true));
+    assert!(json.get("redirect").is_none() || json["redirect"].is_null());
+    assert_eq!(json["value"]["token"], "abc");
+    assert_eq!(json["value"]["redirect"], "/dashboard");
+}
+
 #[test]
 fn render_view_snapshot_is_stable() {
     use resuma::core::context::{with_context, RenderContext, RenderMode};

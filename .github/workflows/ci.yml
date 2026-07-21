@@ -24,6 +24,36 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
 
+      - name: Workspace versions aligned
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+          root = pathlib.Path("Cargo.toml").read_text()
+          block = re.search(r"\[workspace\.package\](.*?)\n\[", root, re.S)
+          if not block:
+              sys.exit("workspace.package missing")
+          m = re.search(r'version = "([^"]+)"', block.group(1))
+          if not m:
+              sys.exit("workspace version not found")
+          ver = m.group(1)
+          bad = []
+          for name, v in re.findall(
+              r"(resuma(?:-macros|-flow)?)\s*=\s*\{[^}]*version\s*=\s*\"([^\"]+)\"",
+              root,
+          ):
+              if v != ver:
+                  bad.append(f"workspace.dependencies {name}={v} != {ver}")
+          flow = pathlib.Path("crates/resuma-flow/Cargo.toml").read_text()
+          if not re.search(r"resuma\s*=\s*\{\s*workspace\s*=\s*true\s*\}", flow):
+              bad.append("crates/resuma-flow must use resuma = { workspace = true }")
+          if not pathlib.Path("Cargo.lock").is_file():
+              bad.append("Cargo.lock must be committed")
+          if bad:
+              print("\n".join(bad))
+              sys.exit(1)
+          print(f"workspace version {ver} ok")
+          PY
+
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
@@ -44,6 +74,14 @@ jobs:
           npm ci
           npm run build
           npm run size
+
+      - name: Assets match runtime dist
+        run: |
+          for f in loader.js core.js flow.js runtime.js; do
+            cmp -s "runtime/dist/$f" "crates/resuma/assets/$f" \
+              || { echo "Mismatch: $f — run npm run build in runtime/ and copy dist → crates/resuma/assets/"; exit 1; }
+          done
+          echo "assets in sync with runtime/dist"
 
       - name: Install E2E browser
         run: |

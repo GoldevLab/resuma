@@ -243,6 +243,8 @@ function formatEvent(ev: WorkerEvent): string {
       return `[result] ${JSON.stringify((ev as { data: unknown }).data)}`;
     case "graph_done":
       return `[graph] complete`;
+    case "resync":
+      return `[resync] missed ${(ev as { skipped?: number }).skipped ?? "?"} events — replaying`;
     default:
       return `[${t}]`;
   }
@@ -450,19 +452,30 @@ function subscribeGraphEvents(
     const url = withGraphToken(`/_resuma/graph/${encodeURIComponent(graphId)}/events`, token);
     const es = new EventSource(url);
     hub!.es = es;
+    const fanout = (ev: WorkerEvent) => {
+      for (const fn of hub!.listeners) fn(ev);
+      if (ev.type === "graph_done") {
+        hub!.terminal = true;
+        es.close();
+        hub!.es = null;
+      }
+    };
     es.onmessage = (msg) => {
       try {
-        const ev = JSON.parse(msg.data) as WorkerEvent;
-        for (const fn of hub!.listeners) fn(ev);
-        if (ev.type === "graph_done") {
-          hub!.terminal = true;
-          es.close();
-          hub!.es = null;
-        }
+        fanout(JSON.parse(msg.data) as WorkerEvent);
       } catch {
         /* ignore */
       }
     };
+    // Named SSE event when the broadcast bus lagged — clients must re-fetch snapshot/replay.
+    es.addEventListener("resync", (msg) => {
+      try {
+        const data = JSON.parse((msg as MessageEvent).data) as WorkerEvent;
+        fanout({ ...data, type: "resync" });
+      } catch {
+        fanout({ type: "resync" });
+      }
+    });
     es.onerror = () => {
       es.close();
       hub!.es = null;
@@ -627,6 +640,10 @@ function mountFlowGraph(el: HTMLElement): void {
 
     closeSse = subscribeGraphEvents(graphId, token, (ev) => {
       if (aborted) return;
+      if (ev.type === "resync") {
+        void refreshGraph(el, graphId, token);
+        return;
+      }
       if (ev.type === "progress" || ev.type === "log" || ev.type === "ai_thinking") return;
       if (
         ev.type === "graph_done" ||
@@ -790,6 +807,23 @@ function mountEventStream(el: HTMLElement): void {
 
     closeSse = subscribeGraphEvents(graphId, token, (ev) => {
       if (!isActive() || aborted) return;
+      if (ev.type === "resync") {
+        void (async () => {
+          try {
+            const res = await fetch(replayPath, { headers, credentials: "same-origin" });
+            if (!isActive() || aborted || !res.ok) return;
+            const events = (await res.json()) as WorkerEvent[];
+            list.innerHTML = "";
+            seen.clear();
+            for (const e of events) appendEvent(e, false);
+            scrollStreamToEnd(viewport, false);
+            append("[resync] replayed missed events", true);
+          } catch {
+            /* ignore */
+          }
+        })();
+        return;
+      }
       appendEvent(ev);
     });
   })();
@@ -920,7 +954,8 @@ function mountWorkerPanel(el: HTMLElement): void {
         ev.type === "node_start" ||
         ev.type === "node_done" ||
         ev.type === "node_failed" ||
-        ev.type === "progress"
+        ev.type === "progress" ||
+        ev.type === "resync"
       ) {
         scheduleControlSync();
       }
@@ -990,7 +1025,8 @@ function mountWorkerPanel(el: HTMLElement): void {
           ev.type === "node_start" ||
           ev.type === "node_done" ||
           ev.type === "node_failed" ||
-          ev.type === "progress"
+          ev.type === "progress" ||
+          ev.type === "resync"
         ) {
           scheduleControlSync();
         }

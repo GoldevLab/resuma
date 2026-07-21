@@ -1,6 +1,6 @@
 # Resuma roadmap — production readiness
 
-**Current release: v1.0.0 (Stable)** — see [STABILITY.md](docs/STABILITY.md).
+**Current release: v1.2.16 (Stable)** — see [STABILITY.md](docs/STABILITY.md).
 
 ---
 
@@ -58,6 +58,19 @@
 - [x] Multi-process rate limiting (disk backend; Redis removed)
 - [ ] Per-action rate limit buckets
 
+### Long-running jobs & blobs (ORBIS-driven)
+- [x] Configurable worker wall-clock timeout (`extended` / `none` / secs / env)
+- [x] `ctx.run_blocking` + progress on `GraphSnapshot` / `/status`
+- [x] Artifact store for large worker results (not inline durable JSON)
+- [x] Multipart upload API separate from trusted `public/`
+- [x] Separate action vs exec JSON size limits
+- [x] CSP WebGPU preset (`worker-src`)
+- [x] Optional disk-backed large `public/` assets (`RESUMA_PUBLIC_DISK`)
+- [x] First-class `#[upload]` macro (`POST /_resuma/upload/{name}`)
+- [x] Artifact auth scoped to graph token (bound via `ctx.artifact_put`)
+- [x] SSE lag → named `resync` event + client replay/status refresh
+- [x] Progress emission throttle (~10 Hz; snapshot always updates)
+
 ---
 
 ## Explicitly out of scope
@@ -69,4 +82,4 @@
 
 ---
 
-*Last updated: 2026-06-16 (post-1.0 minors)*
+*Last updated: 2026-07-21 (v1.2.16: artifacts, uploads, cookies, WebGPU CSP, Cargo.lock)*

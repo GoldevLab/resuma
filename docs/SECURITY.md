@@ -10,7 +10,7 @@ Resuma ships with **secure defaults** comparable to Express + Helmet + rate limi
 | **CSRF** | Cryptographically random tokens; double-submit cookie + `X-Resuma-CSRF` header on `POST /_resuma/action/*` and `POST /_resuma/submit/*` |
 | **Origin check** | Rejects cross-origin POST when `Origin` / `Referer` do not match `Host` |
 | **Rate limiting** | Per-IP sliding window on actions and submits |
-| **Body size limit** | 1 MB default on POST bodies (Axum `DefaultBodyLimit`) |
+| **Body size limit** | 10 MiB default on POST bodies (Axum `DefaultBodyLimit`) |
 | **SSR escaping** | HTML text/attributes escaped; JSON state payload sanitized against `</script>` breakout |
 | **JSON-LD** | Inline `application/ld+json` sanitized the same way as the resumability payload |
 | **Client components** | `ClientComponent` ids restricted to `[a-zA-Z0-9_-]`; attributes escaped |
@@ -27,7 +27,7 @@ Resuma ships with **secure defaults** comparable to Express + Helmet + rate limi
 | `RESUMA_TRUST_PROXY=1` | off | Trust Fly/nginx `X-Forwarded-*` for HTTPS + client IP (only behind a proxy that overwrites forwarding headers) |
 | `RESUMA_CSRF=0` | on | Disable CSRF (not recommended) |
 | `RESUMA_ORIGIN_CHECK=0` | on | Disable Origin/Referer validation |
-| `RESUMA_BODY_LIMIT` | `1048576` | Max POST body bytes |
+| `RESUMA_BODY_LIMIT` | `10485760` (10 MiB) | Max POST body bytes (actions + multipart) |
 | `RESUMA_RATE_ACTIONS` | `120` | Action RPC calls per IP per minute |
 | `RESUMA_RATE_SUBMITS` | `60` | Form submits per IP per minute |
 | `RESUMA_RATE_BACKEND` | `memory` (dev), `disk` (prod) | `memory` or `disk` |
@@ -35,10 +35,15 @@ Resuma ships with **secure defaults** comparable to Express + Helmet + rate limi
 | `RESUMA_EXEC_PUBLIC` | off | Opt-in unauthenticated exec routes (dev only; ignored in production) |
 | `RESUMA_EXEC_ENABLED` | off | Mount `/_resuma/*` exec routes even without registered workers |
 | `RESUMA_RATE_EXEC_WORKERS` | `30` | Worker/queue POSTs per IP per minute |
-| `RESUMA_RATE_EXEC_GRAPH` | `180` | Graph read/SSE per IP per minute |
+| `RESUMA_RATE_EXEC_GRAPH` | `600` | Graph read/SSE/status per IP per minute |
 | `RESUMA_RATE_EXEC_CONTROL` | `60` | Pause/resume/cancel per IP per minute |
 | `RESUMA_EXEC_MAX_INPUT` | `524288` | Max worker/queue JSON input bytes |
+| `RESUMA_ACTION_MAX_INPUT` | `2097152` | Max `#[server]` action JSON args bytes |
 | `RESUMA_EXEC_MAX_DEPTH` | `32` | Max JSON nesting depth for exec input |
+| `RESUMA_WORKER_TIMEOUT_SECS` | `30` | Default worker wall-clock timeout (`0` = none) |
+| `RESUMA_UPLOAD_MAX_BYTES` | `8388608` | Max multipart upload size |
+| `RESUMA_PUBLIC_DISK` | off | Serve large `public/` files from disk |
+| `RESUMA_PUBLIC_INLINE_MAX` | `524288` | Inline threshold when `PUBLIC_DISK=1` |
 | `RESUMA_FETCH_ALLOWLIST` | — | Optional comma-separated host allowlist for `fetch` tool |
 | `RESUMA_FETCH_MAX_BYTES` | `5242880` | Max response body from `fetch` tool (5 MB) |
 | `RESUMA_METRICS_PUBLIC` | off | Allow `GET /_resuma/metrics` without API key (VPC only) |
@@ -49,6 +54,8 @@ Resuma ships with **secure defaults** comparable to Express + Helmet + rate limi
 | `RESUMA_CSP_DEV` | off | With `RESUMA_DEV=1`, CSP is off unless you set this to `1` (Qwik-style dev skip) |
 | `RESUMA_CSP_REPORT_ONLY` | off | Emit `Content-Security-Policy-Report-Only` |
 | `RESUMA_CSP_STRICT_DYNAMIC` | on | `'strict-dynamic'` on `script-src` when a nonce is present |
+| `RESUMA_CSP_WEBGPU` | off | Add `worker-src 'self' blob:` for WebGPU widgets |
+| `RESUMA_CSP_WORKER_SRC` | — | Explicit `worker-src` allowlist |
 | `RESUMA_CSP_IMG_SRC` | — | Space/comma-separated extra `img-src` hosts |
 | `RESUMA_CSP_SCRIPT_SRC` | — | Extra `script-src` hosts |
 | `RESUMA_CSP_STYLE_SRC` | — | Extra `style-src` hosts |
@@ -94,19 +101,36 @@ Validate policies: [Google CSP Evaluator](https://csp-evaluator.withgoogle.com/)
 
 ## Authentication
 
-Resuma does not bundle auth — use `#[middleware]` and attach session context to `FlowRequest`:
+Resuma does not bundle a full auth product — use `#[middleware]` and attach session
+context to `FlowRequest`. Prefer **HttpOnly session cookies** set from the server:
 
 ```rust
+use resuma::prelude::*;
+
+#[submit]
+async fn login(form: LoginForm) -> Result<Redirect, SubmitError> {
+    let token = create_session(&form).await?;
+    Ok(Redirect::to("/dashboard").with_session_cookie("session", &token, 60 * 60 * 24 * 30))
+}
+
 #[middleware]
-async fn require_auth(mut req: FlowRequest) -> resuma::Result<FlowRequest> {
-    if req.header("authorization").is_none() {
-        return Err(resuma::ResumaError::Unauthorized);
+async fn auth_session(mut req: FlowRequest) -> resuma::Result<FlowRequest> {
+    if let Some(raw) = req.header("cookie") {
+        if let Some(token) = cookie_value(raw, "session") {
+            // load user, then:
+            req.set_extension("authenticated", serde_json::json!(true));
+            req.set_extension("user_id", serde_json::json!("user-123"));
+        }
     }
-    req.set_extension("authenticated", serde_json::json!(true));
-    req.set_extension("user_id", serde_json::json!("user-123"));
     Ok(req)
 }
 ```
+
+Helpers: `set_cookie`, `clear_cookie`, `cookie_value`, `CookieOptions`.
+`Redirect::with_cookie` / `with_session_cookie` attach `Set-Cookie` on both JSON
+submits and no-JS 303 PRG responses. Do **not** put a `redirect` field on arbitrary
+JSON payloads (e.g. `{ token, redirect }`) — only typed `Redirect` (or a sole
+`{"redirect":"/…"}` legacy shape) triggers navigation.
 
 Handlers can read `req.is_authenticated()`, `req.user_id()`, and `req.has_role("admin")`.
 
@@ -130,10 +154,13 @@ Override with `RESUMA_RATE_BACKEND=memory|disk`. Tune exec limits with `RESUMA_R
 
 ## Static assets (`public/`)
 
-Files under `public/` are read at startup and served with Content-Types matching their
-extension (`.html` → `text/html`, `.svg` → `image/svg+xml`). **Do not store user uploads
-in `public/`** — malicious HTML/SVG served directly can execute scripts in the browser.
-Use a separate storage bucket or authenticated download route for untrusted content.
+Files under `public/` are indexed at startup. By default bodies are loaded into RAM;
+set **`RESUMA_PUBLIC_DISK=1`** so files larger than **`RESUMA_PUBLIC_INLINE_MAX`**
+(default 512 KiB) are read from disk on each request.
+
+Content-Types are hardened: `.html` → `text/plain`, `.svg` → `application/octet-stream`
+(not executable document types). **Do not store user uploads in `public/`** — use
+`POST /_resuma/upload` (multipart field `file`) and serve via `GET /_resuma/uploads/{id}`.
 
 ## Dynamic route params
 
@@ -157,8 +184,12 @@ require `RESUMA_DEV=1`.
 |---------|----------------|
 | **API key** | `RESUMA_EXEC_API_KEY` — required by default for worker/queue/scheduler/webhook admin routes |
 | **Graph token** | Per-execution scoped token returned in `StartWorkerResponse.access_token`; pass to `flow_graph_auth(..., Some(token))` for SSE/UI |
-| **Rate limits** | Separate buckets for workers, graph reads, and controls |
-| **Input limits** | Max JSON size + nesting depth on worker/queue bodies |
+| **Rate limits** | Separate buckets for workers, graph reads (default 600/min), and controls |
+| **Input limits** | Exec: `RESUMA_EXEC_MAX_INPUT` (512 KiB). Actions: `RESUMA_ACTION_MAX_INPUT` (2 MiB). Body: `RESUMA_BODY_LIMIT` (10 MiB) |
+| **Worker timeout** | Default 30s; `#[worker(resources = "extended")]` → 300s; `"none"` → unlimited; env `RESUMA_WORKER_TIMEOUT_SECS` |
+| **Artifacts** | `ctx.artifact_put` binds to graph id; `GET /_resuma/artifact/{id}?token=` requires that graph token (or API key). Unbound `artifact_put` stays capability-URL |
+| **Uploads** | `POST /_resuma/upload` or `#[upload]` → `POST /_resuma/upload/{name}`; max `RESUMA_UPLOAD_MAX_BYTES` (8 MiB) unless overridden per-macro |
+| **SSE lag** | Broadcast lag emits named `resync` event; Flow UI refetches replay/status |
 | **SSRF guard** | `fetch` tool blocks private IPs, localhost, metadata hosts; optional `RESUMA_FETCH_ALLOWLIST` |
 | **DNS rebinding** | Outbound `fetch`/webhooks resolve DNS and pin connections to validated IPs |
 | **Redirect safety** | Root-relative only; rejects encoded `%2f`, `%5c`, and post-decode `//` open redirects |

@@ -152,6 +152,9 @@ pub struct GraphSnapshot {
     pub nodes: Vec<GraphNodeSnapshot>,
     pub edges: Vec<GraphEdge>,
     pub status: GraphStatus,
+    /// Latest worker progress 0..=100 (updated from `ctx.progress`).
+    #[serde(default)]
+    pub progress: u8,
 }
 
 /// Domain events emitted during worker execution (SSE + replay).

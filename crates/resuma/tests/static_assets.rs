@@ -54,6 +54,50 @@ async fn flow_serves_public_directory_files() {
 }
 
 #[tokio::test]
+async fn flow_serves_disk_backed_public_file() {
+    let dir = std::env::temp_dir().join(format!("resuma-public-disk-http-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let payload = vec![7u8; 2048];
+    std::fs::write(dir.join("chunk.bin"), &payload).unwrap();
+
+    let prev_disk = std::env::var_os("RESUMA_PUBLIC_DISK");
+    let prev_max = std::env::var_os("RESUMA_PUBLIC_INLINE_MAX");
+    std::env::set_var("RESUMA_PUBLIC_DISK", "1");
+    std::env::set_var("RESUMA_PUBLIC_INLINE_MAX", "1024");
+
+    let app = FlowApp::new()
+        .with_public_dir(&dir)
+        .into_router(FlowServeOptions {
+            addr: "127.0.0.1:0".parse().unwrap(),
+            security: SecurityConfig {
+                production: false,
+                ..SecurityConfig::default()
+            },
+        });
+
+    let res = app
+        .oneshot(Request::get("/chunk.bin").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(body.as_ref(), payload.as_slice());
+
+    match prev_disk {
+        Some(v) => std::env::set_var("RESUMA_PUBLIC_DISK", v),
+        None => std::env::remove_var("RESUMA_PUBLIC_DISK"),
+    }
+    match prev_max {
+        Some(v) => std::env::set_var("RESUMA_PUBLIC_INLINE_MAX", v),
+        None => std::env::remove_var("RESUMA_PUBLIC_INLINE_MAX"),
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
 async fn flow_serves_static_and_client_assets() {
     let app = FlowApp::new()
         .static_asset("/static/app.js", DEMO_JS, "application/javascript")

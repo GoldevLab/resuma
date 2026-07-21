@@ -6,6 +6,57 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.16] - 2026-07-21
+
+### Added
+
+- **Worker timeouts** — `#[worker(resources = "extended" | "none" | "600")]`,
+  `Resources::extended()` / `unlimited()`, env `RESUMA_WORKER_TIMEOUT_SECS`.
+  `timeout_secs = 0` disables wall-clock timeout (cooperative cancel only).
+- **`WorkerContext::run_blocking` / `run_blocking_with_progress`** — CPU work on
+  `spawn_blocking` without starving Tokio; progress updates the graph snapshot.
+- **`GraphSnapshot.progress`** + **`GET /_resuma/graph/{id}/status`** — poll progress
+  without replaying SSE event history.
+- **Artifact store** — `ctx.artifact_put` / `artifact_json` → `ArtifactRef`;
+  `GET /_resuma/artifact/{id}` serves large results outside durable graph JSON.
+- **Multipart uploads** — `POST /_resuma/upload` (field `file`) → `UploadReceipt`;
+  `GET /_resuma/uploads/{id}`; env `RESUMA_UPLOAD_MAX_BYTES` (default 8 MiB).
+- **`#[upload]`** — named handlers at `POST /_resuma/upload/{name}` with optional
+  `max_bytes` / `mime` allow-list (`UploadedFile` arg).
+- **Action vs exec input limits** — `validate_action_input` + `RESUMA_ACTION_MAX_INPUT`
+  (default 2 MiB); exec stays at `RESUMA_EXEC_MAX_INPUT` (512 KiB).
+- **CSP WebGPU** — `CspConfig::webgpu()`, `FlowServeOptions::with_webgpu_csp()`,
+  `RESUMA_CSP_WEBGPU=1`, `worker-src` directive.
+- **`RESUMA_PUBLIC_DISK=1`** — large `public/` files served from disk (not full RAM load);
+  `PublicAsset::bytes()` for memory or disk-backed bodies.
+- **`Redirect::with_cookie` / `with_session_cookie` / `clear_cookie`** — attach `Set-Cookie`
+  on `#[submit]` / `#[server]` PRG (303) and JSON responses so session cookies can be
+  HttpOnly without `document.cookie`.
+- **`set_cookie` / `clear_cookie` / `cookie_value` / `CookieOptions`** — public cookie helpers
+  for session middleware.
+- **Packaging** — track workspace `Cargo.lock`; CI asserts version alignment and that
+  `crates/resuma/assets/*.js` match `runtime/dist` after build.
+
+### Changed
+
+- **Artifacts from workers** are bound to the graph id; `GET /_resuma/artifact/{id}` requires
+  that graph's access token (or strict API key). Unbound `artifact_put` (capability URL) remains.
+- Progress SSE/log events from `ctx.progress` are throttled (~100 ms); `GraphSnapshot.progress`
+  still updates on every call.
+- Default `RESUMA_BODY_LIMIT` is **10 MiB** (was 1 MiB) so multipart uploads work out of the box.
+- Default `RESUMA_RATE_EXEC_GRAPH` is **600/min** (was 180) for long-job status polling.
+- Runtime cache-bust query `?v=` bumped to **1.2.16**.
+
+### Fixed
+
+- **SSE lag** — broadcast `Lagged` now emits a named `resync` event so the flow UI refetches
+  snapshot/replay instead of silently dropping events.
+- **Auth redirect footgun** — a JSON field named `redirect` next to other app data
+  (e.g. `{ "token", "redirect" }`) no longer triggers navigation. Only typed `Redirect`
+  (`__resuma_redirect`) or a sole legacy `{"redirect":"/…"}` object counts.
+- **`public/` docs** — `.html` / `.svg` are served as non-executable types (`text/plain` /
+  `application/octet-stream`); use `/_resuma/upload` for user content.
+
 ## [1.2.15] - 2026-07-13
 
 ### Fixed

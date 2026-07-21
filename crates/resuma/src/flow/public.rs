@@ -193,4 +193,34 @@ mod tests {
         assert_eq!(assets[0].content_type, "image/png");
         let _ = fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn public_disk_mode_keeps_large_files_on_disk() {
+        let dir = std::env::temp_dir().join(format!("resuma-public-disk-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let big = vec![0u8; 1024];
+        fs::write(dir.join("big.bin"), &big).unwrap();
+
+        let prev_disk = std::env::var_os("RESUMA_PUBLIC_DISK");
+        let prev_max = std::env::var_os("RESUMA_PUBLIC_INLINE_MAX");
+        std::env::set_var("RESUMA_PUBLIC_DISK", "1");
+        std::env::set_var("RESUMA_PUBLIC_INLINE_MAX", "512");
+
+        let assets = collect_public_dir(&dir);
+        assert_eq!(assets.len(), 1);
+        assert!(matches!(assets[0].body, PublicBody::Disk(_)));
+        let got = assets[0].bytes().expect("disk asset readable");
+        assert_eq!(got.as_slice(), big.as_slice());
+
+        match prev_disk {
+            Some(v) => std::env::set_var("RESUMA_PUBLIC_DISK", v),
+            None => std::env::remove_var("RESUMA_PUBLIC_DISK"),
+        }
+        match prev_max {
+            Some(v) => std::env::set_var("RESUMA_PUBLIC_INLINE_MAX", v),
+            None => std::env::remove_var("RESUMA_PUBLIC_INLINE_MAX"),
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

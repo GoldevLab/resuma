@@ -34,6 +34,8 @@ pub struct ExecSecurityConfig {
     pub graph_controls_per_minute: u32,
     /// Max serialized JSON input bytes for worker/queue bodies.
     pub max_input_bytes: usize,
+    /// Max JSON size for `#[server]` action args (separate from exec max).
+    pub max_action_args_bytes: usize,
     /// Max JSON nesting depth for worker/queue bodies.
     pub max_input_depth: u32,
     /// Require `Origin` or `Referer` on exec mutations when CSRF is enabled.
@@ -63,12 +65,17 @@ impl ExecSecurityConfig {
             api_key,
             public,
             workers_per_minute: env_u32("RESUMA_RATE_EXEC_WORKERS", 30),
-            graph_reads_per_minute: env_u32("RESUMA_RATE_EXEC_GRAPH", 180),
+            // High default: status polling during long jobs (ORBIS-style remesh).
+            graph_reads_per_minute: env_u32("RESUMA_RATE_EXEC_GRAPH", 600),
             graph_controls_per_minute: env_u32("RESUMA_RATE_EXEC_CONTROL", 60),
             max_input_bytes: std::env::var("RESUMA_EXEC_MAX_INPUT")
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(512 * 1024),
+            max_action_args_bytes: std::env::var("RESUMA_ACTION_MAX_INPUT")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(2 * 1024 * 1024),
             max_input_depth: std::env::var("RESUMA_EXEC_MAX_DEPTH")
                 .ok()
                 .and_then(|v| v.parse().ok())
@@ -407,11 +414,24 @@ pub fn validate_graph_id(id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Validate JSON input size and nesting depth.
+/// Validate JSON input size and nesting depth (worker/queue).
 pub fn validate_input(value: &serde_json::Value) -> Result<()> {
     let cfg = config();
     let serialized = serde_json::to_string(value).map_err(ResumaError::Serde)?;
     if serialized.len() > cfg.max_input_bytes {
+        return Err(ResumaError::PayloadTooLarge);
+    }
+    if json_depth(value) > cfg.max_input_depth {
+        return Err(ResumaError::validation("JSON nesting too deep"));
+    }
+    Ok(())
+}
+
+/// Validate `#[server]` action args (higher default limit than exec inputs).
+pub fn validate_action_input(value: &serde_json::Value) -> Result<()> {
+    let cfg = config();
+    let serialized = serde_json::to_string(value).map_err(ResumaError::Serde)?;
+    if serialized.len() > cfg.max_action_args_bytes {
         return Err(ResumaError::PayloadTooLarge);
     }
     if json_depth(value) > cfg.max_input_depth {

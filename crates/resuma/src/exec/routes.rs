@@ -6,7 +6,8 @@ use std::pin::Pin;
 use std::time::Duration;
 
 use async_stream::stream;
-use axum::extract::{ConnectInfo, Path, Query};
+use axum::body::Body;
+use axum::extract::{ConnectInfo, Multipart, Path, Query};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
@@ -80,11 +81,16 @@ where
         .route("/_resuma/queue/{name}", post(enqueue_worker))
         .route("/_resuma/queue/{name}/stats", get(queue_stats_handler))
         .route("/_resuma/graph/{id}", get(get_graph))
+        .route("/_resuma/graph/{id}/status", get(get_graph_status))
         .route("/_resuma/graph/{id}/events", get(graph_events_sse))
         .route("/_resuma/graph/{id}/replay", get(replay_graph))
         .route("/_resuma/graph/{id}/pause", post(pause_graph))
         .route("/_resuma/graph/{id}/resume", post(resume_graph))
         .route("/_resuma/graph/{id}/cancel", post(cancel_graph))
+        .route("/_resuma/artifact/{id}", get(get_artifact))
+        .route("/_resuma/upload", post(upload_multipart))
+        .route("/_resuma/upload/{name}", post(upload_named))
+        .route("/_resuma/uploads/{id}", get(get_upload))
 }
 
 fn client_ip(headers: &HeaderMap, addr: SocketAddr) -> String {
@@ -258,6 +264,149 @@ async fn get_graph(
         .ok_or(ExecHttpError(ResumaError::UnknownGraph(gid.0)))
 }
 
+/// Lightweight poll: status + progress without shipping the full node graph.
+#[derive(Debug, serde::Serialize)]
+struct GraphStatusBody {
+    id: String,
+    status: crate::exec::types::GraphStatus,
+    progress: u8,
+    worker: String,
+}
+
+async fn get_graph_status(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(query): Query<GraphTokenQuery>,
+) -> Result<Json<GraphStatusBody>, ExecHttpError> {
+    let host = request_host(&headers);
+    let ip = client_ip(&headers, addr);
+    validate_graph_id(&id)?;
+    let gid = GraphId(id.clone());
+    guard_graph_read(&headers, &host, &ip, &gid, query.token.as_deref())?;
+    let snap = FlowEngine::snapshot(&gid).ok_or(ExecHttpError(ResumaError::UnknownGraph(id)))?;
+    Ok(Json(GraphStatusBody {
+        id: snap.id.0,
+        status: snap.status,
+        progress: snap.progress,
+        worker: snap.worker,
+    }))
+}
+
+async fn get_artifact(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(query): Query<GraphTokenQuery>,
+) -> Result<Response, ExecHttpError> {
+    let host = request_host(&headers);
+    let ip = client_ip(&headers, addr);
+    match crate::exec::artifacts::get(&id) {
+        Some((bytes, ctype, bound)) => {
+            if let Some(gid) = bound {
+                let gid = GraphId(gid);
+                guard_graph_read(&headers, &host, &ip, &gid, query.token.as_deref())?;
+            }
+            Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, ctype)
+                .header(header::CACHE_CONTROL, "private, max-age=300")
+                .body(Body::from(bytes.as_ref().clone()))
+                .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response()))
+        }
+        None => Ok(StatusCode::NOT_FOUND.into_response()),
+    }
+}
+
+async fn get_upload(Path(id): Path<String>) -> Response {
+    match crate::exec::uploads::take(&id) {
+        Some((bytes, ctype)) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, ctype)
+            .header(header::CACHE_CONTROL, "private, max-age=300")
+            .body(Body::from(bytes))
+            .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response()),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// Multipart upload (`file` field). Distinct from trusted `public/`.
+/// Auth: exec API key, or open when `RESUMA_EXEC_PUBLIC=1` (dev).
+async fn upload_multipart(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> Result<Json<crate::exec::uploads::UploadReceipt>, ExecHttpError> {
+    let ip = client_ip(&headers, addr);
+    let cfg = security::config();
+    if cfg.requires_api_key() {
+        security::guard_admin(&headers, &request_host(&headers), &ip, None)?;
+    }
+
+    let (bytes, content_type, _filename) = read_multipart_file(&mut multipart).await?;
+    let receipt = crate::exec::uploads::store(bytes, &content_type)?;
+    Ok(Json(receipt))
+}
+
+/// Named `#[upload]` handler — multipart field `file`.
+async fn upload_named(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+    mut multipart: Multipart,
+) -> Result<Json<Value>, ExecHttpError> {
+    let ip = client_ip(&headers, addr);
+    validate_resource_name(&name)?;
+    let cfg = security::config();
+    if cfg.requires_api_key() {
+        security::guard_admin(&headers, &request_host(&headers), &ip, None)?;
+    }
+
+    let (meta, run) = crate::exec::uploads::lookup_upload(&name)
+        .ok_or_else(|| ResumaError::Validation(format!("unknown upload handler `{name}`")))?;
+
+    let (bytes, content_type, filename) = read_multipart_file(&mut multipart).await?;
+    let file = crate::exec::uploads::UploadedFile {
+        bytes,
+        content_type,
+        filename,
+    };
+    crate::exec::uploads::validate_uploaded(&file, &meta)?;
+    let value = run(file).await?;
+    Ok(Json(value))
+}
+
+async fn read_multipart_file(
+    multipart: &mut Multipart,
+) -> Result<(Vec<u8>, String, Option<String>), ResumaError> {
+    let mut file_bytes: Option<Vec<u8>> = None;
+    let mut content_type = String::from("application/octet-stream");
+    let mut filename = None;
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ResumaError::Validation(format!("multipart: {e}")))?
+    {
+        let name = field.name().unwrap_or("").to_string();
+        if name != "file" && name != "upload" && name != "heightmap" {
+            continue;
+        }
+        filename = field.file_name().map(|s| s.to_string());
+        if let Some(ct) = field.content_type() {
+            content_type = ct.to_string();
+        }
+        let data = field
+            .bytes()
+            .await
+            .map_err(|e| ResumaError::Validation(format!("multipart read: {e}")))?;
+        file_bytes = Some(data.to_vec());
+        break;
+    }
+    let bytes = file_bytes
+        .ok_or_else(|| ResumaError::Validation("multipart must include field `file`".into()))?;
+    Ok((bytes, content_type, filename))
+}
+
 async fn replay_graph(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
@@ -330,7 +479,15 @@ fn graph_sse_stream(bus: SharedEventBus) -> GraphEventStream {
                         yield Ok(Event::default().data(data));
                     }
                 }
-                Err(RecvError::Lagged(_)) => continue,
+                Err(RecvError::Lagged(n)) => {
+                    // Client must re-fetch `/replay` — do not silently drop gaps.
+                    let data = serde_json::json!({ "type": "resync", "skipped": n });
+                    yield Ok(
+                        Event::default()
+                            .event("resync")
+                            .data(data.to_string()),
+                    );
+                }
                 Err(RecvError::Closed) => break,
             }
         }

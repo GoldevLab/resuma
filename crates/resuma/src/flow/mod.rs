@@ -7,6 +7,7 @@
 pub mod action_hook;
 pub mod app;
 pub mod cache;
+pub mod cookie;
 pub mod errors;
 pub mod extensions;
 pub mod extract;
@@ -31,6 +32,7 @@ pub mod stream_load;
 
 pub use app::{FlowApp, FlowServeOptions};
 pub use cache::{loader_cache, merge_cache_control, register_loader_cache};
+pub use cookie::{clear_cookie, cookie_value, set_cookie, CookieOptions, SameSite};
 pub use errors::{error_page, not_found_page, registry_miss_page, FlowError};
 pub use extensions::{global_extensions, set_global_extensions, FlowExtensions};
 pub use extract::{FromFlowRequest, Path, Query};
@@ -48,8 +50,9 @@ pub use pages::{discover_pages, DiscoveredPage, DiscoveredRoute, FlowPageRegistr
 pub use public::{collect_public_dir, default_public_dir, PublicAsset};
 pub use pwa::{FlowPwaConfig, PwaShortcut};
 pub use redirect::{
-    extract_redirect, flash_message, redirect, redirect_response, redirect_with_flash, Redirect,
-    FLASH_KEY,
+    attach_set_cookies, extract_redirect, flash_message, prepare_navigation, redirect,
+    redirect_response, redirect_response_with_cookies, redirect_with_flash, take_response_cookies,
+    Redirect, COOKIES_KEY, FLASH_KEY, REDIRECT_KEY,
 };
 pub use registry::{dispatch_load, dispatch_submit, register_loader, register_submit};
 pub use request::FlowRequest;

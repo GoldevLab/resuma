@@ -992,6 +992,23 @@ mod tests {
     }
 
     #[test]
+    fn csp_webgpu_adds_worker_and_blob_connect() {
+        let policy = build_content_security_policy(Some("wg"), false, &CspConfig::webgpu());
+        assert!(
+            policy.contains("worker-src"),
+            "webgpu CSP must set worker-src: {policy}"
+        );
+        assert!(
+            policy.contains("blob:"),
+            "webgpu CSP must allow blob: {policy}"
+        );
+        assert!(
+            policy.contains("connect-src") && policy.contains("blob:"),
+            "webgpu CSP needs connect-src blob: for GLTF object URLs: {policy}"
+        );
+    }
+
+    #[test]
     fn csp_extra_img_src() {
         let policy = build_content_security_policy(
             Some("n1"),

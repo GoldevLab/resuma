@@ -10,7 +10,7 @@ use crate::core::context::{with_context, RenderContext, RenderMode};
 use crate::core::view::View;
 use crate::core::Component;
 use crate::core::{FlowRequest, ResumaError};
-use crate::flow::extract_redirect;
+use crate::flow::redirect::{attach_set_cookies, prepare_navigation};
 use crate::flow::runtime::with_request;
 use crate::flow::submit::SubmitError;
 use crate::ssr::PageOptions;
@@ -673,7 +673,7 @@ async fn serve_action(
     // Bound argument size and JSON nesting before dispatch (defense against
     // deeply-nested / oversized payloads that survive the byte body limit).
     if let Err(err) =
-        crate::exec::security::validate_input(&serde_json::Value::Array(body.args.clone()))
+        crate::exec::security::validate_action_input(&serde_json::Value::Array(body.args.clone()))
     {
         return action_error(err);
     }
@@ -695,9 +695,9 @@ async fn serve_action(
     crate::flow::extensions::global_extensions().merge_into(&mut flow_req);
 
     match dispatch_action(&name, body.args, flow_req).await {
-        Ok(value) => {
-            let redirect = extract_redirect(&value);
-            (
+        Ok(mut value) => {
+            let (redirect, cookies) = prepare_navigation(&mut value);
+            let mut res = (
                 StatusCode::OK,
                 Json(ActionResponse {
                     ok: true,
@@ -707,7 +707,9 @@ async fn serve_action(
                     redirect,
                 }),
             )
-                .into_response()
+                .into_response();
+            attach_set_cookies(&mut res, &cookies);
+            res
         }
         Err(err) => action_error(err),
     }

@@ -10,6 +10,7 @@
 //! * **Browser** — live graph UI via `resuma-flow` + SSE
 
 pub mod actions;
+pub mod artifacts;
 pub mod cancel;
 pub mod config;
 pub mod cron;
@@ -33,6 +34,7 @@ pub mod ssrf;
 pub mod state;
 pub mod status;
 pub mod tools;
+pub mod uploads;
 pub mod webhooks;
 pub mod workers;
 
@@ -41,6 +43,9 @@ mod tests;
 
 pub mod types;
 
+pub use artifacts::{
+    get as artifact_get, put as artifact_put, put_json as artifact_put_json, ArtifactRef,
+};
 pub use config::init as init_exec;
 pub use engine::{FlowEngine, GraphCounts};
 pub use events::EventBus;
@@ -64,6 +69,10 @@ pub use types::{
     ExecutionPlan, ExecutionStrategy, GraphEdge, GraphId, GraphNodeSnapshot, GraphSnapshot,
     GraphStatus, NodeId, NodeKind, NodeStatus, RuntimeChoice, StartWorkerResponse, WorkerEvent,
 };
+pub use uploads::{
+    has_registered_uploads, register_upload, store as store_upload, take as take_upload,
+    UploadMeta, UploadReceipt, UploadedFile,
+};
 pub use webhooks::{register as register_webhook, RegisterWebhookBody, WebhookListResponse};
 pub use workers::{
     has_registered_workers, register_worker, WorkerContext, WorkerMeta, WorkerRegistry,
@@ -71,10 +80,11 @@ pub use workers::{
 
 /// True when `/_resuma/*` exec admin routes should be mounted on the HTTP router.
 ///
-/// Routes are omitted for purely static apps unless workers are registered or
+/// Routes are omitted for purely static apps unless workers/uploads are registered or
 /// `RESUMA_EXEC_ENABLED=1` is set explicitly.
 pub fn exec_routes_enabled() -> bool {
     workers::has_registered_workers()
+        || uploads::has_registered_uploads()
         || matches!(
             std::env::var("RESUMA_EXEC_ENABLED").as_deref(),
             Ok("1") | Ok("true") | Ok("TRUE")

@@ -43,6 +43,21 @@ CMD ["/app/server"]
 
 Use the `production` template: `resuma new my-app --template production`.
 
+## Path dependency / monorepo (Fly + GitHub Actions)
+
+If your app depends on Resuma via a **local path** (`resuma = { path = "../resuma" }`):
+
+1. Prefer **git tags** (or crates.io) for CI/deploy:
+   ```toml
+   resuma = { git = "https://github.com/GoldevLab/resuma", tag = "v1.2.16" }
+   ```
+   Keep a `[patch]`/`path` override only for local hacking.
+2. If you must stage a sibling checkout (Docker context with `resuma/` + `app/`):
+   - Checkout both repos in Actions (`path: resuma` and `path: my-app`).
+   - Build with a staging context that copies `Cargo.toml`, crates, and `client-sdk/`.
+   - Pin the Resuma checkout to the same tag your `Cargo.toml` expects.
+3. Always commit **`Cargo.lock`** in deployable apps; for the Resuma workspace itself the lockfile is tracked so Fly/CI builds stay reproducible.
+
 ## Fly.io
 
 ```toml

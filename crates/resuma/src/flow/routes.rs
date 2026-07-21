@@ -14,7 +14,7 @@ use axum::Router;
 use std::net::SocketAddr;
 
 use super::middleware::run_middleware;
-use super::redirect::{extract_redirect, redirect_response};
+use super::redirect::{attach_set_cookies, prepare_navigation, redirect_response_with_cookies};
 use super::registry::dispatch_submit;
 use super::submit::SubmitError;
 use crate::server::{
@@ -135,19 +135,21 @@ pub async fn handle_submit(
     }
 
     match dispatch_submit(&name, data, req).await {
-        Ok(value) => {
-            let redirect = extract_redirect(&value);
+        Ok(mut value) => {
+            let (redirect, cookies) = prepare_navigation(&mut value);
             if wants_json {
-                axum::Json(SubmitResponse {
+                let mut res = axum::Json(SubmitResponse {
                     ok: true,
                     value: Some(value),
                     error: None,
                     field_errors: BTreeMap::new(),
                     redirect,
                 })
-                .into_response()
+                .into_response();
+                attach_set_cookies(&mut res, &cookies);
+                res
             } else if let Some(loc) = redirect {
-                redirect_response(&loc)
+                redirect_response_with_cookies(&loc, &cookies)
             } else {
                 let html = render_to_string(
                     &PageOptions {
@@ -156,7 +158,9 @@ pub async fn handle_submit(
                     },
                     || View::text("Submitted successfully."),
                 );
-                axum::response::Html(html).into_response()
+                let mut res = axum::response::Html(html).into_response();
+                attach_set_cookies(&mut res, &cookies);
+                res
             }
         }
         Err(err) => {

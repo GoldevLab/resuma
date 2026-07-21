@@ -13,6 +13,8 @@ use super::workers::{WorkerContext, WorkerFn};
 use serde_json::Value;
 
 /// Run a worker on this node with timeout and pause/cancel support.
+///
+/// `timeout_secs == 0` disables the wall-clock timeout (cooperative cancel only).
 pub async fn run_on_node(
     profile: &ResourceProfile,
     input: Value,
@@ -20,8 +22,11 @@ pub async fn run_on_node(
     run: WorkerFn,
     cancel: &CancellationToken,
 ) -> Result<Value> {
-    let secs = profile.timeout_secs.max(1);
     let work = cancel::run_cancellable(cancel, run(input, ctx));
+    if profile.timeout_secs == 0 {
+        return work.await;
+    }
+    let secs = profile.timeout_secs;
     match timeout(Duration::from_secs(secs), work).await {
         Ok(r) => r,
         Err(_) => {

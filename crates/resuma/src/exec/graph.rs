@@ -119,6 +119,7 @@ pub fn materialize(
         nodes,
         edges,
         status: GraphStatus::Running,
+        progress: 0,
     }
 }
 
@@ -155,6 +156,10 @@ pub fn apply_event(snapshot: &mut GraphSnapshot, event: &WorkerEvent) {
         }
         WorkerEvent::GraphDone { .. } => {
             snapshot.status = GraphStatus::Done;
+            snapshot.progress = 100;
+        }
+        WorkerEvent::Progress { value, .. } => {
+            snapshot.progress = (*value).min(100);
         }
         _ => {}
     }

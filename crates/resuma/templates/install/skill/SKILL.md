@@ -126,17 +126,30 @@ Self-hosted workers, durable graphs, queue, scheduler — **no Redis**. Routes m
 use resuma::prelude::*;
 use resuma::worker;
 
-#[worker(intent = "process items")]
+#[worker(intent = "process items", resources = "extended")]
 pub async fn my_worker(input: MyInput, ctx: WorkerContext) -> Result<Value> {
     ctx.log("started");
-    ctx.progress(50);
-    ctx.check_cancelled()?;  // cooperative pause/cancel
-    Ok(json!({ "ok": true }))
+    let out = ctx
+        .run_blocking_with_progress(|p| {
+            p(10);
+            let mesh = heavy_cpu(&input);
+            p(100);
+            mesh
+        })
+        .await?;
+    // Large results: store as artifact instead of returning a huge JSON Value.
+    let art = ctx.artifact_json(&out)?;
+    Ok(json!({ "artifact_id": art.id, "bytes": art.bytes }))
 }
 ```
 
 - Register at compile time via `#[worker]` (`mod workers;` in `main.rs`).
 - Manual: `WorkerRegistry::new().register(name, meta, run_fn).install()` — `run` must be **`fn` pointer**, not a capturing closure.
+- Timeouts: `resources = "auto"` (default 30s / `RESUMA_WORKER_TIMEOUT_SECS`), `"extended"` (300s), `"none"` (unlimited), or `"600"` (seconds).
+- Poll progress: `GET /_resuma/graph/{id}/status` → `{ status, progress }` (also on full snapshot). SSE progress events are throttled (~10 Hz); snapshot progress is not.
+- Uploads: `POST /_resuma/upload` multipart field `file` → `{ id, url }`, or `#[upload(mime = "image/png")]` → `POST /_resuma/upload/{name}`.
+- Artifacts from `ctx.artifact_*` are **bound to the graph** — fetch with `?token=` (same as SSE). Unbound `artifact_put` remains a capability URL.
+- SSE lag emits a named `resync` event; Flow UI refetches replay/status.
 
 ### Start a graph
 
@@ -155,10 +168,15 @@ let started = FlowEngine::start("my_worker", json!({ "topic": "x" })).await?;
 | `GET|POST /scheduler` | API key | Cron jobs |
 | `POST /scheduler/tick` | API key | Fire due jobs |
 | `GET /status`, `GET /metrics` | API key (or public flags) | Ops |
-| `GET /graph/{id}` | Graph token | Snapshot |
+| `GET /graph/{id}` | Graph token | Snapshot (+ `progress`) |
+| `GET /graph/{id}/status` | Graph token | Lightweight `{status,progress}` |
 | `GET /graph/{id}/replay` | Graph token | Event JSON array |
 | `GET /graph/{id}/events` | Graph token (query OK) | SSE |
 | `POST /graph/{id}/pause\|resume\|cancel` | Graph token **header** or API key | **No query token** on mutations |
+| `POST /upload` | API key (or public) | Multipart `file` |
+| `POST /upload/{name}` | API key (or public) | Named `#[upload]` handler |
+| `GET /uploads/{id}` | Unguessable id | Private TTL blob |
+| `GET /artifact/{id}` | Graph token (if bound) or id | Large worker result |
 
 **Auth headers:** `Authorization: Bearer $RESUMA_EXEC_API_KEY` or `X-Resuma-Exec-Key`.  
 **Graph token:** `X-Resuma-Graph-Token` (required for control POSTs); `?token=` allowed on GET/SSE only.
@@ -171,7 +189,12 @@ let started = FlowEngine::start("my_worker", json!({ "topic": "x" })).await?;
 | `RESUMA_EXEC_PUBLIC=1` | Dev-only open admin routes (ignored in production) |
 | `RESUMA_DEV=1` | Dev mode; pair with `EXEC_PUBLIC` locally |
 | `RESUMA_EXEC_ENABLED=1` | Mount exec routes without workers |
-| `RESUMA_DATA_DIR` | Durable graphs, queue, scheduler on disk |
+| `RESUMA_DATA_DIR` | Durable graphs, queue, scheduler, artifacts on disk |
+| `RESUMA_WORKER_TIMEOUT_SECS` | Default worker timeout (0 = none) |
+| `RESUMA_ACTION_MAX_INPUT` | Action JSON size (default 2 MiB) |
+| `RESUMA_BODY_LIMIT` | HTTP body (default 10 MiB) |
+| `RESUMA_UPLOAD_MAX_BYTES` | Multipart max (default 8 MiB) |
+| `RESUMA_CSP_WEBGPU=1` | Add `worker-src` for WebGPU ClientComponents |
 
 Fail-closed: no API key and not public → 401 on worker/queue/scheduler.
 
