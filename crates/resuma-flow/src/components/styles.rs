@@ -3,7 +3,12 @@
 use resuma::core::view::{Attr, AttrValue, Child, Element, View};
 
 /// Flow widget stylesheet (served at `GET /_resuma/flow.css` and inlined by [`flow_styles`]).
-pub const FLOW_CSS: &str = include_str!("../../../resuma/assets/flow.css");
+///
+/// Kept as a copy under `crates/resuma-flow/assets/` so the published crate does
+/// not depend on a sibling-path `include_str!` into `crates/resuma/assets/`
+/// (that path is absent from the crates.io tarball). Keep in sync with
+/// `crates/resuma/assets/flow.css` when editing styles.
+pub const FLOW_CSS: &str = include_str!("../../assets/flow.css");
 
 /// Emit Flow widget CSS inline (place in layout or page head).
 ///
