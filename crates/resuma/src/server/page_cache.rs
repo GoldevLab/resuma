@@ -17,6 +17,7 @@ struct PageStaging {
     csrf: String,
     csp_nonce: String,
     status: Option<u16>,
+    redirect: Option<String>,
 }
 
 tokio::task_local! {
@@ -58,6 +59,20 @@ pub fn stage_response_status(status: u16) {
 /// Take the staged HTTP status (consumed once per response).
 pub fn take_response_status() -> Option<u16> {
     with_staging(|s| s.status.take())
+}
+
+/// Stage a `Location` redirect for the page about to be returned — turns the
+/// SSR response into a real `3xx` with no HTML body. Pair with
+/// `stage_response_status` (e.g. `ResumaError::Redirect` already stages both
+/// via `FlowError`/`error_page`).
+pub fn stage_response_redirect(location: impl Into<String>) {
+    let location = location.into();
+    with_staging(|s| s.redirect = Some(location));
+}
+
+/// Take the staged redirect location (consumed once per response).
+pub fn take_response_redirect() -> Option<String> {
+    with_staging(|s| s.redirect.take())
 }
 
 /// Stage a `Cache-Control` header for the page about to be returned.
@@ -118,6 +133,17 @@ mod tests {
     fn sanitize_cache_for_session_overrides_public() {
         let out = sanitize_cache_for_session(Some("public, max-age=3600".into()), true);
         assert_eq!(out.as_deref(), Some("private, no-store"));
+    }
+
+    #[test]
+    fn redirect_staging_round_trips_and_is_consumed_once() {
+        clear_request_staging();
+        assert_eq!(take_response_redirect(), None);
+        stage_response_redirect("/login");
+        assert_eq!(take_response_redirect(), Some("/login".to_string()));
+        // Consumed — a second take (e.g. a following request reusing the
+        // same fallback thread-local slot) must not see a stale redirect.
+        assert_eq!(take_response_redirect(), None);
     }
 
     #[test]

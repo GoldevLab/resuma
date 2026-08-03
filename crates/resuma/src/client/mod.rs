@@ -14,16 +14,50 @@
 //!     .page("/", || view! { {client_component(ClientComponent::new("hero-particles").class("hero-particles"))} });
 //! ```
 //!
+//! [`FlowApp::client_asset`](crate::flow::FlowApp::client_asset) registers a content digest so
+//! [`client_script_url`] emits `?v=<hash>`. Browsers cache `/static/client/{id}.js` as immutable;
+//! the query busts the cache when bytes change — no manual `v2`/`v3` renames.
+//!
 //! ## TypeScript
 //!
 //! Copy [`client-sdk/resuma-client.ts`](https://github.com/GoldevLab/resuma/blob/main/client-sdk/resuma-client.ts)
 //! into your app and call [`bootClientComponent`](https://github.com/GoldevLab/resuma/blob/main/client-sdk/resuma-client.ts)
 //! from each bundled entry.
 
+use std::collections::HashMap;
+
+use once_cell::sync::Lazy;
+use parking_lot::RwLock;
+use sha2::{Digest, Sha256};
+
 use crate::View;
 
 /// URL prefix for bundled client component scripts (`/static/client/{id}.js`).
 pub const CLIENT_SCRIPT_PREFIX: &str = "/static/client/";
+
+static CLIENT_DIGESTS: Lazy<RwLock<HashMap<String, String>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
+
+/// Short SHA-256 hex digest (16 chars) for cache-busting query strings.
+pub fn content_digest(bytes: &[u8]) -> String {
+    let hash = Sha256::digest(bytes);
+    let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
+    hex[..16].to_string()
+}
+
+/// Record the digest for `id` so [`client_script_url`] can append `?v=…`.
+///
+/// Called from [`FlowApp::client_asset`](crate::flow::FlowApp::client_asset). Safe to call again
+/// with new bytes (rebuild / hot reload) — overwrites the previous digest.
+pub fn register_client_asset_digest(id: &str, body: &[u8]) {
+    let digest = content_digest(body);
+    CLIENT_DIGESTS.write().insert(id.to_string(), digest);
+}
+
+/// Route path for a client bundle (no query) — used when mounting axum routes.
+pub fn client_script_path(id: &str) -> String {
+    format!("{CLIENT_SCRIPT_PREFIX}{id}.js")
+}
 
 /// Declarative mount point for a prebuilt TypeScript/JavaScript client component.
 #[derive(Debug, Clone)]
@@ -78,8 +112,15 @@ impl ClientComponent {
 }
 
 /// Script URL for a client component bundle.
+///
+/// When the asset was registered via [`register_client_asset_digest`], appends `?v=<digest>`
+/// so `Cache-Control: immutable` stays correct across content changes.
 pub fn client_script_url(id: &str) -> String {
-    format!("{CLIENT_SCRIPT_PREFIX}{id}.js")
+    let path = client_script_path(id);
+    match CLIENT_DIGESTS.read().get(id) {
+        Some(v) => format!("{path}?v={v}"),
+        None => path,
+    }
 }
 
 /// Mount point + deferred module script for a [`ClientComponent`].
@@ -175,7 +216,40 @@ mod tests {
 
     #[test]
     fn client_script_url_format() {
-        assert_eq!(client_script_url("chart"), "/static/client/chart.js");
+        assert_eq!(
+            client_script_url("chart-unregistered"),
+            "/static/client/chart-unregistered.js"
+        );
+        assert_eq!(
+            client_script_path("chart-unregistered"),
+            "/static/client/chart-unregistered.js"
+        );
+    }
+
+    #[test]
+    fn client_script_url_includes_digest_after_register() {
+        let body = b"export default {};";
+        register_client_asset_digest("digest-demo", body);
+        let url = client_script_url("digest-demo");
+        let expected = format!("/static/client/digest-demo.js?v={}", content_digest(body));
+        assert_eq!(url, expected);
+
+        let html = match client_component(ClientComponent::new("digest-demo")) {
+            View::Raw(s) => s,
+            _ => panic!("expected raw view"),
+        };
+        assert!(html.contains(&format!(r#"src="{expected}""#)));
+    }
+
+    #[test]
+    fn digest_changes_when_bytes_change() {
+        register_client_asset_digest("digest-flip", b"a");
+        let a = client_script_url("digest-flip");
+        register_client_asset_digest("digest-flip", b"b");
+        let b = client_script_url("digest-flip");
+        assert_ne!(a, b);
+        assert!(a.starts_with("/static/client/digest-flip.js?v="));
+        assert!(b.starts_with("/static/client/digest-flip.js?v="));
     }
 
     #[test]

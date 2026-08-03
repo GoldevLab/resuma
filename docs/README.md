@@ -19,8 +19,9 @@ Two ways to read the docs:
 | [PACKAGE.md](./PACKAGE.md) | Product map — Resuma, Resuma Flow, Macros, Client |
 | [NAMING.md](./NAMING.md) | Official brand names and naming rules |
 | [FLOW.md](./FLOW.md) | Resuma Flow — FlowApp, `#[load]`, `#[submit]`, pages |
-| [FLOW_COOKBOOK.md](./FLOW_COOKBOOK.md) | Query loaders, `public/`, PWA, booking template (v0.4.6+) |
-| [SECURITY.md](./SECURITY.md) | CSRF, headers, rate limits, production |
+| [FLOW_COOKBOOK.md](./FLOW_COOKBOOK.md) | Query loaders, `public/`, PWA, booking template |
+| [REALTIME.md](./REALTIME.md) | WebSocket rooms / peers (`resuma::realtime`) |
+| [SECURITY.md](./SECURITY.md) | CSRF, headers, rate limits, cookies, production |
 | [BACKEND.md](./BACKEND.md) | NestJS + Next.js patterns → Rust (`examples/todo`) |
 | [PUBLISHING.md](./PUBLISHING.md) | Publish to crates.io (production release) |
 

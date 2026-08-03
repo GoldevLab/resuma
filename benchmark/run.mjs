@@ -23,6 +23,7 @@ import { execSync } from "node:child_process";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 const skipBuild = process.argv.includes("--skip-build");
+const resumaOnly = process.argv.includes("--resuma-only");
 
 function fmt(bytes) {
   if (bytes === 0) return "0 B";
@@ -429,11 +430,49 @@ const MEASURERS = [
   measureLeptos,
 ];
 
+function attachRows(frameworks) {
+  for (const f of frameworks) {
+    f.initialRow = row("Initial load", f.initial);
+    f.firstRow = row("First interaction", f.firstInteraction);
+    if (f.staticPage) f.staticRow = row("Static page", f.staticPage);
+  }
+}
+
 function main() {
   ensureResumaRuntime();
-  const frameworks = [];
   const errors = [];
 
+  // `--resuma-only`: refresh Resuma numbers from the current runtime build while
+  // keeping other frameworks' previously measured rows (no sibling rebuilds).
+  if (resumaOnly) {
+    console.log("\n[benchmark] measuring measureResuma only…");
+    let resuma;
+    try {
+      resuma = measureResuma();
+    } catch (err) {
+      console.error("[benchmark] measureResuma failed:", err.message);
+      process.exit(1);
+    }
+    attachRows([resuma]);
+    const prev = readJson(join(__dirname, "results.json")) ?? { frameworks: [] };
+    const others = (prev.frameworks ?? []).filter((f) => f.framework !== "Resuma");
+    const frameworks = [resuma, ...others].sort((a, b) => a.initial.gzip - b.initial.gzip);
+    attachRows(frameworks);
+    const results = {
+      generatedAt: new Date().toISOString(),
+      methodology:
+        prev.methodology ??
+        "SSR counter page (heading + increment button). Gzip/brotli from minified artifacts or framework build output.",
+      frameworks,
+      errors: [],
+      note: "Resuma row refreshed with --resuma-only; other frameworks retained from prior run.",
+    };
+    writeFileSync(join(__dirname, "results.json"), JSON.stringify(results, null, 2));
+    printTable(results);
+    return;
+  }
+
+  const frameworks = [];
   for (const measure of MEASURERS) {
     const label = measure.name;
     try {
@@ -446,12 +485,7 @@ function main() {
   }
 
   frameworks.sort((a, b) => a.initial.gzip - b.initial.gzip);
-
-  for (const f of frameworks) {
-    f.initialRow = row("Initial load", f.initial);
-    f.firstRow = row("First interaction", f.firstInteraction);
-    if (f.staticPage) f.staticRow = row("Static page", f.staticPage);
-  }
+  attachRows(frameworks);
 
   const results = {
     generatedAt: new Date().toISOString(),

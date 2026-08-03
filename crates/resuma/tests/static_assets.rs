@@ -138,6 +138,19 @@ async fn flow_serves_static_and_client_assets() {
         .unwrap();
     assert_eq!(client_js.status(), StatusCode::OK);
     assert!(client_js.headers().get("cache-control").is_some());
+    // Registration stamps a digest for HTML script tags.
+    let url = resuma::client_script_url("widget");
+    assert!(
+        url.starts_with("/static/client/widget.js?v="),
+        "expected content-hash query, got {url}"
+    );
+    assert_eq!(
+        url,
+        format!(
+            "/static/client/widget.js?v={}",
+            resuma::content_digest(DEMO_JS)
+        )
+    );
 }
 
 #[tokio::test]

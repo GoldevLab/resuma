@@ -194,6 +194,29 @@ impl FlowEngine {
             .or_else(|| durable::load_events(id))
     }
 
+    /// The `artifact_id` from the most recent `WorkerEvent::Result` in this
+    /// graph's event history, if any.
+    ///
+    /// Workers that return large payloads via [`crate::exec::artifact_put`] put
+    /// the resulting id in their result JSON under `"artifact_id"` by convention;
+    /// callers otherwise had to `replay` the whole event history and search it by
+    /// hand on every claim/poll endpoint. Returns `None` if the graph has no
+    /// history, or its last result carries no `artifact_id` field.
+    pub fn last_artifact(id: &GraphId) -> Option<String> {
+        Self::last_result_field(id, "artifact_id")
+    }
+
+    /// The value of `field` in the most recent `WorkerEvent::Result` payload for
+    /// this graph, as a string. General form of [`Self::last_artifact`] for
+    /// workers that key their result differently (e.g. `"chunk_id"`).
+    ///
+    /// JSON strings, numbers, and booleans are coerced to `String`; objects,
+    /// arrays, and null yield `None`.
+    pub fn last_result_field(id: &GraphId, field: &str) -> Option<String> {
+        let events = Self::replay(id)?;
+        extract_last_result_field(&events, field)
+    }
+
     /// Pause and **cancel** the in-flight worker (cooperative abort, resumable).
     pub fn pause(id: &GraphId) -> Result<()> {
         let exec = GRAPHS
@@ -518,5 +541,95 @@ async fn run_worker(
             bus.emit(emit::graph_done(graph_id.clone()));
             release_live_graph(&graph_id);
         }
+    }
+}
+
+/// Newest-first scan for `field` in the last `WorkerEvent::Result` payload.
+/// Pulled out of [`FlowEngine::last_result_field`] so it is testable without a
+/// live graph/worker registry.
+fn extract_last_result_field(events: &[super::types::WorkerEvent], field: &str) -> Option<String> {
+    events.iter().rev().find_map(|e| match e {
+        super::types::WorkerEvent::Result { data, .. } => {
+            data.get(field).and_then(json_field_as_string)
+        }
+        _ => None,
+    })
+}
+
+/// Coerce a JSON string / number / bool to `String`. Objects, arrays, and null
+/// return `None` — those need a typed deserialize path, not a field helper.
+fn json_field_as_string(v: &serde_json::Value) -> Option<String> {
+    match v {
+        serde_json::Value::String(s) => Some(s.clone()),
+        serde_json::Value::Number(n) => Some(n.to_string()),
+        serde_json::Value::Bool(b) => Some(b.to_string()),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod last_artifact_tests {
+    use super::*;
+    use crate::exec::types::{NodeId, WorkerEvent};
+    use serde_json::json;
+
+    #[test]
+    fn finds_artifact_id_from_most_recent_result_only() {
+        let events = vec![
+            WorkerEvent::NodeStart {
+                node: NodeId("n0".into()),
+                kind: crate::exec::types::NodeKind::Worker,
+                timestamp_ms: 0,
+            },
+            WorkerEvent::Result {
+                data: json!({ "artifact_id": "art-old" }),
+                timestamp_ms: 1,
+            },
+            WorkerEvent::Result {
+                data: json!({ "artifact_id": "art-new", "bytes": 1024 }),
+                timestamp_ms: 2,
+            },
+        ];
+        assert_eq!(
+            extract_last_result_field(&events, "artifact_id"),
+            Some("art-new".to_string())
+        );
+    }
+
+    #[test]
+    fn returns_none_without_a_result_event_or_matching_field() {
+        let events = vec![WorkerEvent::Log {
+            message: "hi".into(),
+            node: NodeId("n0".into()),
+            timestamp_ms: 0,
+        }];
+        assert_eq!(extract_last_result_field(&events, "artifact_id"), None);
+
+        let events = vec![WorkerEvent::Result {
+            data: json!({ "chunk_id": "c1" }),
+            timestamp_ms: 0,
+        }];
+        assert_eq!(extract_last_result_field(&events, "artifact_id"), None);
+        assert_eq!(
+            extract_last_result_field(&events, "chunk_id"),
+            Some("c1".to_string())
+        );
+    }
+
+    #[test]
+    fn coerces_number_and_bool_fields_to_string() {
+        let events = vec![WorkerEvent::Result {
+            data: json!({ "bytes": 1024, "ok": true, "nested": { "x": 1 } }),
+            timestamp_ms: 0,
+        }];
+        assert_eq!(
+            extract_last_result_field(&events, "bytes"),
+            Some("1024".to_string())
+        );
+        assert_eq!(
+            extract_last_result_field(&events, "ok"),
+            Some("true".to_string())
+        );
+        assert_eq!(extract_last_result_field(&events, "nested"), None);
     }
 }

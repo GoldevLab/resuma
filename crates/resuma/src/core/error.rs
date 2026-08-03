@@ -56,6 +56,15 @@ pub enum ResumaError {
     #[error("execution cancelled")]
     Cancelled,
 
+    /// Redirect the browser to another path — the one `#[middleware]` error
+    /// that means "stop rendering this page, navigate elsewhere" instead of
+    /// "render an error page". See `FlowError::Middleware` /
+    /// `page_cache::stage_response_redirect` for how a `GET` page request
+    /// turns this into a real `302 Location:` response (auth gating is the
+    /// primary use case: redirect unauthenticated visitors to `/login`).
+    #[error("redirect to {0}")]
+    Redirect(String),
+
     #[error("{0}")]
     Other(String),
 }
@@ -69,6 +78,7 @@ impl ResumaError {
             Self::RateLimited => 429,
             Self::ServiceUnavailable(_) => 503,
             Self::Cancelled => 409,
+            Self::Redirect(_) => 302,
             Self::UnknownAction(_)
             | Self::UnknownLoader(_)
             | Self::UnknownSubmit(_)
@@ -92,6 +102,7 @@ impl ResumaError {
                 Self::RateLimited => "Too many requests".into(),
                 Self::ServiceUnavailable(_) => "Service temporarily unavailable".into(),
                 Self::Cancelled => "Execution cancelled".into(),
+                Self::Redirect(to) => format!("Redirecting to {to}"),
                 Self::UnknownAction(_)
                 | Self::UnknownLoader(_)
                 | Self::UnknownSubmit(_)

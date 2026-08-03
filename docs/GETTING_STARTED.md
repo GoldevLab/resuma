@@ -2,7 +2,7 @@
 
 > Quick path to your first resumable Rust app.
 
-**Published on crates.io:** [resuma 0.2.0](https://crates.io/crates/resuma) · **API docs:** [docs.rs/resuma](https://docs.rs/resuma)
+**Published on crates.io:** [resuma 1.3](https://crates.io/crates/resuma) · **API docs:** [docs.rs/resuma](https://docs.rs/resuma)
 
 **Interactive docs:** https://resuma-docs.fly.dev/docs · **Local:** clone `site-docs` (sibling repo at `../site-docs`) and `cargo run`
 
@@ -41,14 +41,21 @@ New projects include `rust-toolchain.toml` (stable) so `cargo`/`resuma dev` work
 
 ```toml
 # App Cargo.toml (what `resuma new` generates)
-resuma = "0.4"
+resuma = "1.3"
 tokio  = { version = "1", features = ["full"] }
 ```
 
 For library-only dependency trees (no CLI crates like clap/notify in the graph):
 
 ```toml
-resuma = { version = "0.4", default-features = false }
+resuma = { version = "1.3", default-features = false }
+```
+
+Or with Cargo:
+
+```sh
+cargo add resuma@1.3
+cargo add tokio --features full
 ```
 
 ## Create a project

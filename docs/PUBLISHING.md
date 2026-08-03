@@ -1,34 +1,55 @@
 # Publishing to crates.io
 
-**Next release:** resuma 0.4.2 · resuma-macros 0.4.2 · [docs.rs/resuma](https://docs.rs/resuma)
+**Next release:** resuma / resuma-macros / resuma-flow **1.3.0** · [docs.rs/resuma](https://docs.rs/resuma)
 
-Resuma ships as **two crates** (Rust requires proc-macros in a separate crate):
+Resuma ships as **three crates** (Rust requires proc-macros in a separate crate; Flow UI widgets are optional):
 
 | # | Crate | Role |
 |---|--------|------|
 | 1 | `resuma-macros` | `view!`, `#[component]`, `#[server]`, … + internal rs2js |
-| 2 | `resuma` | Everything else: core, ssr, server, flow, router, CLI |
+| 2 | `resuma` | Core: signals, ssr, server, flow routing, router, CLI, realtime |
+| 3 | `resuma-flow` | Flow UI widgets (`flow_graph`, dashboard, `worker_panel`) — depends on `resuma` |
 
 Users install only:
 
 ```bash
 cargo install resuma
 # or
-resuma = "0.4"
+resuma = "1.3"
+```
+
+Optional Flow widgets:
+
+```toml
+resuma-flow = "1.3"
+```
+
+## Before publish: rebuild embedded JS
+
+Rebuild the TypeScript runtime and copy bundles into the crate assets (required for a correct release):
+
+```sh
+cd runtime
+npm install
+npm run build
+cp dist/loader.js dist/core.js dist/flow.js dist/runtime.js ../crates/resuma/assets/
 ```
 
 ## Publish order
+
+Publish **macros → resuma → resuma-flow**, with a short sleep between crates so crates.io indexes the previous version:
 
 ```bash
 cargo publish -p resuma-macros
 # wait ~90s
 cargo publish -p resuma --dry-run
 cargo publish -p resuma
+# wait ~90s
+cargo publish -p resuma-flow --dry-run
+cargo publish -p resuma-flow
 ```
 
-`resuma` depends on the matching `resuma-macros` version. A full `cargo publish -p resuma --dry-run`
-only works after that macros version is visible on crates.io; before then, rely on workspace tests
-and `cargo publish -p resuma-macros --dry-run`, then run the `resuma` dry-run after publishing macros.
+`resuma` depends on the matching `resuma-macros` version; `resuma-flow` depends on the matching `resuma` version. A full dry-run of a dependent crate only works after its dependency is visible on crates.io.
 
 Or:
 
@@ -39,7 +60,7 @@ Or:
 ## Prerequisites
 
 1. [crates.io](https://crates.io) account + verified email + API token
-2. Clean git tree (tag recommended, e.g. `v0.2.0`)
+2. Clean git tree (tag recommended, e.g. `v1.3.0`)
 3. `cargo login`
 
 ## Internal layout (not published separately)
@@ -47,12 +68,13 @@ Or:
 Runtime code lives as modules inside `crates/resuma/src/`:
 
 ```
-core/    signals, view, components
-ssr/     HTML rendering
-server/  axum HTTP + assets/
-router/  file-based routing scanner
-flow/    FlowApp, loads, submits
-cli/     resuma new|dev|build  [feature cli]
+core/      signals, view, components
+ssr/       HTML rendering
+server/    axum HTTP + assets/
+router/    file-based routing scanner
+flow/      FlowApp, loads, submits
+realtime/  WebSocket rooms / peers
+cli/       resuma new|dev|build  [feature cli]
 ```
 
 CLI templates: `crates/resuma/templates/` (embedded via `include_str!`).
@@ -66,7 +88,7 @@ CLI templates: `crates/resuma/templates/` (embedded via `include_str!`).
 The standalone `resuma-rs2js` crate is **obsolete**. Since v0.2.0 the translator lives inside **`resuma-macros`** as `src/rs2js/` (used by `view!`, `effect!`, `computed!`, `debounce!`, and handler `onClick`).
 
 - **No workspace crate** — nothing to merge or publish again.
-- **`resuma` / `resuma-macros` never depend on it** — only `resuma` + `resuma-macros` are published.
+- **`resuma` / `resuma-macros` never depend on it** — publish `resuma-macros` → `resuma` → `resuma-flow`.
 
 To stop new installs from crates.io, **yank every published version** (crates.io does not allow deleting a crate name):
 

@@ -1,6 +1,6 @@
 # Resuma roadmap — production readiness
 
-**Current release: v1.2.16 (Stable)** — see [STABILITY.md](docs/STABILITY.md).
+**Current release: v1.3.0 (Stable)** — see [STABILITY.md](docs/STABILITY.md).
 
 ---
 
@@ -56,7 +56,15 @@
 ### Security
 - [ ] External audit / OWASP checklist
 - [x] Multi-process rate limiting (disk backend; Redis removed)
-- [ ] Per-action rate limit buckets
+- [x] Per-action rate limit buckets
+
+### Derived from False World dogfooding
+(a real Resuma app hitting these gaps first — see `apps/falseworld/ROADMAP.md` Fase 1)
+- [x] `resuma::realtime` — `Room`/`RoomRegistry`/`Peer`/`WsWriter` reusable WebSocket room primitives, extracted from `falseworld::multiplayer`'s hand-rolled `axum::extract::ws` room/presence/rate-limit code
+- [x] `resuma doctor` — orphaned `static/client/*.js` detection (asset registered nowhere via `client_asset`/`include_bytes!`)
+- [x] `FlowEngine::last_artifact` / `last_result_field` — last-result-with-artifact lookup over `FlowEngine::replay`, replacing hand-rolled graph event scans in worker-heavy apps
+- [x] `ResumaError::Redirect(String)` — `#[middleware]` can now bounce a page `GET` to a real `302 Location:` (e.g. unauthenticated → `/login`) instead of only rendering the error shell with a 4xx/5xx status; needed once `falseworld` grew real session auth (`falseworld::auth`) and had to gate the game page server-side
+- [x] `flow::runtime::set_current_request` — `render_with_flow` republishes the task-local `FlowRequest` right after `#[middleware]` runs, so `current_request()` (the only way a `#[layout]` body can see the request) reflects middleware-attached extensions instead of a pre-middleware snapshot; without it, `falseworld`'s `RootLayout` nav bar never showed the logged-in user despite `req.is_authenticated()` being true on the page itself
 
 ### Long-running jobs & blobs (ORBIS-driven)
 - [x] Configurable worker wall-clock timeout (`extended` / `none` / secs / env)
@@ -82,4 +90,4 @@
 
 ---
 
-*Last updated: 2026-07-21 (v1.2.16: artifacts, uploads, cookies, WebGPU CSP, Cargo.lock)*
+*Last updated: 2026-08-03 (v1.3.0: realtime, Redirect, per-action rate limits, set_current_request, doctor orphan assets)*

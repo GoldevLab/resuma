@@ -12,7 +12,9 @@ const ROOT_ID = "resuma-root";
 const HANDLER_PREFIX = "data-r-on:";
 const CAPTURES_PREFIX = "data-r-cap:";
 const INLINE_PREFIX = "data-r-inline:";
-const CORE_URL = "/_resuma/core.js?v=1.2.16";
+/** Injected at build time via esbuild `--define:__RESUMA_VERSION__=…` from package.json. */
+declare const __RESUMA_VERSION__: string;
+const CORE_URL = `/_resuma/core.js?v=${__RESUMA_VERSION__}`;
 
 interface ResumePayload {
   signals: unknown[];

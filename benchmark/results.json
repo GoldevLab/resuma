@@ -1,22 +1,22 @@
 {
-  "generatedAt": "2026-05-24T20:15:51.136Z",
+  "generatedAt": "2026-08-03T21:00:20.340Z",
   "methodology": "SSR counter page (heading + increment button). Gzip/brotli from minified artifacts or framework build output.",
   "frameworks": [
     {
       "framework": "Resuma",
-      "version": "0.3.1",
+      "version": "1.3.0",
       "initial": {
-        "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\runtime\\dist\\loader.js",
+        "path": "/home/golfredo/Documentos/apps/resuma/runtime/dist/loader.js",
         "name": "loader.js",
-        "raw": 1865,
-        "gzip": 901,
-        "brotli": 746
+        "raw": 2131,
+        "gzip": 1021,
+        "brotli": 860
       },
       "firstInteraction": {
-        "raw": 10752,
-        "gzip": 4299,
-        "brotli": 3747,
-        "note": "loader.js + core.js"
+        "raw": 26604,
+        "gzip": 9351,
+        "brotli": 8351,
+        "note": "loader.js + core.js + Counter handler chunk (first click)"
       },
       "staticPage": {
         "raw": 0,
@@ -25,38 +25,45 @@
       },
       "details": {
         "loader": {
-          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\runtime\\dist\\loader.js",
+          "path": "/home/golfredo/Documentos/apps/resuma/runtime/dist/loader.js",
           "name": "loader.js",
-          "raw": 1865,
-          "gzip": 901,
-          "brotli": 746
+          "raw": 2131,
+          "gzip": 1021,
+          "brotli": 860
         },
         "core": {
-          "path": "C:\\Users\\golfredo\\Documents\\apps\\Resuma\\runtime\\dist\\core.js",
+          "path": "/home/golfredo/Documentos/apps/resuma/runtime/dist/core.js",
           "name": "core.js",
-          "raw": 8887,
-          "gzip": 3398,
-          "brotli": 3001
+          "raw": 24343,
+          "gzip": 8203,
+          "brotli": 7378
+        },
+        "handler": {
+          "path": "/home/golfredo/Documentos/apps/resuma/benchmark/.resuma-counter-handler.js",
+          "name": ".resuma-counter-handler.js",
+          "raw": 130,
+          "gzip": 127,
+          "brotli": 113
         }
       },
       "note": "Rust SSR + resumability",
       "initialRow": {
         "label": "Initial load",
-        "raw": 1865,
-        "gzip": 901,
-        "brotli": 746,
-        "rawFmt": "1.82 KiB",
-        "gzipFmt": "901 B",
-        "brotliFmt": "746 B"
+        "raw": 2131,
+        "gzip": 1021,
+        "brotli": 860,
+        "rawFmt": "2.08 KiB",
+        "gzipFmt": "1021 B",
+        "brotliFmt": "860 B"
       },
       "firstRow": {
         "label": "First interaction",
-        "raw": 10752,
-        "gzip": 4299,
-        "brotli": 3747,
-        "rawFmt": "10.50 KiB",
-        "gzipFmt": "4.20 KiB",
-        "brotliFmt": "3.66 KiB"
+        "raw": 26604,
+        "gzip": 9351,
+        "brotli": 8351,
+        "rawFmt": "25.98 KiB",
+        "gzipFmt": "9.13 KiB",
+        "brotliFmt": "8.16 KiB"
       },
       "staticRow": {
         "label": "Static page",
@@ -552,5 +559,6 @@
       }
     }
   ],
-  "errors": []
+  "errors": [],
+  "note": "Resuma row refreshed with --resuma-only; other frameworks retained from prior run."
 }

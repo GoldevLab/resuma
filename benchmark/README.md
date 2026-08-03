@@ -22,7 +22,7 @@ First Leptos run compiles ~200 crates and can take several minutes. Subsequent r
 
 | Framework | Initial load | First interaction | Static page |
 |-----------|-------------:|--------------------:|------------:|
-| **Resuma** | 901 B | 4.20 KiB | **0 B** |
+| **Resuma** | 1021 B | 9.13 KiB | **0 B** |
 | **Leptos** | 79.02 KiB | 79.02 KiB | — |
 | **Next.js** (App Router) | 142.43 KiB | 142.43 KiB | — |
 | **React** (Vite SPA) | 57.99 KiB | 57.99 KiB | — |
@@ -32,7 +32,7 @@ First Leptos run compiles ~200 crates and can take several minutes. Subsequent r
 | **SolidStart** | 16.75 KiB | 16.75 KiB | — |
 | **templ + HTMX** | 16.21 KiB | 16.21 KiB | — |
 
-Measured from production build artifacts in `benchmark/` (May 2026).
+Measured from production build artifacts in `benchmark/`. Resuma row refreshed for **1.3.0** (`node benchmark/run.mjs --resuma-only`); other frameworks retained from the May 2026 multi-framework run.
 
 ### Reading the table
 

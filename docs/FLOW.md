@@ -76,6 +76,47 @@ Progressive enhancement: `POST /_resuma/submit/:name` works without JS. See `/do
 
 `#[middleware]` runs before pages, loaders, submits, and actions. See `/docs/flow/middleware` and `/docs/security/middleware` (auth patterns).
 
+To gate a page behind login and bounce anonymous visitors with a real HTTP 302
+(instead of the error shell), return `Err(ResumaError::Redirect("/login".into()))`.
+Attach session identity with `req.set_extension(...)` so handlers and layouts can
+read `req.is_authenticated()` / `req.user_id()`.
+
+`#[layout]` bodies only see the request via `current_request()` (the macro discards
+its `req` argument). After middleware runs, Flow republishes the updated request
+with `set_current_request`, so a layout nav can show the logged-in user:
+
+```rust
+#[middleware]
+async fn attach_session(mut req: FlowRequest) -> resuma::Result<FlowRequest> {
+    if let Some(user) = verify_cookie(&req) {
+        req.set_extension("authenticated", serde_json::json!(true));
+        req.set_extension("user_id", serde_json::json!(user.id));
+        req.set_extension("username", serde_json::json!(user.name));
+    }
+    if req.path == "/" && !req.is_authenticated() {
+        return Err(ResumaError::Redirect("/login".into()));
+    }
+    Ok(req)
+}
+
+#[layout("/")]
+fn RootLayout() -> View {
+    let authed = current_request().is_some_and(|r| r.is_authenticated());
+    // …
+}
+```
+
+Session cookies on `#[submit]` success: `Redirect::to("/").with_session_cookie("sid", &token, ttl_secs)`.
+See [SECURITY.md](./SECURITY.md) for CSRF, cookie helpers, and rate limits.
+
+### Workers, artifacts, uploads
+
+Long-running jobs use `#[worker]` (exec / Resuma OS). Large results go through
+`ctx.artifact_put` and `FlowEngine::last_artifact` / `last_result_field` instead of
+scanning the full event replay by hand. Multipart uploads use `POST /_resuma/upload`
+or `#[upload]`. Env knobs and auth for these routes are documented in
+[SECURITY.md](./SECURITY.md).
+
 ### SEO
 
 Flow serves `/robots.txt` and `/sitemap.xml`. Configure via `FlowSeoConfig`.
@@ -99,6 +140,8 @@ Full API: `/docs/api` on the docs site.
 | `resuma::flow` | Pages, loads, submits, routing |
 | `resuma::server` | axum HTTP + `/_resuma/*` |
 | `resuma::router` | File scanner for `src/pages/` |
+| `resuma::realtime` | WebSocket rooms / peers — [REALTIME.md](./REALTIME.md) |
+| `resuma::exec` | Workers, artifacts, queue |
 
 ## Cookbook recipes
 

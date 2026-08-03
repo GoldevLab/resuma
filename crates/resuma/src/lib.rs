@@ -28,7 +28,7 @@
 //! Install the CLI: `cargo install resuma`. Narrative guides live at
 //! [resuma-docs.fly.dev](https://resuma-docs.fly.dev/docs).
 //!
-//! ## Resumability model (v0.4)
+//! ## Resumability model
 //!
 //! * Every [`#[component]`](component) is a **resumable boundary** — handlers register
 //!   under `/_resuma/handler/{Component}.js` and prefetch when the boundary enters the viewport.
@@ -46,6 +46,7 @@
 //! | [`ssr`] | HTML rendering + embedded resumability payload |
 //! | [`mod@server`] | axum HTTP, `ResumaApp`, `/_resuma/*` assets |
 //! | [`flow`] | `FlowApp`, file-based pages, `#[load]`, `#[submit]` |
+//! | [`realtime`] | WebSocket room/peer/rate-limit primitives for multiplayer apps |
 //! | [`router`] | Page discovery scanner |
 //! | [`cli`] | `resuma new` / `dev` / `build` (feature `cli`) |
 //!
@@ -62,6 +63,7 @@ pub mod client;
 pub mod core;
 pub mod exec;
 pub mod flow;
+pub mod realtime;
 pub mod router;
 pub mod server;
 pub mod ssr;
@@ -75,7 +77,8 @@ pub use resuma_macros::{
 };
 
 pub use crate::client::{
-    client_component, client_script_url, ClientComponent, CLIENT_SCRIPT_PREFIX,
+    client_component, client_script_path, client_script_url, content_digest,
+    register_client_asset_digest, ClientComponent, CLIENT_SCRIPT_PREFIX,
 };
 
 pub use crate::core::view::AttrValue;
@@ -106,10 +109,16 @@ pub use crate::flow::{
     load_boundary, loader_refresh_form, loader_refresh_input, not_found_page, query_nav_link,
     redirect, redirect_with_flash, register_layout, register_loader, register_loader_cache,
     register_middleware, register_stream_chunk, register_stream_loader, register_submit,
-    set_cookie, theme_into_pwa, try_use_load, try_use_load_value, use_load, with_request,
+    set_cookie, set_current_request, theme_into_pwa, try_use_load, try_use_load_value, use_load,
+    with_request,
     CookieOptions, DiscoveredPage, FlowApp, FlowError, FlowExtensions, FlowPageRegistry,
     FlowPwaConfig, FlowServeOptions, FromFlowRequest, LoadValue, LoaderError, Path, PublicAsset,
     PwaShortcut, Query, Redirect, SameSite, SubmitError, SubmitValue,
+};
+
+pub use crate::realtime::{
+    classify_frame, spawn_ws_writer, InboundFrame, Peer, PeerId, Room, RoomFull, RoomRegistry,
+    WsWriter,
 };
 
 pub use crate::exec::{

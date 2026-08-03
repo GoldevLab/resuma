@@ -41,7 +41,7 @@ pub fn flow_styles_link() -> View {
             },
             Attr {
                 name: "href".into(),
-                value: AttrValue::Static("/_resuma/flow.css".into()),
+                value: AttrValue::Static(resuma::server::flow_css_url().into()),
             },
             Attr {
                 name: "data-r-flow-styles".into(),

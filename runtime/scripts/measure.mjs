@@ -12,10 +12,11 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dist = join(__dirname, "..", "dist");
 
-const LOADER_GZIP_BUDGET = 1024;
+// Keep in sync with `crates/resuma/src/cli/doctor.rs` and `docs/STABILITY.md`.
+const LOADER_GZIP_BUDGET = 1100;
 // Post-1.0 reactive For/Match/Show + SPA nav; visible tasks + view transitions;
-// mount cleanup registry; safeAction + field_errors (v1.2.13).
-const CORE_GZIP_BUDGET = 8300;
+// mount cleanup registry; safeAction + field_errors; exclusive nav (1.3.x).
+const CORE_GZIP_BUDGET = 8500;
 
 const defaults = ["loader.js", "core.js", "flow.js", "runtime.js"].map((f) => join(dist, f));
 

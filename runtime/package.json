@@ -1,6 +1,6 @@
 {
   "name": "@resuma/runtime",
-  "version": "1.2.16",
+  "version": "1.3.0",
   "description": "Tiny client runtime for Resuma. Reads serialized state, lazy-loads event handlers, dispatches server actions. No hydration.",
   "type": "module",
   "main": "dist/loader.js",
@@ -11,13 +11,13 @@
     "src"
   ],
   "scripts": {
-    "build:loader": "esbuild src/loader.ts --bundle --format=esm --target=es2020 --minify --outfile=dist/loader.js",
-    "build:core": "esbuild src/core.ts --bundle --format=esm --target=es2020 --minify --external:/_resuma/* --outfile=dist/core.js",
+    "build:loader": "esbuild src/loader.ts --bundle --format=esm --target=es2020 --minify --define:__RESUMA_VERSION__=\\\"$npm_package_version\\\" --outfile=dist/loader.js",
+    "build:core": "esbuild src/core.ts --bundle --format=esm --target=es2020 --minify --external:/_resuma/* --define:__RESUMA_VERSION__=\\\"$npm_package_version\\\" --outfile=dist/core.js",
     "build:flow": "esbuild src/flow.ts --bundle --format=esm --target=es2020 --minify --outfile=dist/flow.js",
-    "build:legacy": "esbuild src/runtime.ts --bundle --format=esm --target=es2020 --minify --sourcemap --external:/_resuma/* --outfile=dist/runtime.js",
+    "build:legacy": "esbuild src/runtime.ts --bundle --format=esm --target=es2020 --minify --sourcemap --external:/_resuma/* --define:__RESUMA_VERSION__=\\\"$npm_package_version\\\" --outfile=dist/runtime.js",
     "build": "npm run build:loader && npm run build:core && npm run build:flow && npm run build:legacy",
-    "build:dev": "esbuild src/loader.ts --bundle --format=esm --target=es2020 --sourcemap --outfile=dist/loader.dev.js",
-    "watch": "esbuild src/loader.ts --bundle --format=esm --target=es2020 --sourcemap --watch --outfile=dist/loader.dev.js",
+    "build:dev": "esbuild src/loader.ts --bundle --format=esm --target=es2020 --sourcemap --define:__RESUMA_VERSION__=\\\"$npm_package_version\\\" --outfile=dist/loader.dev.js",
+    "watch": "esbuild src/loader.ts --bundle --format=esm --target=es2020 --sourcemap --define:__RESUMA_VERSION__=\\\"$npm_package_version\\\" --watch --outfile=dist/loader.dev.js",
     "size": "node scripts/measure.mjs"
   },
   "devDependencies": {

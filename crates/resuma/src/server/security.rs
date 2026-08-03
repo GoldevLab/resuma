@@ -3,6 +3,7 @@
 //! Enabled by default on `ResumaApp::serve()` and `FlowApp::serve()`. Configure via
 //! [`SecurityConfig`] or environment variables (see `docs/SECURITY.md`).
 
+use std::collections::BTreeMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
@@ -141,6 +142,13 @@ pub struct SecurityConfig {
     pub actions_per_minute: u32,
     /// Max form submits per client IP per minute.
     pub submits_per_minute: u32,
+    /// Optional per-action overrides of [`Self::actions_per_minute`].
+    ///
+    /// Keys are `#[server]` action names (e.g. `"login"`). When set, each IP is
+    /// also limited under the bucket `action:<name>` in addition to the global
+    /// `action` bucket. Populate via [`Self::with_action_rate_limit`] or env
+    /// `RESUMA_RATE_ACTION_<NAME>` / `RESUMA_RATE_ACTIONS_BY_NAME`.
+    pub action_rate_limits: BTreeMap<String, u32>,
     /// Hide `/_resuma/benchmark.json` in production.
     pub hide_benchmark: bool,
     /// Sanitize error messages returned to clients.
@@ -175,10 +183,33 @@ impl SecurityConfig {
                 .unwrap_or(10 * 1024 * 1024),
             actions_per_minute: parse_rate_limit("RESUMA_RATE_ACTIONS", 120),
             submits_per_minute: parse_rate_limit("RESUMA_RATE_SUBMITS", 60),
+            action_rate_limits: parse_action_rate_limits(),
             hide_benchmark: production,
             production,
             csp: CspConfig::from_env(),
         }
+    }
+
+    /// Override (or add) a per-action rate limit for `name` (calls/IP/minute).
+    ///
+    /// ```ignore
+    /// configure(
+    ///     SecurityConfig::from_env()
+    ///         .with_action_rate_limit("login", 10)
+    ///         .with_action_rate_limit("search", 60),
+    /// );
+    /// ```
+    pub fn with_action_rate_limit(mut self, name: impl Into<String>, limit_per_minute: u32) -> Self {
+        let name = name.into();
+        if !name.is_empty() && limit_per_minute > 0 {
+            self.action_rate_limits.insert(name, limit_per_minute);
+        }
+        self
+    }
+
+    /// Look up a per-action override, if any.
+    pub fn action_rate_limit(&self, name: &str) -> Option<u32> {
+        self.action_rate_limits.get(name).copied()
     }
 }
 
@@ -221,6 +252,61 @@ fn parse_rate_limit(name: &str, default: u32) -> u32 {
         Some(n) => n,
         None => default,
     }
+}
+
+/// Parse per-action overrides from:
+/// - `RESUMA_RATE_ACTIONS_BY_NAME=login:10,search:60`
+/// - `RESUMA_RATE_ACTION_<NAME>=N` (e.g. `RESUMA_RATE_ACTION_login=10`)
+///
+/// Skips `RESUMA_RATE_ACTIONS` (global) and empty / zero values.
+fn parse_action_rate_limits() -> BTreeMap<String, u32> {
+    let mut map = BTreeMap::new();
+    if let Ok(raw) = std::env::var("RESUMA_RATE_ACTIONS_BY_NAME") {
+        for part in raw.split(|c: char| c == ',' || c.is_whitespace()) {
+            let part = part.trim();
+            if part.is_empty() {
+                continue;
+            }
+            let Some((name, limit)) = part.split_once(':') else {
+                continue;
+            };
+            let name = name.trim();
+            if name.is_empty() {
+                continue;
+            }
+            if let Ok(n) = limit.trim().parse::<u32>() {
+                if n > 0 {
+                    map.insert(name.to_string(), n);
+                }
+            }
+        }
+    }
+    for (key, value) in std::env::vars() {
+        let Some(name) = key.strip_prefix("RESUMA_RATE_ACTION_") else {
+            continue;
+        };
+        // Avoid clobbering the global `RESUMA_RATE_ACTIONS` env (no trailing `_`).
+        if name.is_empty() {
+            continue;
+        }
+        if let Ok(n) = value.parse::<u32>() {
+            if n > 0 {
+                map.insert(name.to_string(), n);
+            }
+        }
+    }
+    map
+}
+
+/// Apply a per-action rate limit when configured for `action_name`.
+///
+/// No-op when no override is set — the global `action` bucket from
+/// [`guard_mutation`] still applies.
+pub fn check_action_rate_limit(ip: &str, action_name: &str) -> Result<()> {
+    let Some(limit) = config().action_rate_limit(action_name) else {
+        return Ok(());
+    };
+    check_rate_limit(ip, &format!("action:{action_name}"), limit)
 }
 
 /// Install global security config (call before `serve()` to override env defaults).
@@ -1087,6 +1173,47 @@ mod tests {
     fn validate_action_name_rejects_empty() {
         assert!(validate_action_name("").is_err());
         assert!(validate_action_name("echo").is_ok());
+    }
+
+    #[test]
+    fn with_action_rate_limit_stores_positive_overrides() {
+        let cfg = SecurityConfig::from_env()
+            .with_action_rate_limit("login", 10)
+            .with_action_rate_limit("search", 60)
+            .with_action_rate_limit("", 5)
+            .with_action_rate_limit("noop", 0);
+        assert_eq!(cfg.action_rate_limit("login"), Some(10));
+        assert_eq!(cfg.action_rate_limit("search"), Some(60));
+        assert_eq!(cfg.action_rate_limit("noop"), None);
+        assert_eq!(cfg.action_rate_limit(""), None);
+    }
+
+    #[test]
+    fn check_action_rate_limit_noops_without_override() {
+        rate_limit::reset_rate_limits_for_tests();
+        configure(SecurityConfig {
+            actions_per_minute: 10_000,
+            action_rate_limits: BTreeMap::new(),
+            ..SecurityConfig::from_env()
+        });
+        assert!(check_action_rate_limit("127.0.0.1", "unlisted").is_ok());
+    }
+
+    #[test]
+    fn check_action_rate_limit_trips_when_override_exceeded() {
+        rate_limit::reset_rate_limits_for_tests();
+        configure(
+            SecurityConfig::from_env()
+                .with_action_rate_limit("login", 2),
+        );
+        assert!(check_action_rate_limit("10.0.0.9", "login").is_ok());
+        assert!(check_action_rate_limit("10.0.0.9", "login").is_ok());
+        assert!(matches!(
+            check_action_rate_limit("10.0.0.9", "login"),
+            Err(ResumaError::RateLimited)
+        ));
+        // A different IP still has budget.
+        assert!(check_action_rate_limit("10.0.0.10", "login").is_ok());
     }
 
     #[test]

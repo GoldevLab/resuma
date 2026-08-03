@@ -20,7 +20,7 @@ See [NAMING.md](./NAMING.md) for the full product map.
 
 ```toml
 [dependencies]
-resuma = { version = "0.4", default-features = false }
+resuma = { version = "1.3", default-features = false }
 tokio  = { version = "1", features = ["full"] }
 ```
 
@@ -55,9 +55,9 @@ From the monorepo: `cargo install --path crates/resuma --features cli`
 | # | Brand | Crate / path | Role |
 |---|-------|--------------|------|
 | 1 | **Resuma** | `resuma` (`core`, `ssr`, `server`) | Components, signals, resumability |
-| 2 | **Resuma Flow** | `resuma::flow` | `FlowApp`, routing, loaders, actions |
+| 2 | **Resuma Flow** | `resuma::flow` + `resuma-flow` | `FlowApp` / routing in `resuma`; UI widgets in `resuma-flow` |
 | 3 | **Resuma Macros** | `resuma-macros` | `view!`, `#[component]`, rs2js |
-| 4 | **Resuma Runtime** | `runtime/` → `/_resuma/*.js` | Browser loader + core |
+| 4 | **Resuma Runtime** | `runtime/` → `/_resuma/*.js` | Browser loader + core + flow |
 | 5 | **Resuma Client** | `client-sdk/resuma-client.ts` | TypeScript widget mount contract |
 | 6 | **Resuma CLI** | `resuma` feature `cli` | `new`, `dev`, `build` |
 
@@ -75,12 +75,13 @@ From the monorepo: `cargo install --path crates/resuma --features cli`
 
 ## Published crates
 
-Only **`resuma`** + **`resuma-macros`** ship on [crates.io](https://crates.io/crates/resuma).
+Workspace **1.3.x** ships **`resuma-macros`**, **`resuma`**, and **`resuma-flow`** on [crates.io](https://crates.io/crates/resuma). Most apps depend on **`resuma`** only; add **`resuma-flow`** for Flow UI widgets.
 
 | Crate | crates.io | docs.rs |
 |-------|-----------|---------|
 | `resuma` | [crates.io/crates/resuma](https://crates.io/crates/resuma) | [docs.rs/resuma](https://docs.rs/resuma) |
 | `resuma-macros` | [crates.io/crates/resuma-macros](https://crates.io/crates/resuma-macros) | [docs.rs/resuma-macros](https://docs.rs/resuma-macros) |
+| `resuma-flow` | [crates.io/crates/resuma-flow](https://crates.io/crates/resuma-flow) | [docs.rs/resuma-flow](https://docs.rs/resuma-flow) |
 
 ## API map
 

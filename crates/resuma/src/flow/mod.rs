@@ -60,7 +60,8 @@ pub use routes::{
     attach_flow_routes, attach_seo_kit_routes, FlowSeoConfig, SeoKitRouteOpts, SubmitResponse,
 };
 pub use runtime::{
-    current_request, set_load_cache, try_use_load, try_use_load_value, use_load, with_request,
+    current_request, set_current_request, set_load_cache, try_use_load, try_use_load_value,
+    use_load, with_request,
 };
 pub use stream_load::{register_stream_chunk, register_stream_loader};
 pub use submit::{encode_submit_result, SubmitError, SubmitValue};

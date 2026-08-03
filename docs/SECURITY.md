@@ -30,6 +30,8 @@ Resuma ships with **secure defaults** comparable to Express + Helmet + rate limi
 | `RESUMA_BODY_LIMIT` | `10485760` (10 MiB) | Max POST body bytes (actions + multipart) |
 | `RESUMA_RATE_ACTIONS` | `120` | Action RPC calls per IP per minute |
 | `RESUMA_RATE_SUBMITS` | `60` | Form submits per IP per minute |
+| `RESUMA_RATE_ACTION_<NAME>` | — | Per-action override (e.g. `RESUMA_RATE_ACTION_login=10`) |
+| `RESUMA_RATE_ACTIONS_BY_NAME` | — | Comma list `login:10,search:60` (same as per-action) |
 | `RESUMA_RATE_BACKEND` | `memory` (dev), `disk` (prod) | `memory` or `disk` |
 | `RESUMA_EXEC_API_KEY` | — | **Required** for exec admin routes unless `RESUMA_EXEC_PUBLIC=1` (dev only) |
 | `RESUMA_EXEC_PUBLIC` | off | Opt-in unauthenticated exec routes (dev only; ignored in production) |
@@ -134,7 +136,23 @@ JSON payloads (e.g. `{ token, redirect }`) — only typed `Redirect` (or a sole
 
 Handlers can read `req.is_authenticated()`, `req.user_id()`, and `req.has_role("admin")`.
 
-Returning `Err` now **blocks** the request on pages, submits, and server actions.
+Returning `Err` now **blocks** the request on pages, submits, and server actions — with
+one exception: `Err(ResumaError::Redirect(to))` turns a page `GET` into a bare
+`302 Location: <to>` (no HTML body) instead of the error shell, so you can gate a whole
+page behind auth and bounce anonymous visitors to `/login` server-side:
+
+```rust
+#[middleware]
+async fn require_login(req: FlowRequest) -> resuma::Result<FlowRequest> {
+    if req.path.starts_with("/dashboard") && !req.is_authenticated() {
+        return Err(ResumaError::Redirect("/login".into()));
+    }
+    Ok(req)
+}
+```
+
+Any other `Err` variant (`Unauthorized`, `Forbidden`, …) still renders the error shell
+with the matching 401/403/429 status.
 
 ## Backend patterns (NestJS + Next.js)
 
@@ -151,6 +169,31 @@ All patterns are live in **`examples/todo`**: Controller/Service split, Guards, 
 By default, dev uses an **in-memory** sliding window per IP. In **production** (`RESUMA_ENV=production`), Resuma uses a **disk-backed** rate limiter under `{RESUMA_DATA_DIR}/rate-limit/` so limits survive restarts and are shared across processes on the same volume (no Redis required).
 
 Override with `RESUMA_RATE_BACKEND=memory|disk`. Tune exec limits with `RESUMA_RATE_EXEC_*`. For multi-region or multi-machine deploys, add edge rate limiting (Fly proxy, nginx `limit_req`) in front of Resuma — no external datastore required.
+
+### Per-action rate limit buckets
+
+The global `RESUMA_RATE_ACTIONS` budget still applies to every `POST /_resuma/action/*`.
+On top of that you can tighten specific `#[server]` names — useful for login/search
+endpoints that attract abuse while leaving read-ish actions at the default:
+
+```bash
+# Either form works; programmatic overrides win if both are set at configure time.
+export RESUMA_RATE_ACTION_login=10
+export RESUMA_RATE_ACTIONS_BY_NAME=search:60,claim:30
+```
+
+```rust
+use resuma::prelude::*;
+
+configure_security(
+    SecurityConfig::from_env()
+        .with_action_rate_limit("login", 10)
+        .with_action_rate_limit("search", 60),
+);
+```
+
+Each override uses its own bucket key (`action:<name>`), so burning the login
+budget does not starve unrelated actions.
 
 ## Static assets (`public/`)
 

@@ -21,7 +21,8 @@ use super::pages::{discover_pages, DiscoveredPage, FlowPageRegistry};
 use super::request::FlowRequest;
 use super::routes::attach_flow_routes;
 use super::runtime::{
-    first_load_error, prefetch_deferred_loaders, stage_deferred_stream_plan, with_request_deferred,
+    first_load_error, prefetch_deferred_loaders, set_current_request, stage_deferred_stream_plan,
+    with_request_deferred,
 };
 
 type PageFn = Arc<dyn Fn(FlowRequest) -> View + Send + Sync>;
@@ -140,6 +141,8 @@ impl FlowApp {
     }
 
     /// Register a TypeScript client component bundle at `/static/client/{id}.js`.
+    ///
+    /// Records a content digest so HTML script tags use `?v=<hash>` (immutable-safe cache bust).
     pub fn client_asset(self, id: impl AsRef<str>, body: &'static [u8]) -> Self {
         let id = id.as_ref();
         if crate::client::validate_client_id(id).is_err() {
@@ -149,7 +152,8 @@ impl FlowApp {
             );
             return self;
         }
-        let path = crate::client::client_script_url(id);
+        crate::client::register_client_asset_digest(id, body);
+        let path = crate::client::client_script_path(id);
         self.static_asset(path, body, "application/javascript; charset=utf-8")
     }
 
@@ -651,7 +655,17 @@ fn render_with_flow(
                 let updated =
                     tokio::task::block_in_place(|| h.block_on(run_middleware(req.clone())));
                 match updated {
-                    Ok(r) => req = r,
+                    Ok(r) => {
+                        req = r;
+                        // Republish so `current_request()` — and therefore
+                        // `#[layout]` bodies, which only get `current_request()`
+                        // since the macro discards its own `req` argument —
+                        // see the auth extensions middleware just attached
+                        // (`is_authenticated()`/`user_id()`), not the stale
+                        // pre-middleware snapshot `with_request_deferred`
+                        // captured below before middleware ran.
+                        set_current_request(req.clone());
+                    }
                     Err(e) => return error_page(&FlowError::from_resuma(e)),
                 }
             } else {

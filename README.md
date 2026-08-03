@@ -15,7 +15,7 @@ Ship HTML from the server. The browser **resumes** serialized state and lazy han
 [![CI](https://github.com/GoldevLab/resuma/actions/workflows/ci.yml/badge.svg)](https://github.com/GoldevLab/resuma/actions/workflows/ci.yml)
 [![License](https://img.shields.io/crates/l/resuma.svg)](https://github.com/GoldevLab/resuma)
 [![Rust](https://img.shields.io/badge/rust-1.91%2B-orange.svg)](https://rustup.rs)
-[![Initial JS](https://img.shields.io/badge/initial%20JS-901%20B-712cf9.svg)](benchmark/README.md)
+[![Initial JS](https://img.shields.io/badge/initial%20JS-1021%20B-712cf9.svg)](benchmark/README.md)
 
 **[Get started](https://resuma-docs.fly.dev/docs/getting_started)** · **[Benchmark](https://resuma-docs.fly.dev/docs/benchmark)** · **[Docs](https://resuma-docs.fly.dev/docs)** · **[API](https://docs.rs/resuma)**
 
@@ -35,7 +35,7 @@ Same UX everywhere — SSR counter (heading + increment button). Production buil
 
 | Framework | Initial load | First click | Static page |
 |-----------|-------------:|------------:|------------:|
-| **Resuma** | **907 B** | **5.08 KiB** | **0 B** |
+| **Resuma** | **1021 B** | **9.13 KiB** | **0 B** |
 | Leptos | 79.02 KiB | 79.02 KiB | — |
 | Next.js (App Router) | 142.43 KiB | 142.43 KiB | — |
 | React (Vite SPA) | 57.99 KiB | 57.99 KiB | — |
@@ -45,7 +45,7 @@ Same UX everywhere — SSR counter (heading + increment button). Production buil
 | SolidStart | 16.75 KiB | 16.75 KiB | — |
 | templ + HTMX | 16.21 KiB | 16.21 KiB | — |
 
-Regenerate locally: `node benchmark/run.mjs` · Independent sources in [benchmark/README.md](benchmark/README.md#external-validation)
+Regenerate locally: `node benchmark/run.mjs` (or `--resuma-only` to refresh just Resuma) · Independent sources in [benchmark/README.md](benchmark/README.md#external-validation)
 
 > If you like [Qwik's resumability](https://qwik.dev/docs/concepts/resumable/) and a Rust-first stack, Resuma is that model with native SSR, server actions, and **no WASM bundle by default**.
 
@@ -56,12 +56,12 @@ Regenerate locally: `node benchmark/run.mjs` · Independent sources in [benchmar
 | Classic SSR + hydration | **Resuma** |
 | --- | --- |
 | Re-run components to attach listeners | **Resume** serialized state and handlers |
-| JS grows with the whole app upfront | **907 B** loader + lazy handler chunks |
+| JS grows with the whole app upfront | **~1 KiB** loader + lazy handler chunks |
 | Manual interactive boundaries | Every `#[component]` is resumable by default |
 | Custom server RPC wiring | `#[server]` + built-in Axum routes |
 | Static docs/marketing pages still ship JS | **0 B** on non-interactive pages |
 
-**Mental model:** components run once on the server. SSR embeds signals and handler refs in HTML; a tiny client runtime resumes on first click or when an island enters the viewport.
+**Mental model:** components run once on the server. SSR embeds signals and handler refs in HTML; a tiny client runtime resumes on first click or when an island enters the viewport. Multiplayer apps can use [`resuma::realtime`](https://docs.rs/resuma/latest/resuma/realtime/) for WebSocket rooms and peers.
 
 ---
 
@@ -113,7 +113,7 @@ Handlers compile to JavaScript automatically — lazy-loaded on first interactio
 
 ```toml
 [dependencies]
-resuma = "1.0"
+resuma = "1.3"
 tokio  = { version = "1", features = ["full"] }
 ```
 
@@ -160,10 +160,10 @@ Guide: [resuma-docs.fly.dev/docs/flow](https://resuma-docs.fly.dev/docs/flow)
 
 | Product | Crate / path | Role |
 |---------|--------------|------|
-| **Resuma** | `resuma` | Core — signals, resumability, `ResumaApp` |
-| **Resuma Flow** | `resuma::flow` | Pages, routing, loaders, `FlowApp` |
+| **Resuma** | `resuma` | Core — signals, resumability, `ResumaApp`, `resuma::realtime` |
+| **Resuma Flow** | `resuma::flow` + `resuma-flow` | Pages/routing in `resuma`; UI widgets crate (`flow_graph`, dashboard, `worker_panel`) |
 | **Resuma Macros** | `resuma-macros` | `view!`, `#[component]`, rs2js |
-| **Resuma Runtime** | `runtime/` | Browser loader + core |
+| **Resuma Runtime** | `runtime/` | Browser loader + core + flow |
 | **Resuma Client** | `client-sdk/` | TypeScript widgets (`ClientComponent`) |
 | **Resuma CLI** | `resuma` + `cli` feature | `new`, `dev`, `build` |
 
@@ -195,7 +195,7 @@ Details: [docs/NAMING.md](./docs/NAMING.md)
                             │ HTTP
                             ▼
 ┌──────────────────────────────────────────────────────────┐
-│              Browser (907 B loader, lazy core)           │
+│              Browser (~1 KiB loader, lazy core)          │
 │   parse resuma/state · delegate events · lazy handlers   │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -225,8 +225,9 @@ resuma/
 ├── assets/               # logo + GitHub social preview
 ├── crates/
 │   ├── resuma/           # runtime, SSR, server, flow, CLI
-│   └── resuma-macros/    # view!, #[component], rs2js
-├── runtime/              # TypeScript client (~907 B loader)
+│   ├── resuma-macros/    # view!, #[component], rs2js
+│   └── resuma-flow/      # Flow UI widgets (flow_graph, dashboard, worker_panel)
+├── runtime/              # TypeScript client (~1 KiB loader; see benchmark/)
 ├── benchmark/            # measured comparisons vs Qwik, Next, etc.
 ├── examples/             # runnable demos
 └── docs/                 # markdown reference
@@ -255,17 +256,21 @@ ResumaApp::new()
 
 ---
 
-## What ships in v0.4
+## What ships in 1.3
 
-- `view!{}` — JSX-like templates
-- `#[component]` — resumable by default
-- `#[server]` / `#[submit]` / `#[load]` — server RPC and Flow data
+- `view!` / `#[component]` — JSX-like templates; resumable by default
+- `#[server]` / `#[submit]` / `#[load]` — server RPC, form mutations, and Flow data loaders
 - `#[island]` — optional lazy client bundles
-- rs2js — Rust handlers → lazy JS chunks
-- axum server with `/_resuma/*` routes
-- File-based routing · static export scaffold
+- SPA `NavLink` + view transitions
+- `ResumaError::Redirect` + middleware auth gating
+- Cookies / session helpers (`Redirect::with_session_cookie`)
+- Workers, artifacts, and uploads
+- `resuma::realtime` — WebSocket rooms / peers
+- WebGPU CSP defaults
+- Client asset cache-busting
+- Per-action rate limits
+- Flow file-based routing (`FlowApp`, `src/pages/`)
 - CLI: `new`, `add`, `dev`, `build`, `routes`, `update`, `doctor`
-- Production security defaults (CSRF, CSP, rate limits)
 
 ---
 

@@ -259,13 +259,6 @@ function createForItemNode(item: unknown, key: string, sample: HTMLElement | und
       if (isSignalBoundDyn(el)) return;
       el.textContent = itemLabel(item);
     });
-    // Legacy samples without resuma-dyn (e.g. todo demo) keep the old hook.
-    if (!node.querySelector("resuma-dyn")) {
-      const titleEl = node.querySelector(".todo-title");
-      if (titleEl) {
-        titleEl.textContent = itemLabel(item);
-      }
-    }
     return node;
   }
   const wrap = document.createElement("div");
@@ -282,10 +275,6 @@ function updateForItemContent(node: HTMLElement, item: unknown): void {
     if (isSignalBoundDyn(el)) return;
     el.textContent = itemLabel(item);
   });
-  if (!node.querySelector("resuma-dyn")) {
-    const titleEl = node.querySelector(".todo-title");
-    if (titleEl) titleEl.textContent = itemLabel(item);
-  }
 }
 
 function listKey(item: unknown, keyField: string | null, index: number): string {

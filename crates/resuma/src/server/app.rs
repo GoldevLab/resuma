@@ -437,6 +437,23 @@ fn render_page_response(
     let status_code = super::page_cache::take_response_status()
         .and_then(|s| StatusCode::from_u16(s).ok())
         .unwrap_or(StatusCode::OK);
+    // A `#[middleware]` that returned `Err(ResumaError::Redirect(to))` staged
+    // both the status (302) and this — skip the whole HTML render (the `view`
+    // is just the `error_page` shell, nobody should see it) and return a bare
+    // redirect, same as any other server that gates a page with a 302.
+    if let Some(location) = super::page_cache::take_response_redirect() {
+        let mut res = Response::builder()
+            .status(status_code)
+            .header(
+                header::LOCATION,
+                HeaderValue::from_str(&location).unwrap_or_else(|_| HeaderValue::from_static("/")),
+            )
+            .body(Body::empty())
+            .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response());
+        res.headers_mut()
+            .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+        return attach_page_security(res, &opts, https, set_csrf_cookie);
+    }
     // Error / non-200 pages must not be advertised as indexable.
     let robots_tag = if status_code == StatusCode::OK {
         "index, follow"
@@ -619,7 +636,8 @@ async fn serve_flow_css() -> Response {
             ),
             (
                 header::CACHE_CONTROL,
-                HeaderValue::from_static("public, max-age=31536000, immutable"),
+                // Fixed path — never immutable (same rule as /_resuma/*.js).
+                HeaderValue::from_static("public, max-age=60, must-revalidate"),
             ),
         ],
         FLOW_CSS,
@@ -667,6 +685,12 @@ async fn serve_action(
     }
 
     if let Err(err) = security::validate_action_name(&name) {
+        return action_error(err);
+    }
+
+    // Optional tighter bucket for this `#[server]` name (see
+    // `SecurityConfig::action_rate_limits` / `RESUMA_RATE_ACTION_*`).
+    if let Err(err) = security::check_action_rate_limit(&ip, &name) {
         return action_error(err);
     }
 

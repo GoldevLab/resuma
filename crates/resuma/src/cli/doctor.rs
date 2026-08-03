@@ -10,8 +10,9 @@ use super::update::{
     latest_crates_io_version, parse_resuma_dependency, ResumaDependency, CLI_VERSION,
 };
 
-const LOADER_GZIP_BUDGET: usize = 1024;
-const CORE_GZIP_BUDGET: usize = 6600;
+// Keep in sync with `runtime/scripts/measure.mjs` and `docs/STABILITY.md`.
+const LOADER_GZIP_BUDGET: usize = 1100;
+const CORE_GZIP_BUDGET: usize = 8500;
 
 pub fn doctor_command() -> Result<()> {
     println!("[resuma] doctor\n");
@@ -88,6 +89,7 @@ pub fn doctor_command() -> Result<()> {
             if has_flow_pages(&cwd) {
                 check_flow_pages(&cwd);
             }
+            check_client_assets(&cwd);
         } else {
             println!("  (not a Resuma app — no resuma in [dependencies])");
         }
@@ -238,5 +240,158 @@ fn fmt_bytes(n: usize) -> String {
         format!("{n} B")
     } else {
         format!("{:.2} KiB", n as f64 / 1024.0)
+    }
+}
+
+/// Scans `static/client/*.js` for files no `include_bytes!(...)` in `src/` points
+/// at — i.e. files that were `client_asset`-registered once and then abandoned
+/// when the app hand-rolled a `v2`/`v3` rename instead of relying on Resuma's
+/// content-digest cache busting. This exact drift (~250 orphaned files, tens of
+/// MB) is what motivated the check: see `resuma` CHANGELOG `[Unreleased]`.
+fn check_client_assets(root: &Path) {
+    let client_dir = root.join("static/client");
+    let Ok(entries) = std::fs::read_dir(&client_dir) else {
+        return;
+    };
+
+    let referenced = referenced_client_asset_paths(root);
+    let mut orphaned: Vec<String> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("js"))
+        .filter(|path| {
+            let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
+            !referenced.contains(&canonical)
+        })
+        .filter_map(|path| path.file_name().map(|n| n.to_string_lossy().into_owned()))
+        .collect();
+    orphaned.sort();
+
+    if orphaned.is_empty() {
+        println!("  static/client/: no orphaned assets");
+        return;
+    }
+    println!(
+        "  static/client/: {} file(s) not referenced by any client_asset(...) / include_bytes!(...) in src/:",
+        orphaned.len()
+    );
+    for name in orphaned.iter().take(20) {
+        println!("    - {name}");
+    }
+    if orphaned.len() > 20 {
+        println!("    ...and {} more", orphaned.len() - 20);
+    }
+    println!(
+        "  → delete unused files, or register them via .client_asset(\"id\", include_bytes!(...))"
+    );
+}
+
+/// Resolved, canonicalized filesystem paths every `include_bytes!("...")` literal
+/// under `root/src` points at. `include_bytes!` paths are relative to the file
+/// they appear in (not the crate root), so resolution must happen per-file.
+fn referenced_client_asset_paths(root: &Path) -> std::collections::HashSet<PathBuf> {
+    let mut referenced = std::collections::HashSet::new();
+    let src_dir = root.join("src");
+    if !src_dir.is_dir() {
+        return referenced;
+    }
+    for entry in walkdir::WalkDir::new(&src_dir)
+        .into_iter()
+        .filter_map(Result::ok)
+    {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let Some(parent) = path.parent() else {
+            continue;
+        };
+        for rel in extract_include_bytes_paths(&content) {
+            let resolved = parent.join(&rel);
+            referenced.insert(resolved.canonicalize().unwrap_or(resolved));
+        }
+    }
+    referenced
+}
+
+/// Extracts string-literal path arguments from `include_bytes!("...")` call
+/// sites via plain text search (fast, dependency-free — good enough for a
+/// health-check heuristic; not a full Rust parser).
+fn extract_include_bytes_paths(content: &str) -> Vec<String> {
+    const NEEDLE: &str = "include_bytes!";
+    let mut out = Vec::new();
+    let mut cursor = 0usize;
+    while let Some(found) = content[cursor..].find(NEEDLE) {
+        let after_needle = cursor + found + NEEDLE.len();
+        let rest = &content[after_needle..];
+        let Some(open) = rest.find('"') else { break };
+        let Some(close) = rest[open + 1..].find('"') else {
+            break;
+        };
+        out.push(rest[open + 1..open + 1 + close].to_string());
+        cursor = after_needle + open + 1 + close + 1;
+    }
+    out
+}
+
+#[cfg(test)]
+mod client_asset_tests {
+    use super::*;
+
+    #[test]
+    fn extracts_single_and_multiple_include_bytes_paths() {
+        let src = r#"
+            .client_asset("fw-item-icons", include_bytes!("../static/client/fw-item-icons.js"))
+            .client_asset(
+                "fw-meadow-gpu",
+                include_bytes!("../static/client/fw-meadow-gpu.js"),
+            )
+        "#;
+        assert_eq!(
+            extract_include_bytes_paths(src),
+            vec![
+                "../static/client/fw-item-icons.js".to_string(),
+                "../static/client/fw-meadow-gpu.js".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn extracts_nothing_when_absent() {
+        assert!(extract_include_bytes_paths("fn main() {}").is_empty());
+    }
+
+    #[test]
+    fn flags_orphaned_js_files_not_reachable_from_src() {
+        let root = std::env::temp_dir().join(format!(
+            "resuma-doctor-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let client_dir = root.join("static/client");
+        let src_dir = root.join("src");
+        std::fs::create_dir_all(&client_dir).unwrap();
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::write(client_dir.join("live.js"), b"// live").unwrap();
+        std::fs::write(client_dir.join("dead-v1.js"), b"// dead").unwrap();
+        std::fs::write(
+            src_dir.join("main.rs"),
+            br#"fn register() { let _ = include_bytes!("../static/client/live.js"); }"#,
+        )
+        .unwrap();
+
+        let referenced = referenced_client_asset_paths(&root);
+        let live_canonical = client_dir.join("live.js").canonicalize().unwrap();
+        let dead_canonical = client_dir.join("dead-v1.js").canonicalize().unwrap();
+        assert!(referenced.contains(&live_canonical));
+        assert!(!referenced.contains(&dead_canonical));
+
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }

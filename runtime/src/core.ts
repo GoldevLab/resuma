@@ -31,10 +31,13 @@ function hasFlowWidgets(scope: ParentNode): boolean {
   return false;
 }
 
+/** Injected at build time via esbuild `--define:__RESUMA_VERSION__=…` from package.json. */
+declare const __RESUMA_VERSION__: string;
+
 async function maybeInitFlowWidgets(scope: ParentNode): Promise<void> {
   if (!hasFlowWidgets(scope)) return;
   try {
-    const mod = await import("/_resuma/flow.js?v=1.2.16");
+    const mod = await import(`/_resuma/flow.js?v=${__RESUMA_VERSION__}`);
     mod.initFlowWidgets(scope);
   } catch (err) {
     console.error("[r] flow load", err);

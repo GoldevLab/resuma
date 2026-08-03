@@ -35,6 +35,7 @@ impl FlowError {
                 ResumaError::InvalidCsrf => "Invalid CSRF token",
                 ResumaError::RateLimited => "Too many requests",
                 ResumaError::Validation(message) => message,
+                ResumaError::Redirect(_) => "Redirecting…",
                 _ => "Request blocked",
             },
         }
@@ -48,9 +49,16 @@ impl FlowError {
 /// Default error page view.
 ///
 /// Stages the error's HTTP status so the response is returned with the correct
-/// code (401/403/404/500…) instead of a soft `200 OK`.
+/// code (401/403/404/500…) instead of a soft `200 OK`. A `#[middleware]`
+/// returning `Err(ResumaError::Redirect(to))` additionally stages a
+/// `Location` header — `render_page_response` turns the whole response into a
+/// real `302` with no HTML body once it sees that staged redirect, so this
+/// view's markup is only ever seen by clients that don't follow redirects.
 pub fn error_page(err: &FlowError) -> View {
     crate::server::page_cache::stage_response_status(err.status());
+    if let FlowError::Middleware(ResumaError::Redirect(to)) = err {
+        crate::server::page_cache::stage_response_redirect(to.clone());
+    }
     view_error_shell(err.status(), err.message())
 }
 
@@ -64,6 +72,30 @@ pub fn registry_miss_page(module: &str) -> View {
     error_page(&FlowError::Render(format!(
         "page module `{module}` missing from registry — run `resuma routes --generate`"
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::server::page_cache::{clear_request_staging, take_response_redirect, take_response_status};
+
+    #[test]
+    fn redirect_error_stages_302_and_location() {
+        clear_request_staging();
+        let _ = error_page(&FlowError::from_resuma(ResumaError::Redirect(
+            "/login".into(),
+        )));
+        assert_eq!(take_response_status(), Some(302));
+        assert_eq!(take_response_redirect(), Some("/login".to_string()));
+    }
+
+    #[test]
+    fn non_redirect_middleware_error_stages_status_without_location() {
+        clear_request_staging();
+        let _ = error_page(&FlowError::from_resuma(ResumaError::Unauthorized));
+        assert_eq!(take_response_status(), Some(401));
+        assert_eq!(take_response_redirect(), None);
+    }
 }
 
 fn view_error_shell(status: u16, message: &str) -> View {

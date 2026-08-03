@@ -6,6 +6,53 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-08-03
+
+### Added
+
+- **`resuma::realtime`** — WebSocket room/peer primitives for multiplayer apps:
+  `Room<S>` (join/leave/broadcast_except/sweep_stale), `RoomRegistry<K, S>` (thread-safe
+  room map keyed by world/lobby id), `Peer::allow_rate` (per-message-kind throttling),
+  `spawn_ws_writer` + `classify_frame` (boilerplate around `axum::extract::ws`). See
+  `docs/REALTIME.md`.
+- **`ResumaError::Redirect(String)`** — a `#[middleware]` can return
+  `Err(ResumaError::Redirect("/login".into()))` to turn a page `GET` into a bare
+  `302 Location:` (no HTML body). Staging in
+  `server::page_cache::{stage_response_redirect, take_response_redirect}`.
+- **`set_current_request`** — republishes the task-local `FlowRequest` after
+  `#[middleware]` so `current_request()` (and `#[layout]` bodies) see auth
+  extensions. Re-exported from `resuma::flow` and the crate root.
+- **`FlowEngine::last_artifact` / `last_result_field`** — newest-first scan of a
+  graph's `WorkerEvent::Result` history. Numbers and bools are coerced to string.
+- **`resuma doctor` orphaned client asset check** — flags `static/client/*.js`
+  files not wired via `client_asset` / `include_bytes!`.
+- **Per-action rate limit buckets** — `SecurityConfig::with_action_rate_limit`,
+  env `RESUMA_RATE_ACTION_<NAME>` / `RESUMA_RATE_ACTIONS_BY_NAME`, plus the global
+  `RESUMA_RATE_ACTIONS` budget. Documented in `docs/SECURITY.md`.
+
+### Changed
+
+- **Runtime `?v=` cache-bust** — injected from `runtime/package.json` via esbuild
+  `--define:__RESUMA_VERSION__` (no more hand-edited version strings in
+  `loader.ts` / `core.ts`).
+- **Gzip size budgets unified** — loader ≤ 1100 B, core ≤ 8500 B across
+  `measure.mjs`, `resuma doctor`, and `docs/STABILITY.md`. Benchmark Resuma row
+  refreshed (`1021 B` initial / `9.13 KiB` first click).
+- **Docs hygiene** — README/PUBLISHING/GETTING_STARTED/PACKAGE/NAMING/INSTALL
+  updated off the stale 0.4.x / “no resuma-flow crate” claims; three-crate
+  publish order documented.
+
+### Fixed
+
+- **Client asset cache busting** — `FlowApp::client_asset` records a content digest and
+  `client_script_url` / `ClientComponent` script tags emit `?v=<hash>`. Safe with
+  `Cache-Control: immutable` without manual `v2`/`v3` renames when bytes change.
+- **`RESUMA_DEV=1` soft cache** — embedded `static_asset` / client bundles use
+  `max-age=0, must-revalidate` in dev instead of year-long immutable.
+- **`/_resuma/flow.css`** — no longer `immutable`; `max-age=60, must-revalidate`, and
+  `flow_styles_link()` / `flow_css_url()` append `?v=<digest>`.
+- **Legacy `.todo-title` For-list hook** removed from the client runtime.
+
 ## [1.2.16] - 2026-07-21
 
 ### Added

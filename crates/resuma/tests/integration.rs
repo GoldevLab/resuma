@@ -254,3 +254,110 @@ async fn seo_kit_serves_robots_and_llms_txt() {
     assert!(txt.contains("resumable Rust SSR"));
     assert!(txt.contains("https://example.com"));
 }
+
+/// A `#[middleware]` that returns `Err(ResumaError::Redirect(to))` should turn
+/// a page `GET` into a bare `302 Location: to` — no HTML body, no
+/// `resuma-error` shell. This exercises the real HTTP path
+/// (`render_page_response` in `server/app.rs`), not just the staging helpers
+/// in `page_cache`/`flow::errors` (see their own unit tests). Auth gating
+/// (redirect unauthenticated visitors to `/login`) is the motivating use
+/// case — see `falseworld/src/auth.rs`.
+#[tokio::test(flavor = "multi_thread")]
+async fn flow_middleware_redirect_returns_bare_302_with_location() {
+    // Staging directly (rather than a real `#[middleware]`, which registers
+    // globally for the whole test binary via link-time ctors and would leak
+    // into every other test in this file) exercises the exact same
+    // `error_page` -> `render_page_response` path a redirecting middleware
+    // takes, without the cross-test global-state risk.
+    #[component]
+    fn Gate() {
+        use resuma::core::ResumaError;
+        use resuma::flow::errors::{error_page, FlowError};
+        error_page(&FlowError::from_resuma(ResumaError::Redirect("/login".into())))
+    }
+
+    let app = FlowApp::new()
+        .component("/dashboard", Gate)
+        .into_router(FlowServeOptions::default());
+
+    let res = app
+        .oneshot(Request::get("/dashboard").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::FOUND);
+    assert_eq!(
+        res.headers().get(axum::http::header::LOCATION).unwrap(),
+        "/login"
+    );
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(body.is_empty(), "redirect response must not carry an HTML body");
+}
+
+/// A `#[layout]` body can only see the request via `current_request()` (the
+/// macro discards its own `req` argument — see `layout_macro.rs`), and
+/// `render_with_flow` used to call `with_request_deferred` with the
+/// **pre-middleware** request, so `current_request()` inside a layout showed
+/// stale extensions (e.g. an auth middleware's `authenticated`/`user_id`
+/// never visible in a nav bar built by the layout). Regression test for the
+/// `set_current_request` republish added alongside `falseworld::auth`'s
+/// session middleware. Unique pattern (`/regr-layout-req`) + a `#[layout]`
+/// registered only here avoids colliding with other tests' global
+/// middleware/layout registrations in this shared test binary.
+#[tokio::test(flavor = "multi_thread")]
+async fn layout_sees_middleware_populated_request_via_current_request() {
+    use resuma::flow::current_request;
+
+    #[middleware]
+    async fn stamp_regr_marker(mut req: FlowRequest) -> resuma::Result<FlowRequest> {
+        if req.path == "/regr-layout-req" {
+            req.set_extension("test_marker", serde_json::json!(true));
+        }
+        Ok(req)
+    }
+    let _ = stamp_regr_marker;
+
+    #[layout("/regr-layout-req")]
+    fn RegrLayout() -> View {
+        let marked = current_request()
+            .is_some_and(|r| r.extension("test_marker").is_some());
+        view! {
+            <div>
+                { if marked { "marked" } else { "unmarked" } }
+                <Slot />
+            </div>
+        }
+    }
+
+    #[component]
+    fn RegrPage() {
+        view! { <p>"page"</p> }
+    }
+
+    let app = FlowApp::new()
+        .page_with_layouts(
+            "/regr-layout-req",
+            vec!["/regr-layout-req".to_string()],
+            |_req| RegrPage::render(Default::default()),
+        )
+        .into_router(FlowServeOptions::default());
+
+    let res = app
+        .oneshot(
+            Request::get("/regr-layout-req")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let html = String::from_utf8_lossy(&body);
+    assert!(
+        html.contains("marked") && !html.contains("unmarked"),
+        "layout should see the middleware-populated request via current_request(): {html}"
+    );
+}

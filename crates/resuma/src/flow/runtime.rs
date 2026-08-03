@@ -175,6 +175,22 @@ pub fn with_request<R>(req: FlowRequest, f: impl FnOnce() -> R) -> (R, FlowReque
     })
 }
 
+/// Overwrite the active [`FlowRequest`] for the rest of this render — used by
+/// `render_with_flow` right after `#[middleware]` runs, so `current_request()`
+/// (and anything reading it, notably `#[layout]` bodies via
+/// `current_request()`, since the `#[layout]` macro itself discards its `req`
+/// argument) sees the middleware-populated request (`is_authenticated()`,
+/// `user_id()`, …) instead of the pre-middleware one `with_request_deferred`
+/// captured before middleware had a chance to run. A no-op outside an active
+/// [`with_request`]/[`with_request_deferred`] scope.
+pub fn set_current_request(req: FlowRequest) {
+    with_flow(|cell| {
+        if let Some(rt) = cell.borrow_mut().as_mut() {
+            rt.request = Some(req);
+        }
+    });
+}
+
 /// Begin a page render with optional deferred streaming mode.
 pub fn with_request_deferred<R>(
     req: FlowRequest,
