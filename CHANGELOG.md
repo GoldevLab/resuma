@@ -6,6 +6,22 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`resuma dev` no longer kills port 3000 by default** — starting a second app used to
+  `fuser -k` the first one. Kill is now opt-in (`--kill-stale`); when `:3000` is busy the
+  CLI picks the next free port (`3001`, …) and sets `RESUMA_ADDR` so both apps stay up.
+
+### Added
+
+- **`loader_poll(path, interval_ms)`** — live dashboard helper that re-runs `#[load]` via
+  SPA `__resuma.invalidate` on an interval (visible-task + mount cleanup; skips hidden
+  tabs). Dogfooded by JobBot replacing `<meta http-equiv="refresh">`.
+- **`load_all2` / `load_all3`** — combine multiple `LoadValue`s into one boundary (pending
+  if any pending; first error otherwise). Dogfooded by JobBot queue + profile pages.
+- **File routes `_id_.rs`** — module-safe param files now map to `/…/:id` the same as
+  `[id].rs` (JobBot `/jobs/:id` was registering as a literal `/jobs/_id_` before).
+
 ## [1.3.0] - 2026-08-03
 
 ### Added

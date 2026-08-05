@@ -412,6 +412,13 @@ impl FlowApp {
         if self.streaming {
             app = app.with_streaming(true);
         }
+        // Custom axum probes via `.route("/ready", …)` must suppress the
+        // built-in handlers or axum panics on overlapping GET routes.
+        for (path, _) in &self.extra_routes {
+            if path == crate::server::ops::HEALTH_PATH || path == crate::server::ops::READY_PATH {
+                app = app.suppress_default_ops(path.clone());
+            }
+        }
 
         let deferred_streaming = self.streaming;
         let not_found = self.not_found.clone();

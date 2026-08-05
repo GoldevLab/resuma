@@ -64,6 +64,9 @@ async fn home(req: &FlowRequest) -> HomeData { ... }
 
 Cache-Control is merged on the HTML response. See `/docs/flow/caching`.
 
+Live dashboards: `loader_poll("/", 8_000)` re-runs loaders via SPA `__resuma.invalidate`
+(prefer over `<meta refresh>`). See [FLOW_COOKBOOK.md](./FLOW_COOKBOOK.md).
+
 ### `#[load(stream)]` + streaming SSR
 
 Enable with `FlowApp::streaming(true)`. Shell streams first; loader HTML arrives in follow-up chunks. See `/docs/flow/streaming` and `examples/flow-demo`.

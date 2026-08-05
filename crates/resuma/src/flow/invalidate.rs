@@ -1,5 +1,6 @@
 //! Stable loader invalidation — re-run server `#[load]` handlers via SPA navigation.
 
+use crate::core::task::use_visible_task;
 use crate::core::view::{Child, View};
 
 use super::nav::build_query_href;
@@ -50,6 +51,47 @@ pub fn invalidate_link(path: &str, query: &[(&str, &str)], label: impl Into<Stri
         children: vec![Child::Text(label.into())],
         dom_id: None,
     })
+}
+
+/// Poll server `#[load]` data for `path` on an interval via SPA `__resuma.invalidate`.
+///
+/// Prefer this over `<meta http-equiv="refresh">` — it reuses the resumable mount
+/// pipeline, skips ticks while the tab is hidden, and tears the timer down on SPA
+/// remount (visible-task cleanup).
+///
+/// Call during page render (side-effect registers a visible task). Returns
+/// [`View::empty`] so it can sit inside `view!` trees:
+///
+/// ```rust,ignore
+/// view! {
+///     <div>
+///         {loader_poll("/", 8_000)}
+///         // dashboard body…
+///     </div>
+/// }
+/// ```
+pub fn loader_poll(path: &str, interval_ms: u64) -> View {
+    let path_js = serde_json::to_string(path).unwrap_or_else(|_| "\"/\"".into());
+    let ms = interval_ms.max(250);
+    let body = format!(
+        r#"(async (state, __resuma) => {{
+  const path = {path_js};
+  const ms = {ms};
+  let busy = false;
+  const tick = async () => {{
+    if (busy || document.visibilityState === "hidden") return;
+    busy = true;
+    try {{ await __resuma.invalidate(path); }} catch (_) {{}}
+    finally {{ busy = false; }}
+  }};
+  const id = setInterval(tick, ms);
+  return () => {{ clearInterval(id); }};
+}})"#,
+        path_js = path_js,
+        ms = ms,
+    );
+    let _ = use_visible_task(body);
+    View::empty()
 }
 
 #[cfg(test)]

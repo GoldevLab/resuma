@@ -66,6 +66,13 @@
 - [x] `ResumaError::Redirect(String)` — `#[middleware]` can now bounce a page `GET` to a real `302 Location:` (e.g. unauthenticated → `/login`) instead of only rendering the error shell with a 4xx/5xx status; needed once `falseworld` grew real session auth (`falseworld::auth`) and had to gate the game page server-side
 - [x] `flow::runtime::set_current_request` — `render_with_flow` republishes the task-local `FlowRequest` right after `#[middleware]` runs, so `current_request()` (the only way a `#[layout]` body can see the request) reflects middleware-attached extensions instead of a pre-middleware snapshot; without it, `falseworld`'s `RootLayout` nav bar never showed the logged-in user despite `req.is_authenticated()` being true on the page itself
 
+### Derived from JobBot dogfooding
+(worker + SQLite + live queue UI — `apps/jobbot`)
+- [x] `loader_poll(path, interval_ms)` — first-class live-dashboard poll via `__resuma.invalidate` (replaces crude `<meta refresh>` full reloads)
+- [x] `load_all2` / `load_all3` — multi-loader boundary helper (JobBot queue + profile)
+- [ ] Optional partial loader refresh (invalidate one loader without full page SPA swap)
+- [ ] Document concurrent background `tokio` worker + Flow SSR SQLite patterns (WAL / busy_timeout)
+
 ### Long-running jobs & blobs (ORBIS-driven)
 - [x] Configurable worker wall-clock timeout (`extended` / `none` / secs / env)
 - [x] `ctx.run_blocking` + progress on `GraphSnapshot` / `/status`
@@ -90,4 +97,4 @@
 
 ---
 
-*Last updated: 2026-08-03 (v1.3.0: realtime, Redirect, per-action rate limits, set_current_request, doctor orphan assets)*
+*Last updated: 2026-08-04 (Unreleased: loader_poll + load_all from JobBot dogfooding)*

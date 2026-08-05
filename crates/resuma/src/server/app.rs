@@ -57,6 +57,9 @@ pub struct ResumaApp {
     streaming: bool,
     /// Optional catch-all page renderer (used by Resuma Flow for param routes).
     fallback: Option<Arc<FallbackFactory>>,
+    /// Paths that suppress the built-in `/health` / `/ready` probes so an app
+    /// can mount its own axum handler (e.g. DB readiness) via [`FlowApp::route`].
+    skip_default_ops: std::collections::HashSet<String>,
 }
 
 type PageFactory = dyn Fn(FlowRequest) -> View + Send + Sync;
@@ -101,6 +104,7 @@ impl ResumaApp {
             },
             streaming: false,
             fallback: None,
+            skip_default_ops: std::collections::HashSet::new(),
         }
     }
 
@@ -164,6 +168,13 @@ impl ResumaApp {
     /// Enable chunked streaming SSR (lower TTFB — head sent before body).
     pub fn with_streaming(mut self, enabled: bool) -> Self {
         self.streaming = enabled;
+        self
+    }
+
+    /// Skip the built-in probe at `path` (`/health` or `/ready`) so a custom
+    /// [`crate::FlowApp::route`] handler can take its place without overlapping.
+    pub fn suppress_default_ops(mut self, path: impl Into<String>) -> Self {
+        self.skip_default_ops.insert(path.into());
         self
     }
 
@@ -295,11 +306,16 @@ impl ResumaApp {
             }
         }
 
-        // Liveness / readiness probes (skipped if the app defines its own).
-        if !state.pages.contains_key(super::ops::HEALTH_PATH) {
+        // Liveness / readiness probes (skipped if the app defines its own page
+        // or mounts a custom axum route via FlowApp::route / suppress_default_ops).
+        if !state.pages.contains_key(super::ops::HEALTH_PATH)
+            && !self.skip_default_ops.contains(super::ops::HEALTH_PATH)
+        {
             router = router.route(super::ops::HEALTH_PATH, get(super::ops::health));
         }
-        if !state.pages.contains_key(super::ops::READY_PATH) {
+        if !state.pages.contains_key(super::ops::READY_PATH)
+            && !self.skip_default_ops.contains(super::ops::READY_PATH)
+        {
             router = router.route(super::ops::READY_PATH, get(super::ops::ready));
         }
 

@@ -37,9 +37,9 @@ pub use errors::{error_page, not_found_page, registry_miss_page, FlowError};
 pub use extensions::{global_extensions, set_global_extensions, FlowExtensions};
 pub use extract::{FromFlowRequest, Path, Query};
 pub use form::form;
-pub use invalidate::{invalidate_href, invalidate_href_now, invalidate_link};
+pub use invalidate::{invalidate_href, invalidate_href_now, invalidate_link, loader_poll};
 pub use layout::{apply_layouts, register_layout};
-pub use load::{load_boundary, LoadValue, LoaderError};
+pub use load::{load_all2, load_all3, load_boundary, LoadValue, LoaderError};
 pub use match_route::{match_route, RouteMatch};
 pub use middleware::{register_middleware, run_middleware};
 pub use nav::{

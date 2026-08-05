@@ -58,7 +58,8 @@ enum Commands {
     Doctor,
     /// Run the app with hot reload.
     Dev {
-        /// Bind address (default: 127.0.0.1:3000). If the port is taken, the next free port is used.
+        /// Bind address (default: 127.0.0.1:3000). If the port is taken, the next free port is used
+        /// so multiple apps can run `resuma dev` at once (3000, 3001, …).
         #[arg(long, default_value = "127.0.0.1:3000")]
         addr: String,
         /// Open the default browser once the server starts.
@@ -67,9 +68,14 @@ enum Commands {
         /// Skip building the JS runtime (useful when prebuilt).
         #[arg(long)]
         skip_runtime: bool,
-        /// Kill any process listening on the dev port before starting (Linux).
-        #[arg(long)]
+        /// Kill whatever is listening on the preferred port before starting
+        /// (Linux `fuser -k`). Off by default so a second `resuma dev` keeps
+        /// the first app alive and binds the next free port instead.
+        #[arg(long = "kill-stale")]
         kill_stale: bool,
+        /// Deprecated alias: kill-stale is already off by default.
+        #[arg(long = "no-kill-stale", hide = true)]
+        no_kill_stale: bool,
     },
     /// Build a production binary + JS bundles.
     Build {
@@ -138,7 +144,12 @@ pub fn run() -> Result<()> {
             open,
             skip_runtime,
             kill_stale,
-        } => dev_command(&addr, open, skip_runtime, kill_stale),
+            no_kill_stale,
+        } => {
+            // `--no-kill-stale` is a no-op (default); keep accepting it for old scripts.
+            let _ = no_kill_stale;
+            dev_command(&addr, open, skip_runtime, kill_stale)
+        }
         Commands::Build {
             static_export,
             out,
@@ -288,6 +299,8 @@ fn dev_command(addr: &str, open: bool, skip_runtime: bool, kill_stale: bool) -> 
         .map_err(|_| anyhow!("invalid --addr {addr:?} (expected e.g. 127.0.0.1:3000)"))?;
     if kill_stale {
         kill_stale_port(preferred.port());
+        // Brief pause so the kernel releases the socket before we re-bind.
+        std::thread::sleep(std::time::Duration::from_millis(150));
     }
     let bound = crate::server::resolve_listen_addr(preferred)
         .map_err(|e| anyhow!("could not bind {preferred}: {e}"))?;
@@ -297,6 +310,22 @@ fn dev_command(addr: &str, open: bool, skip_runtime: bool, kill_stale: bool) -> 
             preferred.port(),
             bound
         );
+        if kill_stale {
+            println!(
+                "[resuma] tip: another process still holds :{} after --kill-stale — \
+                 stop it manually or pass --addr with a free port",
+                preferred.port()
+            );
+        } else {
+            println!(
+                "[resuma] tip: another app (or a suspended Ctrl+Z job) holds :{}. \
+                 This instance stays on :{}. Use --kill-stale only if you meant to \
+                 replace the process on :{}.",
+                preferred.port(),
+                bound.port(),
+                preferred.port()
+            );
+        }
     }
     let addr = bound.to_string();
     let url = format!("http://{}", addr);

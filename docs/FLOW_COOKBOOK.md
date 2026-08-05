@@ -25,8 +25,38 @@ Built-in helpers:
 |-----|-----|
 | `loader_refresh_input(path, param, value, preserve, type, attrs)` | `<input>` / date picker that navigates on change |
 | `loader_refresh_form(path, preserve, children)` | GET form → SPA navigate |
+| `loader_poll(path, interval_ms)` | Interval SPA `__resuma.invalidate` (live dashboards; skips hidden tabs) |
+| `load_all2` / `load_all3` | One boundary for 2–3 `#[load]` values (no nested `load_boundary`) |
 | `query_nav_link(path, &[("servicio","corte")], …)` | Nav link with query string |
 | `build_query_href` | Build href in Rust |
+
+### Multi-loader pages
+
+```rust
+load_all3(
+    use_settings_load(),
+    use_jobs_load(),
+    use_events_load(),
+    |settings, jobs, events| render(settings, jobs, events),
+    |err| error_page(&FlowError::Loader(err)),
+    || View::empty(),
+)
+```
+
+### Live dashboards (`loader_poll`)
+
+Prefer `loader_poll` over `<meta http-equiv="refresh">`. It registers a visible task that
+calls `__resuma.invalidate(path)` on an interval, pauses while the tab is hidden, and
+clears the timer on SPA remount:
+
+```rust
+view! {
+    <div>
+        {loader_poll("/", 8_000)}
+        // queue / activity that comes from #[load]
+    </div>
+}
+```
 
 ## `public/` directory
 
@@ -74,7 +104,10 @@ Demonstrates `#[load]` + query refresh + `#[submit]` redirect.
 ## Dev UX
 
 ```bash
-resuma dev --kill-stale   # free the port before starting (Linux)
+resuma dev                # :3000, or next free port if busy (multi-app safe)
+resuma dev --kill-stale   # replace whatever holds the preferred port (Linux)
+resuma dev --addr 127.0.0.1:3010
 ```
 
+Multiple projects can run `resuma dev` at once — the second binds `:3001`, etc.
 `cargo watch` also watches `public/` for static file changes during dev.

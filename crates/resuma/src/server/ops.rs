@@ -24,7 +24,8 @@ pub async fn health() -> Response {
 }
 
 /// Readiness handler — safe default returns ready; apps with external
-/// dependencies (DB, cache) can register their own `/ready` page to override.
+/// dependencies (DB, cache) can override via a `/ready` page **or**
+/// `FlowApp::route("/ready", …)` (which suppresses this default).
 pub async fn ready() -> Response {
     (StatusCode::OK, "ready").into_response()
 }

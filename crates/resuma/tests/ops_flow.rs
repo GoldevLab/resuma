@@ -30,6 +30,30 @@ async fn health_and_ready_return_ok() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn flow_route_overrides_default_ready_without_panic() {
+    use axum::response::IntoResponse;
+    use axum::routing::get;
+
+    let app = FlowApp::new()
+        .page("/", |_req| view! { <main>"home"</main> })
+        .route(
+            "/ready",
+            get(|| async { (StatusCode::SERVICE_UNAVAILABLE, "db down").into_response() }),
+        )
+        .into_router(FlowServeOptions::default());
+
+    let res = app
+        .oneshot(Request::get("/ready").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(&body[..], b"db down");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn flow_router_echoes_request_id() {
     let app = FlowApp::new()
         .page("/", |_req| view! { <main>"home"</main> })

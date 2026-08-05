@@ -5,6 +5,7 @@
 //!     index.rs            -> /
 //!     about.rs            -> /about
 //!     users/[id].rs       -> /users/:id
+//!     jobs/_id_.rs        -> /jobs/:id   (module-safe equivalent)
 //!     blog/[...slug].rs   -> /blog/*slug
 //!     _layout.rs          -> shared layout
 //! ```
@@ -134,6 +135,24 @@ fn convert_segment(seg: &str) -> String {
         }
         return format!(":{}", inner);
     }
+    // Module-safe param files: `_id_.rs` → `:id` (same as `[id].rs`).
+    // Skip layout markers and catch-all module names (`_rest_slug_`).
+    if seg.len() >= 3
+        && seg.starts_with('_')
+        && seg.ends_with('_')
+        && seg != "_layout"
+        && !seg.starts_with("_rest_")
+    {
+        let inner = &seg[1..seg.len() - 1];
+        if !inner.is_empty()
+            && inner
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+            && !inner.contains("__")
+        {
+            return format!(":{inner}");
+        }
+    }
     seg.to_string()
 }
 
@@ -168,6 +187,13 @@ mod tests {
         assert_eq!(r.pattern, "/users/:id");
         // Module segments must be valid Rust identifiers.
         assert_eq!(r.module, "users::_id_");
+    }
+
+    #[test]
+    fn underscore_param_file_maps_like_brackets() {
+        let r = route("jobs/_id_.rs");
+        assert_eq!(r.pattern, "/jobs/:id");
+        assert_eq!(r.module, "jobs::_id_");
     }
 
     #[test]
