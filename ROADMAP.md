@@ -69,7 +69,11 @@
 ### Derived from JobBot dogfooding
 (worker + SQLite + live queue UI — `apps/jobbot`)
 - [x] `loader_poll(path, interval_ms)` — first-class live-dashboard poll via `__resuma.invalidate` (replaces crude `<meta refresh>` full reloads)
-- [x] `load_all2` / `load_all3` — multi-loader boundary helper (JobBot queue + profile)
+- [x] Soft invalidate — `replaceState`, no scroll, strip visible `_r`, bypass prefetch (poll + same-path submit redirects)
+- [x] Prefetch-safe `followRedirect` after `#[submit]` / actions
+- [x] `Redirect::revalidate()` — soft revalidate current path after mutations
+- [x] Form pending (`aria-busy` / disable submit) during enhanced form posts
+- [x] `load_all2` / `load_all3` / `load_all4` — multi-loader boundary helper (JobBot queue + profile)
 - [ ] Optional partial loader refresh (invalidate one loader without full page SPA swap)
 - [ ] Document concurrent background `tokio` worker + Flow SSR SQLite patterns (WAL / busy_timeout)
 

@@ -207,17 +207,37 @@ function buildLocalState(captures: string[]): Record<string, SignalCell<unknown>
 /*  Flow form submit (progressive enhancement)                       */
 /* ------------------------------------------------------------------- */
 
+function setFormPending(form: HTMLFormElement, pending: boolean): void {
+  form.toggleAttribute("aria-busy", pending);
+  form.classList.toggle("resuma-form-pending", pending);
+  form
+    .querySelectorAll<HTMLButtonElement | HTMLInputElement>(
+      "button, input[type=submit], input[type=button]",
+    )
+    .forEach((el) => {
+      if (pending) {
+        if (!el.disabled) el.setAttribute("data-r-was-enabled", "1");
+        el.disabled = true;
+      } else if (el.getAttribute("data-r-was-enabled") === "1") {
+        el.disabled = false;
+        el.removeAttribute("data-r-was-enabled");
+      }
+    });
+}
+
 function attachFormEnhancement(): void {
   document.addEventListener("submit", async (ev) => {
     if (!(ev.target instanceof HTMLFormElement)) return;
     const form = ev.target;
     if (!form.getAttribute("data-r-submit")) return;
     ev.preventDefault();
+    if (form.hasAttribute("aria-busy")) return;
     const name = form.getAttribute("data-r-submit")!;
     const fd = new FormData(form);
     const body: Record<string, string> = {};
     fd.forEach((v, k) => { body[k] = String(v); });
     const params = new URLSearchParams(body);
+    setFormPending(form, true);
     try {
       const res = await fetch(form.action || `/_resuma/submit/${encodeURIComponent(name)}`, {
         method: "POST",
@@ -244,6 +264,8 @@ function attachFormEnhancement(): void {
       console.info("[resuma] submit ok", data.value);
     } catch (err) {
       console.error("[resuma] submit error", err);
+    } finally {
+      if (document.contains(form)) setFormPending(form, false);
     }
   }, true);
 }

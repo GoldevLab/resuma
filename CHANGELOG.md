@@ -11,14 +11,24 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`resuma dev` no longer kills port 3000 by default** — starting a second app used to
   `fuser -k` the first one. Kill is now opt-in (`--kill-stale`); when `:3000` is busy the
   CLI picks the next free port (`3001`, …) and sets `RESUMA_ADDR` so both apps stay up.
+- **Soft `invalidate` / `loader_poll`** — no longer `pushState`s `?_r=` into history or
+  scrolls to top on every tick (JobBot live queue dogfood).
+- **Submit/action redirects never reuse NavLink prefetch** — Keep/Dismiss/mark-applied
+  always refetch fresh SSR HTML so lists update immediately.
+- **Same-path redirects** soft-replace (no scroll); cross-path redirects still push + scroll.
 
 ### Added
 
 - **`loader_poll(path, interval_ms)`** — live dashboard helper that re-runs `#[load]` via
   SPA `__resuma.invalidate` on an interval (visible-task + mount cleanup; skips hidden
   tabs). Dogfooded by JobBot replacing `<meta http-equiv="refresh">`.
-- **`load_all2` / `load_all3`** — combine multiple `LoadValue`s into one boundary (pending
-  if any pending; first error otherwise). Dogfooded by JobBot queue + profile pages.
+- **`load_all2` / `load_all3` / `load_all4`** — combine multiple `LoadValue`s into one
+  boundary (pending if any pending; first error otherwise). Dogfooded by JobBot queue +
+  profile pages.
+- **`Redirect::revalidate()`** — soft-invalidate the current page after a mutation
+  (`__resuma_revalidate`); no-JS falls back to 303 `Referer`.
+- **Form pending UI** — enhanced `<Form>` sets `aria-busy` / `.resuma-form-pending` and
+  disables submit controls while the request is in flight.
 - **File routes `_id_.rs`** — module-safe param files now map to `/…/:id` the same as
   `[id].rs` (JobBot `/jobs/:id` was registering as a literal `/jobs/_id_` before).
 

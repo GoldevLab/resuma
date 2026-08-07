@@ -13,6 +13,12 @@ pub const FLASH_KEY: &str = "flash";
 /// Internal JSON key for typed redirects (avoids colliding with app fields named `redirect`).
 pub const REDIRECT_KEY: &str = "__resuma_redirect";
 
+/// Internal JSON key for soft revalidation of the current page (see [`Redirect::revalidate`]).
+pub const REVALIDATE_KEY: &str = "__resuma_revalidate";
+
+/// Client/HTTP sentinel for [`Redirect::revalidate`] (not a real browser path).
+pub const REVALIDATE_SENTINEL: &str = "__revalidate__";
+
 /// Internal JSON key for `Set-Cookie` values — stripped before the body reaches the client.
 pub const COOKIES_KEY: &str = "__resuma_cookies";
 
@@ -24,6 +30,8 @@ pub const COOKIES_KEY: &str = "__resuma_cookies";
 pub struct Redirect {
     pub to: String,
     cookies: Vec<String>,
+    /// When true, clients soft-invalidate the current path instead of navigating elsewhere.
+    revalidate: bool,
 }
 
 impl Redirect {
@@ -31,6 +39,20 @@ impl Redirect {
         Self {
             to: path.into(),
             cookies: Vec::new(),
+            revalidate: false,
+        }
+    }
+
+    /// Soft-revalidate the current page's `#[load]` data after a mutation.
+    ///
+    /// JSON clients receive `{ "__resuma_revalidate": true }` and call
+    /// `__resuma.invalidate()` (replaceState, no scroll, no stale prefetch).
+    /// No-JS form posts fall back to a 303 toward `Referer` (or `/`).
+    pub fn revalidate() -> Self {
+        Self {
+            to: REVALIDATE_SENTINEL.into(),
+            cookies: Vec::new(),
+            revalidate: true,
         }
     }
 
@@ -69,6 +91,15 @@ impl Serialize for Redirect {
         S: serde::Serializer,
     {
         use serde::ser::SerializeStruct;
+        if self.revalidate {
+            let fields = 1 + usize::from(!self.cookies.is_empty());
+            let mut s = serializer.serialize_struct("Redirect", fields)?;
+            s.serialize_field(REVALIDATE_KEY, &true)?;
+            if !self.cookies.is_empty() {
+                s.serialize_field(COOKIES_KEY, &self.cookies)?;
+            }
+            return s.end();
+        }
         let fields = 1 + usize::from(!self.cookies.is_empty());
         let mut s = serializer.serialize_struct("Redirect", fields)?;
         s.serialize_field(REDIRECT_KEY, &self.to)?;
@@ -85,13 +116,6 @@ impl<'de> Deserialize<'de> for Redirect {
         D: serde::Deserializer<'de>,
     {
         let value = Value::deserialize(deserializer)?;
-        let to = value
-            .get(REDIRECT_KEY)
-            .or_else(|| value.get("redirect"))
-            .or_else(|| value.get("to"))
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| serde::de::Error::missing_field(REDIRECT_KEY))?
-            .to_string();
         let cookies = value
             .get(COOKIES_KEY)
             .and_then(|v| v.as_array())
@@ -102,7 +126,30 @@ impl<'de> Deserialize<'de> for Redirect {
                     .collect()
             })
             .unwrap_or_default();
-        Ok(Self { to, cookies })
+        if value
+            .get(REVALIDATE_KEY)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
+            return Ok(Self {
+                to: REVALIDATE_SENTINEL.into(),
+                cookies,
+                revalidate: true,
+            });
+        }
+        let to = value
+            .get(REDIRECT_KEY)
+            .or_else(|| value.get("redirect"))
+            .or_else(|| value.get("to"))
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| serde::de::Error::missing_field(REDIRECT_KEY))?
+            .to_string();
+        let revalidate = to == REVALIDATE_SENTINEL;
+        Ok(Self {
+            to,
+            cookies,
+            revalidate,
+        })
     }
 }
 
@@ -151,16 +198,29 @@ fn append_flash(path: &str, message: &str) -> String {
 /// `{ "token": "…", "redirect": "/dashboard" }` are **not** treated as navigation
 /// (auth footgun).
 pub fn extract_redirect(value: &Value) -> Option<String> {
+    if value
+        .get(REVALIDATE_KEY)
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        return Some(REVALIDATE_SENTINEL.into());
+    }
     if let Some(path) = value.get(REDIRECT_KEY).and_then(|v| v.as_str()) {
+        if path == REVALIDATE_SENTINEL {
+            return Some(REVALIDATE_SENTINEL.into());
+        }
         return validate_redirect_path(path).ok();
     }
     let obj = value.as_object()?;
     let path = obj.get("redirect")?.as_str()?;
-    let allowed = obj
-        .keys()
-        .all(|k| k == "redirect" || k == COOKIES_KEY || k == "cookies");
+    let allowed = obj.keys().all(|k| {
+        k == "redirect" || k == COOKIES_KEY || k == "cookies" || k == REVALIDATE_KEY
+    });
     if !allowed {
         return None;
+    }
+    if path == REVALIDATE_SENTINEL {
+        return Some(REVALIDATE_SENTINEL.into());
     }
     validate_redirect_path(path).ok()
 }
@@ -189,12 +249,29 @@ pub fn take_response_cookies(value: &mut Value) -> Vec<String> {
 pub fn scrub_resuma_meta(value: &mut Value) {
     if let Some(obj) = value.as_object_mut() {
         obj.remove(REDIRECT_KEY);
+        obj.remove(REVALIDATE_KEY);
         obj.remove(COOKIES_KEY);
         // Legacy sole-key redirect shape: drop after extraction so clients use top-level `redirect`.
         if obj.len() == 1 && obj.contains_key("redirect") {
             obj.remove("redirect");
         }
     }
+}
+
+/// Resolve [`REVALIDATE_SENTINEL`] to a real Location for no-JS 303 responses.
+pub fn resolve_redirect_location(path: &str, referer: Option<&str>) -> String {
+    if path != REVALIDATE_SENTINEL {
+        return path.to_string();
+    }
+    referer
+        .and_then(|r| {
+            let url = url::Url::parse(r).ok()?;
+            let path = url.path();
+            let query = url.query().map(|q| format!("?{q}")).unwrap_or_default();
+            let loc = format!("{path}{query}");
+            validate_redirect_path(&loc).ok()
+        })
+        .unwrap_or_else(|| "/".into())
 }
 
 /// Extract redirect + cookies and scrub meta keys. Used by submit/action HTTP layers.
@@ -412,5 +489,32 @@ mod tests {
         // Pre-1.2.16 Serialize shape
         let v = json!({ "redirect": "/items?created=1" });
         assert_eq!(extract_redirect(&v).as_deref(), Some("/items?created=1"));
+    }
+
+    #[test]
+    fn revalidate_serializes_and_extracts() {
+        let r = Redirect::revalidate();
+        let mut v = serde_json::to_value(&r).unwrap();
+        assert_eq!(v.get(REVALIDATE_KEY), Some(&json!(true)));
+        assert!(v.get(REDIRECT_KEY).is_none());
+        assert_eq!(
+            extract_redirect(&v).as_deref(),
+            Some(REVALIDATE_SENTINEL)
+        );
+        scrub_resuma_meta(&mut v);
+        assert!(v.get(REVALIDATE_KEY).is_none());
+    }
+
+    #[test]
+    fn resolve_revalidate_uses_referer() {
+        assert_eq!(
+            resolve_redirect_location(REVALIDATE_SENTINEL, Some("https://app.test/profile?x=1")),
+            "/profile?x=1"
+        );
+        assert_eq!(
+            resolve_redirect_location(REVALIDATE_SENTINEL, None),
+            "/"
+        );
+        assert_eq!(resolve_redirect_location("/done", None), "/done");
     }
 }

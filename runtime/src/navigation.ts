@@ -12,6 +12,20 @@ const STATE_SCRIPT_ID = "resuma-state";
 const prefetchCache = new Map<string, string>();
 const prefetchInFlight = new Set<string>();
 
+/** Sentinel from `Redirect::revalidate()` — soft-invalidate current path. */
+export const REVALIDATE_SENTINEL = "__revalidate__";
+
+export type NavigateOptions = {
+  /** Push a history entry (default true). Soft invalidates use false. */
+  pushState?: boolean;
+  /** Scroll to top after swap (default: same as pushState). */
+  scroll?: boolean;
+  /** Reuse NavLink prefetch cache (default true). Submit redirects must use false. */
+  usePrefetch?: boolean;
+  /** URL written to history/location (defaults to fetch href; use to strip `_r`). */
+  historyHref?: string;
+};
+
 async function prefetchRoute(href: string): Promise<void> {
   if (!href || prefetchInFlight.has(href)) return;
   if (href.startsWith("http") && !href.startsWith(location.origin)) return;
@@ -207,7 +221,52 @@ export function buildUrl(
   return url.pathname + url.search;
 }
 
-/** Re-run server loaders for a path via SPA navigation (cache-bust query). */
+/** Drop Resuma cache-bust `_r` from a path+search string. */
+function stripCacheBust(href: string): string {
+  try {
+    const url = new URL(href, location.origin);
+    url.searchParams.delete("_r");
+    const q = url.searchParams.toString();
+    return url.pathname + (q ? `?${q}` : "");
+  } catch {
+    return href;
+  }
+}
+
+function normalizePathSearch(href: string): string {
+  try {
+    const url = new URL(href, location.origin);
+    url.searchParams.delete("_r");
+    const q = url.searchParams.toString();
+    return url.pathname + (q ? `?${q}` : "");
+  } catch {
+    return href;
+  }
+}
+
+function resolveNavigateOptions(
+  pushStateOrOpts: boolean | NavigateOptions | undefined,
+): Required<Pick<NavigateOptions, "pushState" | "scroll" | "usePrefetch">> &
+  Pick<NavigateOptions, "historyHref"> {
+  if (typeof pushStateOrOpts === "boolean" || pushStateOrOpts === undefined) {
+    const pushState = pushStateOrOpts ?? true;
+    return { pushState, scroll: pushState, usePrefetch: true };
+  }
+  const pushState = pushStateOrOpts.pushState ?? true;
+  return {
+    pushState,
+    scroll: pushStateOrOpts.scroll ?? pushState,
+    usePrefetch: pushStateOrOpts.usePrefetch ?? true,
+    historyHref: pushStateOrOpts.historyHref,
+  };
+}
+
+/**
+ * Re-run server loaders for a path via SPA navigation (cache-bust query).
+ *
+ * Soft by default: `replaceState`, no scroll-to-top, and `_r` is stripped from
+ * the visible URL so `loader_poll` does not flood history.
+ */
 export async function invalidate(
   path?: string,
   query?: Record<string, string | null | undefined>,
@@ -215,7 +274,14 @@ export async function invalidate(
   prefetchCache.clear();
   const targetPath = path?.split("?")[0] ?? location.pathname;
   const bust = String(Date.now());
-  await navigate(buildUrl(targetPath, { ...query, _r: bust }));
+  const fetchHref = buildUrl(targetPath, { ...query, _r: bust });
+  const historyHref = buildUrl(targetPath, query);
+  await navigate(fetchHref, {
+    pushState: false,
+    scroll: false,
+    usePrefetch: false,
+    historyHref,
+  });
 }
 
 // Generation counter + in-flight controller: a slow fetch from a stale
@@ -230,7 +296,8 @@ type DocWithVt = Document & {
 async function swapToHtml(
   href: string,
   html: string,
-  pushState: boolean,
+  opts: Required<Pick<NavigateOptions, "pushState" | "scroll">> &
+    Pick<NavigateOptions, "historyHref">,
   gen: number,
 ): Promise<void> {
   if (gen !== navGen) return;
@@ -247,16 +314,30 @@ async function swapToHtml(
   if (stateScript) stateScript.textContent = newState.textContent;
   if (doc.title) document.title = doc.title;
 
-  if (pushState) history.pushState({ resumaNav: true }, "", href);
+  const historyHref = opts.historyHref ?? stripCacheBust(href);
+  if (opts.pushState) {
+    history.pushState({ resumaNav: true }, "", historyHref);
+  } else {
+    history.replaceState({ resumaNav: true }, "", historyHref);
+  }
   await remountPage();
-  if (pushState) window.scrollTo(0, 0);
+  if (opts.scroll) window.scrollTo(0, 0);
   focusMain();
-  document.dispatchEvent(new CustomEvent("resuma:navigate", { detail: { href } }));
+  document.dispatchEvent(
+    new CustomEvent("resuma:navigate", { detail: { href: historyHref } }),
+  );
 }
 
-async function runNavigation(href: string, pushState: boolean, gen: number, signal: AbortSignal): Promise<void> {
-  let html: string | undefined = prefetchCache.get(href);
+async function runNavigation(
+  href: string,
+  opts: Required<Pick<NavigateOptions, "pushState" | "scroll" | "usePrefetch">> &
+    Pick<NavigateOptions, "historyHref">,
+  gen: number,
+  signal: AbortSignal,
+): Promise<void> {
+  let html: string | undefined = opts.usePrefetch ? prefetchCache.get(href) : undefined;
   if (!html) {
+    // Also ignore prefetch for path-only keys when bust query differs.
     const res = await fetch(href, {
       headers: { Accept: "text/html" },
       credentials: "same-origin",
@@ -273,16 +354,20 @@ async function runNavigation(href: string, pushState: boolean, gen: number, sign
     prefetchCache.delete(href);
   }
   if (gen !== navGen) return;
-  await swapToHtml(href, html, pushState, gen);
+  await swapToHtml(href, html, opts, gen);
 }
 
-export async function navigate(href: string, pushState = true): Promise<void> {
+export async function navigate(
+  href: string,
+  pushStateOrOpts: boolean | NavigateOptions = true,
+): Promise<void> {
   // SPA navigation swaps fetched HTML into our origin — never do that for a
   // cross-origin target. Fall back to a full, browser-mediated navigation.
   if (!isSameOrigin(href)) {
     window.location.assign(href);
     return;
   }
+  const opts = resolveNavigateOptions(pushStateOrOpts);
   const gen = ++navGen;
   navController?.abort();
   const controller = new AbortController();
@@ -290,7 +375,7 @@ export async function navigate(href: string, pushState = true): Promise<void> {
 
   const run = async () => {
     try {
-      await runNavigation(href, pushState, gen, controller.signal);
+      await runNavigation(href, opts, gen, controller.signal);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       console.error("[r] nav", err);
@@ -310,20 +395,41 @@ export async function navigate(href: string, pushState = true): Promise<void> {
   }
 }
 
-/** Follow redirect hints from submit/action JSON — uses SPA nav for same-origin paths. */
+/**
+ * Follow redirect hints from submit/action JSON — uses SPA nav for same-origin paths.
+ *
+ * Always bypasses NavLink prefetch (mutations must see fresh loader data). Same-path
+ * redirects soft-replace without scrolling; cross-path redirects push + scroll.
+ */
 export function followRedirect(path: string): void {
+  if (path === REVALIDATE_SENTINEL) {
+    void invalidate();
+    return;
+  }
   // Same-origin absolute paths use SPA nav. Reject protocol-relative (`//host`)
   // and non-http(s) schemes so a redirect hint can't bounce the user off-origin
   // or into a `javascript:`/`data:` URL.
+  const go = (target: string) => {
+    prefetchCache.clear();
+    const current = normalizePathSearch(location.pathname + location.search);
+    const next = normalizePathSearch(target);
+    const same = current === next;
+    void navigate(target, {
+      pushState: !same,
+      scroll: !same,
+      usePrefetch: false,
+      historyHref: next,
+    });
+  };
+
   if (path.startsWith("/") && !path.startsWith("//")) {
-    void navigate(path);
+    go(path);
     return;
   }
   try {
     const url = new URL(path, location.origin);
     if (url.origin === location.origin && (url.protocol === "http:" || url.protocol === "https:")) {
-      // Same-origin absolute URLs take the same SPA path as root-relative ones.
-      void navigate(url.pathname + url.search + url.hash);
+      go(url.pathname + url.search + url.hash);
       return;
     }
   } catch {
@@ -376,6 +482,10 @@ export function initNavLinks(): void {
   });
 
   window.addEventListener("popstate", () => {
-    void navigate(location.pathname + location.search, false);
+    void navigate(location.pathname + location.search, {
+      pushState: false,
+      scroll: false,
+      usePrefetch: false,
+    });
   });
 }

@@ -22,7 +22,17 @@ export interface ResumaGlobal {
   chunkDigests: Record<string, string>;
   refreshIsland: (id: string) => Promise<void>;
   context: (key: string) => unknown;
-  navigate: (href: string, pushState?: boolean) => Promise<void>;
+  navigate: (
+    href: string,
+    pushStateOrOpts?:
+      | boolean
+      | {
+          pushState?: boolean;
+          scroll?: boolean;
+          usePrefetch?: boolean;
+          historyHref?: string;
+        },
+  ) => Promise<void>;
   buildUrl: (path: string, query?: Record<string, string | null | undefined>) => string;
   invalidate: (path?: string, query?: Record<string, string | null | undefined>) => Promise<void>;
 }

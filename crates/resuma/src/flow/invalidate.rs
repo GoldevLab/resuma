@@ -59,6 +59,11 @@ pub fn invalidate_link(path: &str, query: &[(&str, &str)], label: impl Into<Stri
 /// pipeline, skips ticks while the tab is hidden, and tears the timer down on SPA
 /// remount (visible-task cleanup).
 ///
+/// Soft invalidate semantics (runtime): `history.replaceState` (no history spam),
+/// no scroll-to-top, cache-bust `_r` stripped from the visible URL, and NavLink
+/// prefetch is bypassed so polls always see fresh `#[load]` data. This still
+/// remounts `#resuma-root` (full SPA swap) — not a partial loader patch.
+///
 /// Call during page render (side-effect registers a visible task). Returns
 /// [`View::empty`] so it can sit inside `view!` trees:
 ///

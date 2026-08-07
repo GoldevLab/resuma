@@ -92,6 +92,33 @@ pub fn load_all3<A, B, C>(
     }
 }
 
+/// Combine four `#[load]` values into one boundary.
+pub fn load_all4<A, B, C, D>(
+    a: LoadValue<A>,
+    b: LoadValue<B>,
+    c: LoadValue<C>,
+    d: LoadValue<D>,
+    ok: impl FnOnce(A, B, C, D) -> View,
+    err: impl FnOnce(LoaderError) -> View,
+    pending: impl FnOnce() -> View,
+) -> View {
+    if matches!(a, LoadValue::Pending)
+        || matches!(b, LoadValue::Pending)
+        || matches!(c, LoadValue::Pending)
+        || matches!(d, LoadValue::Pending)
+    {
+        return pending();
+    }
+    match (a, b, c, d) {
+        (LoadValue::Err(e), _, _, _)
+        | (_, LoadValue::Err(e), _, _)
+        | (_, _, LoadValue::Err(e), _)
+        | (_, _, _, LoadValue::Err(e)) => err(e),
+        (LoadValue::Ok(a), LoadValue::Ok(b), LoadValue::Ok(c), LoadValue::Ok(d)) => ok(a, b, c, d),
+        _ => pending(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,6 +148,20 @@ mod tests {
             || View::text("pending"),
         );
         assert!(matches!(v, View::Text(t) if t == "1+2+3"));
+    }
+
+    #[test]
+    fn load_all4_ok_when_all_ready() {
+        let v = load_all4(
+            LoadValue::Ok(1i32),
+            LoadValue::Ok(2i32),
+            LoadValue::Ok(3i32),
+            LoadValue::Ok(4i32),
+            |a, b, c, d| View::text(format!("{a}+{b}+{c}+{d}")),
+            |_| View::text("err"),
+            || View::text("pending"),
+        );
+        assert!(matches!(v, View::Text(t) if t == "1+2+3+4"));
     }
 }
 

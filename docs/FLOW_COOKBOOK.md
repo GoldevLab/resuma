@@ -47,7 +47,13 @@ load_all3(
 
 Prefer `loader_poll` over `<meta http-equiv="refresh">`. It registers a visible task that
 calls `__resuma.invalidate(path)` on an interval, pauses while the tab is hidden, and
-clears the timer on SPA remount:
+clears the timer on SPA remount.
+
+Soft invalidate (not a meta-refresh):
+- `history.replaceState` — does **not** push `?_r=` history entries
+- no scroll-to-top
+- bypasses NavLink prefetch so polls always refetch `#[load]`
+- still remounts `#resuma-root` (full SPA swap); partial loader patches are not shipped yet
 
 ```rust
 view! {
@@ -57,6 +63,22 @@ view! {
     </div>
 }
 ```
+
+### Mutations that refresh the same page
+
+After Keep / Dismiss / mark-applied, return a redirect so the list reloads with fresh loaders:
+
+```rust
+#[submit]
+async fn keep_item(...) -> Result<Redirect, SubmitError> {
+    // ...mutate...
+    Ok(Redirect::to("/profile")) // same-path: soft replace, no prefetch, no scroll
+    // or: Ok(Redirect::revalidate()) // invalidate current path (Referer for no-JS)
+}
+```
+
+`<Form submit={…}>` disables submit buttons while the request is in flight (`aria-busy` /
+`.resuma-form-pending`).
 
 ## `public/` directory
 
