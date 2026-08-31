@@ -18,6 +18,8 @@ struct PageStaging {
     csp_nonce: String,
     status: Option<u16>,
     redirect: Option<String>,
+    title: Option<String>,
+    description: Option<String>,
 }
 
 tokio::task_local! {
@@ -101,6 +103,29 @@ pub fn sanitize_cache_for_session(
 /// Take a staged cache header (consumed once per response).
 pub fn take_response_cache_control() -> Option<String> {
     with_staging(|s| s.cache_control.take())
+}
+
+/// Override `<title>` for this SSR response. Call during page render; the
+/// document wrapper reads it after the view is written (non-streaming).
+pub fn set_page_title(title: impl Into<String>) {
+    let title = title.into();
+    with_staging(|s| s.title = Some(title));
+}
+
+/// Staged document title, if the page set one.
+pub fn page_title_override() -> Option<String> {
+    with_staging(|s| s.title.clone())
+}
+
+/// Override the meta description for this SSR response.
+pub fn set_page_description(description: impl Into<String>) {
+    let description = description.into();
+    with_staging(|s| s.description = Some(description));
+}
+
+/// Staged meta description, if the page set one.
+pub fn page_description_override() -> Option<String> {
+    with_staging(|s| s.description.clone())
 }
 
 /// Stage the CSRF token for forms rendered during this page pass.

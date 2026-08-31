@@ -95,8 +95,8 @@ pub use crate::core::{
 
 pub use crate::server::{
     build_content_security_policy, configure_security, register_server_action,
-    set_action_middleware, CspConfig, ResumaApp, SecurityConfig, ServeOptions, CSRF_FIELD,
-    CSRF_HEADER,
+    set_action_middleware, set_page_description, set_page_title, CspConfig, ResumaApp,
+    SecurityConfig, ServeOptions, CSRF_FIELD, CSRF_HEADER,
 };
 
 pub use crate::ssr::seo_kit::{AiCrawlerPolicy, MetaTag, SeoKit};
@@ -169,7 +169,8 @@ pub mod prelude {
         loader_refresh_input, match_signal, middleware,
         nav_link, not_found_page, portal, provide_context, provide_theme, push_slots,
         query_nav_link, redirect, redirect_with_flash, render_to_string, render_view, resolve_slot,
-        server, set_action_middleware, set_cookie, show, signal, stream_slot, submit,
+        server, set_action_middleware, set_cookie, set_page_description, set_page_title, show,
+        signal, stream_slot, submit,
         theme_css_vars, try_use_context, try_use_load, try_use_load_value, upload, use_computed,
         use_computed_with_js, use_context, use_debounce, use_effect, use_load, use_signal,
         use_store, use_task, use_theme, use_visible_task, use_visible_task_with_captures, view,

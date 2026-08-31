@@ -41,6 +41,9 @@ fn path_segment_title(path: &str) -> Option<String> {
 }
 
 pub fn page_title(opts: &PageOptions, path: &str) -> String {
+    if let Some(title) = crate::server::page_cache::page_title_override() {
+        return title;
+    }
     if let Some(segment) = path_segment_title(path) {
         format!("{segment} | {}", opts.title)
     } else {
@@ -49,6 +52,9 @@ pub fn page_title(opts: &PageOptions, path: &str) -> String {
 }
 
 pub fn page_description(opts: &PageOptions, path: &str) -> String {
+    if let Some(description) = crate::server::page_cache::page_description_override() {
+        return description;
+    }
     if !opts.description.is_empty() {
         return opts.description.clone();
     }
