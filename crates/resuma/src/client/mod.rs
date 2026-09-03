@@ -78,6 +78,9 @@ pub struct ClientComponent {
     pub class: Option<String>,
     pub props: Option<serde_json::Value>,
     pub aria_hidden: bool,
+    /// Defer the module import until `requestIdleCallback` (or a 1ms timeout).
+    /// Use for decorative widgets that must not compete with LCP.
+    pub lazy: bool,
 }
 
 impl ClientComponent {
@@ -87,6 +90,7 @@ impl ClientComponent {
             class: None,
             props: None,
             aria_hidden: true,
+            lazy: false,
         }
     }
 
@@ -111,6 +115,13 @@ impl ClientComponent {
 
     pub fn aria_hidden(mut self, hidden: bool) -> Self {
         self.aria_hidden = hidden;
+        self
+    }
+
+    /// Import the bundle after the browser is idle (2.5s timeout). Skips the
+    /// download entirely when `prefers-reduced-motion: reduce`.
+    pub fn lazy(mut self, lazy: bool) -> Self {
+        self.lazy = lazy;
         self
     }
 
@@ -177,14 +188,24 @@ pub fn client_component(comp: ClientComponent) -> View {
     } else {
         format!(r#" nonce="{}""#, escape_attr(&nonce))
     };
-    // Import only — `bootClientComponent` / `notifyClientReady` fire
-    // `resuma:client-ready` after sync or async init, not at import time.
-    View::raw(format!(
-        r#"<div {attrs}></div>
-<script type="module" defer{nonce_attr}>
+    let script = if comp.lazy {
+        format!(
+            r#"<script type="module" defer{nonce_attr}>
+const boot = () => import("{script_js}");
+if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {{
+  if ("requestIdleCallback" in window) requestIdleCallback(() => {{ void boot(); }}, {{ timeout: 2500 }});
+  else setTimeout(() => {{ void boot(); }}, 1);
+}}
+</script>"#
+        )
+    } else {
+        format!(
+            r#"<script type="module" defer{nonce_attr}>
 import "{script_js}";
 </script>"#
-    ))
+        )
+    };
+    View::raw(format!("<div {attrs}></div>\n{script}"))
 }
 
 fn escape_js_str(value: &str) -> String {
@@ -252,9 +273,24 @@ mod tests {
         assert!(html.contains(r#"class="hero-particles""#));
         assert!(html.contains(r#"import "/static/client/hero-particles.js""#));
         assert!(
+            !html.contains("requestIdleCallback"),
+            "eager mounts import immediately"
+        );
+        assert!(
             !html.contains("resuma:client-ready"),
             "ready is signaled by bootClientComponent after init, not the import wrapper"
         );
+    }
+
+    #[test]
+    fn client_component_lazy_defers_import() {
+        let html = match client_component(ClientComponent::new("hero-particles").lazy(true)) {
+            View::Raw(s) => s,
+            _ => panic!("expected raw view"),
+        };
+        assert!(html.contains("requestIdleCallback"));
+        assert!(html.contains(r#"import("/static/client/hero-particles.js")"#));
+        assert!(!html.contains("\nimport \"/static/client/hero-particles.js\";"));
     }
 
     #[test]

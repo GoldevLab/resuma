@@ -46,8 +46,9 @@ Documented in `runtime/scripts/measure.mjs` and enforced in CI:
 | Asset | Gzip budget |
 |-------|-------------|
 | `loader.js` | ≤ 1100 B |
-| `core.js` | ≤ 9500 B |
+| `core.js` | ≤ 10000 B |
 | `flow.js` | lazy (exec/Flow widgets only) |
+| `ui.js` | lazy (Popup / Modal / GestureView / VirtualFor fallbacks) |
 
 These match `runtime/scripts/measure.mjs` (CI) and `resuma doctor`.
 

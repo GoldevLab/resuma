@@ -195,17 +195,49 @@ export async function remountPage(): Promise<void> {
 
 /** Move focus to the page root for assistive tech after an SPA swap. */
 function focusMain(): void {
-  const scope = root();
-  const target =
-    scope.querySelector<HTMLElement>("[autofocus]") ??
-    scope.querySelector<HTMLElement>("h1, [role='heading'], main") ??
-    scope;
-  if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
-  try {
-    target.focus({ preventScroll: true });
-  } catch {
-    target.focus();
+  requestFocus(() => {
+    const scope = root();
+    return (
+      scope.querySelector<HTMLElement>("[autofocus]") ??
+      scope.querySelector<HTMLElement>("h1, [role='heading'], main") ??
+      scope
+    );
+  });
+}
+
+type FocusTarget = HTMLElement | (() => HTMLElement | null | undefined);
+const focusQ: FocusTarget[] = [];
+let focusScheduled = false;
+
+function flushFocus(): void {
+  focusScheduled = false;
+  while (focusQ.length) {
+    const t = focusQ.pop()!;
+    const el = typeof t === "function" ? t() : t;
+    if (!el?.isConnected) continue;
+    if (!el.hasAttribute("tabindex") && !el.matches("a,button,input,select,textarea,[tabindex]")) {
+      el.setAttribute("tabindex", "-1");
+    }
+    try {
+      el.focus({ preventScroll: true });
+    } catch {
+      el.focus();
+    }
+    return;
   }
+}
+
+/** Queued focus — last writer in the microtask wins. */
+export function requestFocus(target: FocusTarget): void {
+  focusQ.push(target);
+  if (focusScheduled) return;
+  focusScheduled = true;
+  queueMicrotask(flushFocus);
+}
+
+export function cancelFocus(): void {
+  focusQ.length = 0;
+  focusScheduled = false;
 }
 
 /** Build `/path?key=value` for SPA navigation. Null/empty values are skipped. */
@@ -317,6 +349,10 @@ async function swapToHtml(
   if (doc.title) document.title = doc.title;
 
   const historyHref = opts.historyHref ?? stripCacheBust(href);
+  const dir = doc.documentElement.getAttribute("dir");
+  if (dir) document.documentElement.setAttribute("dir", dir);
+  else document.documentElement.removeAttribute("dir");
+
   if (opts.pushState) {
     history.pushState({ resumaNav: true }, "", historyHref);
   } else {
@@ -386,8 +422,9 @@ export async function navigate(
     }
   };
 
+  const soft = !opts.pushState && !opts.scroll;
   const doc = document as DocWithVt;
-  if (doc.startViewTransition) {
+  if (!soft && doc.startViewTransition && !hasTopLayer()) {
     try {
       await doc.startViewTransition(run).finished;
     } catch {
@@ -395,6 +432,14 @@ export async function navigate(
     }
   } else {
     await run();
+  }
+}
+
+function hasTopLayer(): boolean {
+  try {
+    return !!document.querySelector(":popover-open,dialog[open]");
+  } catch {
+    return false;
   }
 }
 

@@ -7,6 +7,7 @@ use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 
 mod add;
+mod dev_watch;
 mod doctor;
 mod install;
 mod prompt;
@@ -28,7 +29,7 @@ enum Commands {
     New {
         /// Project directory name (prompted when omitted in an interactive terminal).
         name: Option<String>,
-        /// Template: `basic`, `todo`, `flow`, `flow-fullstack`, or `production` (prompted when omitted).
+        /// Template: `basic`, `todo`, `flow`, `flow-booking`, `flow-fullstack`, or `production` (prompted when omitted).
         #[arg(long)]
         template: Option<String>,
     },
@@ -58,8 +59,10 @@ enum Commands {
     Doctor,
     /// Run the app with hot reload.
     Dev {
-        /// Bind address (default: 127.0.0.1:3000). If the port is taken, the next free port is used
-        /// so multiple apps can run `resuma dev` at once (3000, 3001, …).
+        /// Bind address (default: 127.0.0.1:3000). A second `resuma dev` in the *same*
+        /// project replaces the leftover watcher (pidfile + process tree) so the
+        /// preferred port can be reused. A second app in another directory still
+        /// hops to the next free port (3001, …).
         #[arg(long, default_value = "127.0.0.1:3000")]
         addr: String,
         /// Open the default browser once the server starts.
@@ -317,6 +320,7 @@ fn dev_command(
         ensure_runtime_built()?;
     }
     maybe_regenerate_routes(Path::new("src/pages"))?;
+    dev_watch::reclaim_same_project_dev();
 
     let preferred: std::net::SocketAddr = addr
         .parse()
@@ -389,16 +393,17 @@ fn dev_command(
 
     println!("[resuma] hot reload enabled — save a file to rebuild and refresh the browser");
 
-    let status = Command::new("cargo")
+    let mut watch = Command::new("cargo");
+    watch
         .args(&watch_args)
         .env("RESUMA_ADDR", addr)
         .env("RESUMA_DEV", "1")
         .env("RESUMA_VIA_CLI", "1")
         .env("RESUMA_BIND_EXACT", "1")
         .env("RESUMA_CLI_HINT", "0")
-        .env("RUST_LOG", "info,resuma=debug")
-        .status()
-        .context("failed to spawn cargo watch")?;
+        .env("RUST_LOG", "info,resuma=debug");
+
+    let status = dev_watch::spawn_and_wait_watch(watch).context("failed to spawn cargo watch")?;
 
     if !status.success() {
         return Err(anyhow!("dev exited with status {:?}", status.code()));
@@ -650,6 +655,8 @@ fn ensure_runtime_built() -> Result<()> {
                 ("loader.js", runtime_dir.join("dist/loader.js")),
                 ("core.js", runtime_dir.join("dist/core.js")),
                 ("flow.js", runtime_dir.join("dist/flow.js")),
+                ("ui.js", runtime_dir.join("dist/ui.js")),
+                ("ui.css", runtime_dir.join("dist/ui.css")),
             ];
             for (name, from) in assets {
                 let to = runtime_assets_dir().join(name);

@@ -103,9 +103,14 @@ Validate policies: [Google CSP Evaluator](https://csp-evaluator.withgoogle.com/)
 ```toml
 # fly.toml
 [env]
+  HOST = "0.0.0.0"
+  PORT = "8080"
   RESUMA_ENV = "production"
   RESUMA_TRUST_PROXY = "1"
+  RESUMA_TRUSTED_PROXY_CIDRS = "fdaa::/16"
 ```
+
+`RESUMA_TRUST_PROXY=1` requires `RESUMA_TRUSTED_PROXY_CIDRS` or the process will not start. Hosting walkthroughs: Fly, DigitalOcean, Railway — see the docs site **Deploy** page.
 
 ## Authentication
 

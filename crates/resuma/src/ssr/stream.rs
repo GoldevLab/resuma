@@ -18,10 +18,13 @@ pub fn stream_head(opts: &PageOptions, path: &str) -> String {
     } else {
         &opts.lang
     };
+    let dir_attr = super::document_dir_attr(opts);
+    let theme_attr = super::document_theme_attr(opts);
+    let theme_boot = super::html_theme_boot(opts);
     let title = seo::page_title(opts, path);
     let description = seo::page_description(opts, path);
     let seo_tags = seo::seo_head_tags(opts, path);
-    let json_ld = seo::json_ld_script(&opts.json_ld);
+    let json_ld = seo::document_json_ld(opts);
     let head = super::apply_head_csp_nonce(&opts.head, &opts.csp_nonce);
 
     let stylesheet = opts
@@ -32,38 +35,46 @@ pub fn stream_head(opts: &PageOptions, path: &str) -> String {
 
     format!(
         r#"<!doctype html>
-<html lang="{lang}">
+<html lang="{lang}"{dir_attr}{theme_attr}>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="description" content="{description}" />
+{theme_boot}<meta name="description" content="{description}" />
 <title>{title}</title>
 {json_ld}{seo_tags}
 {stylesheet}
+<link rel="stylesheet" href="{ui_css}" />
 {head}
 </head>
 <body>
 <div id="resuma-root">"#,
         lang = escape_attr(lang),
+        dir_attr = dir_attr,
+        theme_attr = theme_attr,
+        theme_boot = theme_boot,
         title = escape_text(&title),
         description = escape_attr(&description),
         seo_tags = seo_tags,
         json_ld = json_ld,
         head = head,
         stylesheet = stylesheet,
+        ui_css = escape_attr(crate::server::runtime_asset::ui_css_url()),
     )
 }
 
 /// Closing tags + optional resumability payload + loader bootstrap.
 pub fn stream_tail(opts: &PageOptions, body_html: &str, payload: &ResumePayload) -> String {
     let scripts = super::client_scripts(opts, body_html, payload);
+    let live = super::live_region_html(body_html, payload);
     let dev_script = crate::server::dev::dev_reload_script(&opts.csp_nonce);
     format!(
         r#"</div>
+{live}
 {scripts}
 {dev_script}
 </body>
 </html>"#,
+        live = live,
         scripts = scripts,
         dev_script = dev_script,
     )
@@ -81,6 +92,11 @@ pub fn stream_placeholder(name: &str) -> String {
 pub type StreamChunk = Result<String, String>;
 
 /// Build a simple stream: head → body chunks → tail.
+///
+/// `stream_head` runs **before** the async generator so per-request staging
+/// (`set_page_title`, robots, JSON-LD) is read on the same task that rendered
+/// the view. Yielding `stream_head` inside `async_stream` can run on another
+/// worker and miss task-local overrides.
 pub fn build_page_stream(
     opts: PageOptions,
     path: &str,
@@ -88,9 +104,9 @@ pub fn build_page_stream(
     payload: ResumePayload,
     body_chunks: Vec<String>,
 ) -> Pin<Box<dyn Stream<Item = StreamChunk> + Send>> {
-    let path = path.to_string();
+    let head = stream_head(&opts, path);
     Box::pin(async_stream::stream! {
-        yield Ok(stream_head(&opts, &path));
+        yield Ok(head);
         for chunk in body_chunks {
             yield Ok(chunk);
         }
@@ -164,6 +180,31 @@ mod tests {
             !head.contains(r#"lang="en" onclick"#),
             "stream head leaked lang quotes: {head}"
         );
+        crate::server::page_cache::clear_request_staging();
+    }
+
+    #[test]
+    fn stream_tail_includes_live_region_for_overlays() {
+        crate::server::page_cache::clear_request_staging();
+        let (_head, body, tail) = render_stream_parts(
+            &PageOptions {
+                title: "t".into(),
+                ..Default::default()
+            },
+            "/",
+            || {
+                crate::popup(
+                    crate::PopupOpts {
+                        id: "m".into(),
+                        ..Default::default()
+                    },
+                    vec![crate::Child::Text("Open".into())],
+                    vec![crate::Child::Text("Panel".into())],
+                )
+            },
+        );
+        assert!(body.contains("data-r-popup"), "{body}");
+        assert!(tail.contains("id=\"r-live\""), "{tail}");
         crate::server::page_cache::clear_request_staging();
     }
 }

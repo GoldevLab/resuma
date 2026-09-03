@@ -56,7 +56,7 @@ pub fn invalidate_link(path: &str, query: &[(&str, &str)], label: impl Into<Stri
 /// Poll server `#[load]` data for `path` on an interval via SPA `__resuma.invalidate`.
 ///
 /// Prefer this over `<meta http-equiv="refresh">` — it reuses the resumable mount
-/// pipeline, skips ticks while the tab is hidden, and tears the timer down on SPA
+/// skips ticks while the tab is hidden or idle (`__resuma.presence().idle`), and tears the timer down on SPA
 /// remount (visible-task cleanup).
 ///
 /// Soft invalidate semantics (runtime): `history.replaceState` (no history spam),
@@ -83,14 +83,24 @@ pub fn loader_poll(path: &str, interval_ms: u64) -> View {
   const path = {path_js};
   const ms = {ms};
   let busy = false;
+  let idle = false;
+  let idleT = 0;
+  const bump = () => {{ idle = false; clearTimeout(idleT); idleT = setTimeout(() => {{ idle = true; }}, 60000); }};
+  ["pointerdown", "keydown"].forEach((ev) => document.addEventListener(ev, bump, {{ passive: true }}));
+  bump();
   const tick = async () => {{
-    if (busy || document.visibilityState === "hidden") return;
+    if (busy || document.visibilityState === "hidden" || idle) return;
+    if (__resuma.presence && __resuma.presence().idle) return;
     busy = true;
     try {{ await __resuma.invalidate(path); }} catch (_) {{}}
     finally {{ busy = false; }}
   }};
   const id = setInterval(tick, ms);
-  return () => {{ clearInterval(id); }};
+  return () => {{
+    clearInterval(id);
+    clearTimeout(idleT);
+    ["pointerdown", "keydown"].forEach((ev) => document.removeEventListener(ev, bump));
+  }};
 }})"#,
         path_js = path_js,
         ms = ms,
@@ -109,5 +119,25 @@ mod tests {
         assert!(href.starts_with("/users?"));
         assert!(href.contains("q=a"));
         assert!(href.contains("_r=1"));
+    }
+
+    #[test]
+    fn loader_poll_cleanup_removes_idle_listeners() {
+        use crate::core::context::{with_context, RenderContext, RenderMode};
+        let ctx = RenderContext::new(RenderMode::Ssr);
+        let payload = with_context(ctx.clone(), || {
+            let _ = loader_poll("/", 1000);
+            ctx.snapshot()
+        });
+        let js: String = payload
+            .visible_tasks
+            .values()
+            .map(|t| t.body.as_str())
+            .collect();
+        assert!(
+            js.contains("removeEventListener"),
+            "poll cleanup must unbind idle listeners: {js}"
+        );
+        assert!(js.contains("clearTimeout"), "{js}");
     }
 }

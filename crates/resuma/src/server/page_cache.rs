@@ -20,6 +20,11 @@ struct PageStaging {
     redirect: Option<String>,
     title: Option<String>,
     description: Option<String>,
+    robots: Option<String>,
+    canonical: Option<String>,
+    json_ld: Option<String>,
+    dir: Option<String>,
+    theme: Option<String>,
 }
 
 tokio::task_local! {
@@ -53,9 +58,15 @@ pub fn clear_request_staging() {
 }
 
 /// Stage the HTTP status for the page about to be returned (e.g. 404/500 error
-/// pages). Defaults to 200 when unset.
+/// pages). Defaults to 200 when unset. Non-200 statuses also stage `noindex`
+/// unless [`set_page_robots`] already ran.
 pub fn stage_response_status(status: u16) {
-    with_staging(|s| s.status = Some(status));
+    with_staging(|s| {
+        s.status = Some(status);
+        if status != 200 && s.robots.is_none() {
+            s.robots = Some("noindex".into());
+        }
+    });
 }
 
 /// Take the staged HTTP status (consumed once per response).
@@ -126,6 +137,61 @@ pub fn set_page_description(description: impl Into<String>) {
 /// Staged meta description, if the page set one.
 pub fn page_description_override() -> Option<String> {
     with_staging(|s| s.description.clone())
+}
+
+/// Override `meta name="robots"` for this SSR response.
+pub fn set_page_robots(robots: impl Into<String>) {
+    let robots = robots.into();
+    with_staging(|s| s.robots = Some(robots));
+}
+
+/// Staged robots directive, if the page or a non-200 status set one.
+pub fn page_robots_override() -> Option<String> {
+    with_staging(|s| s.robots.clone())
+}
+
+/// Override the HTML canonical URL for this SSR response (absolute).
+pub fn set_page_canonical(canonical: impl Into<String>) {
+    let canonical = canonical.into();
+    with_staging(|s| s.canonical = Some(canonical));
+}
+
+/// Staged canonical URL, if the page set one.
+pub fn page_canonical_override() -> Option<String> {
+    with_staging(|s| s.canonical.clone())
+}
+
+/// Override JSON-LD for this SSR response (raw JSON, not HTML-wrapped).
+pub fn set_page_json_ld(json_ld: impl Into<String>) {
+    let json_ld = json_ld.into();
+    with_staging(|s| s.json_ld = Some(json_ld));
+}
+
+/// Staged JSON-LD, if the page set one.
+pub fn page_json_ld_override() -> Option<String> {
+    with_staging(|s| s.json_ld.clone())
+}
+
+/// Override `<html dir>` for this SSR response (`ltr`, `rtl`, or `auto`).
+pub fn set_page_dir(dir: impl Into<String>) {
+    let dir = dir.into();
+    with_staging(|s| s.dir = Some(dir));
+}
+
+/// Staged document `dir`, if the page set one.
+pub fn page_dir_override() -> Option<String> {
+    with_staging(|s| s.dir.clone())
+}
+
+/// Override `<html data-theme>` for this SSR response.
+pub fn set_page_theme(theme: impl Into<String>) {
+    let theme = theme.into();
+    with_staging(|s| s.theme = Some(theme));
+}
+
+/// Staged document theme id, if the page set one.
+pub fn page_theme_override() -> Option<String> {
+    with_staging(|s| s.theme.clone())
 }
 
 /// Stage the CSRF token for forms rendered during this page pass.

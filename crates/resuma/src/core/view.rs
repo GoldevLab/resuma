@@ -49,6 +49,48 @@ pub struct Element {
     pub dom_id: Option<String>,
 }
 
+impl Element {
+    /// Last write wins for a given name (e.g. force `type="button"` on a submit).
+    /// `style` is concatenated so Popup `anchor-name` does not drop host styles.
+    pub(crate) fn merge_attrs(&mut self, extra: impl IntoIterator<Item = Attr>) {
+        for a in extra {
+            if a.name == "style" {
+                if let (Some(existing), AttrValue::Static(extra_style)) =
+                    (self.attrs.iter_mut().find(|x| x.name == "style"), &a.value)
+                {
+                    if let AttrValue::Static(cur) = &mut existing.value {
+                        append_css(cur, extra_style);
+                        continue;
+                    }
+                }
+            }
+            if let Some(existing) = self.attrs.iter_mut().find(|x| x.name == a.name) {
+                *existing = a;
+            } else {
+                self.attrs.push(a);
+            }
+        }
+    }
+}
+
+fn append_css(cur: &mut String, extra: &str) {
+    let extra = extra.trim();
+    if extra.is_empty() {
+        return;
+    }
+    if cur.trim().is_empty() {
+        *cur = extra.to_string();
+        return;
+    }
+    if !cur.trim_end().ends_with(';') {
+        cur.push(';');
+    }
+    if !cur.ends_with(' ') {
+        cur.push(' ');
+    }
+    cur.push_str(extra);
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Fragment {
     pub children: Vec<Child>,
@@ -116,6 +158,19 @@ pub struct ForView {
     pub signal: SignalId,
     pub key_field: Option<String>,
     pub items: Vec<ForItemView>,
+    /// Windowed list (`<For virtual>`). SSR emits a prefix of `items`; the
+    /// client window lives in `/_resuma/ui.js`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub virtual_list: Option<VirtualListOpts>,
+}
+
+/// Options for a virtualized `<For>`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct VirtualListOpts {
+    pub item_height: u32,
+    pub overscan: u32,
+    /// Full collection length (SSR `items` may be a windowed prefix).
+    pub total: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

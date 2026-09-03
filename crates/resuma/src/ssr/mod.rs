@@ -55,6 +55,10 @@ pub struct PageOptions {
     pub description: String,
     pub head: String,
     pub lang: String,
+    /// Document `dir` (`ltr` / `rtl` / `auto`). Empty omits the attribute.
+    pub dir: String,
+    /// Live `html[data-theme]` palettes + blocking boot for `[data-r-theme]`.
+    pub html_theme: Option<crate::HtmlTheme>,
     /// Public site origin, e.g. `https://resuma-docs.fly.dev` (no trailing slash).
     pub site_url: String,
     /// Open Graph image path or absolute URL.
@@ -253,48 +257,117 @@ fn wrap_document(
     } else {
         &opts.lang
     };
+    let dir_attr = document_dir_attr(opts);
+    let theme_attr = document_theme_attr(opts);
+    let theme_boot = html_theme_boot(opts);
     let title = seo::page_title(opts, path);
     let description = seo::page_description(opts, path);
     let seo_tags = seo::seo_head_tags(opts, path);
-    let json_ld = seo::json_ld_script(&opts.json_ld);
+    let json_ld = seo::document_json_ld(opts);
     let stylesheet = opts
         .stylesheet
         .as_ref()
         .map(|s| format!(r#"<link rel="stylesheet" href="{}" />"#, escape_attr(s)))
         .unwrap_or_default();
+    let ui_css = ui_head_tags(body_html);
     let scripts = client_scripts(opts, body_html, payload);
+    let live = live_region_html(body_html, payload);
     let dev_script = crate::server::dev::dev_reload_script(&opts.csp_nonce);
     let head = apply_head_csp_nonce(&opts.head, &opts.csp_nonce);
 
     format!(
         r#"<!doctype html>
-<html lang="{lang}">
+<html lang="{lang}"{dir_attr}{theme_attr}>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="description" content="{description}" />
+{theme_boot}<meta name="description" content="{description}" />
 <title>{title}</title>
 {json_ld}{seo_tags}
 {stylesheet}
+{ui_css}
 {head}
 </head>
 <body>
 <div id="resuma-root">{body}</div>
+{live}
 {scripts}
 {dev_script}
 </body>
 </html>"#,
         lang = escape_attr(lang),
+        dir_attr = dir_attr,
+        theme_attr = theme_attr,
+        theme_boot = theme_boot,
         title = escape_text(&title),
         description = escape_attr(&description),
         seo_tags = seo_tags,
         json_ld = json_ld,
         head = head,
         stylesheet = stylesheet,
+        ui_css = ui_css,
+        live = live,
         body = body_html,
         scripts = scripts,
         dev_script = dev_script,
     )
+}
+
+pub(crate) fn document_dir_attr(opts: &PageOptions) -> String {
+    let dir = crate::server::page_cache::page_dir_override()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| opts.dir.clone());
+    if dir.is_empty() {
+        String::new()
+    } else {
+        format!(r#" dir="{}""#, escape_attr(&dir))
+    }
+}
+
+pub(crate) fn document_theme_attr(opts: &PageOptions) -> String {
+    let Some(cfg) = opts.html_theme.as_ref() else {
+        return String::new();
+    };
+    let id = crate::server::page_cache::page_theme_override()
+        .filter(|s| cfg.allows(s))
+        .unwrap_or_else(|| cfg.default_light.clone());
+    if id.is_empty() {
+        String::new()
+    } else {
+        format!(r#" data-theme="{}""#, escape_attr(&id))
+    }
+}
+
+pub(crate) fn html_theme_boot(opts: &PageOptions) -> String {
+    let Some(cfg) = opts.html_theme.as_ref() else {
+        return String::new();
+    };
+    apply_head_csp_nonce(&cfg.boot_script(), &opts.csp_nonce)
+}
+
+pub(crate) fn body_needs_ui(body_html: &str) -> bool {
+    body_html.contains("data-r-popup")
+        || body_html.contains("data-r-modal")
+        || body_html.contains("data-r-gesture")
+        || body_html.contains("data-r-virtual")
+}
+
+pub(crate) fn ui_head_tags(body_html: &str) -> String {
+    if !body_needs_ui(body_html) {
+        return String::new();
+    }
+    format!(
+        r#"<link rel="stylesheet" href="{}" />"#,
+        escape_attr(crate::server::runtime_asset::ui_css_url())
+    )
+}
+
+pub(crate) fn live_region_html(body_html: &str, payload: &ResumePayload) -> String {
+    if !page_needs_client(payload, body_html) {
+        return String::new();
+    }
+    r#"<div id="r-live" role="status" aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div>"#
+        .into()
 }
 
 fn write_view(buf: &mut String, view: &View) {
@@ -562,13 +635,27 @@ fn write_for(buf: &mut String, for_view: &crate::core::view::ForView) {
         .as_deref()
         .map(|k| format!(r#" data-r-key="{}""#, escape_attr(k)))
         .unwrap_or_default();
+    let virtual_attr = if let Some(v) = &for_view.virtual_list {
+        format!(
+            r#" data-r-virtual data-r-item-height="{}" data-r-overscan="{}" data-r-virtual-total="{}""#,
+            v.item_height.max(1),
+            if v.overscan == 0 { 6 } else { v.overscan },
+            v.total,
+        )
+    } else {
+        String::new()
+    };
     let _ = write!(
         buf,
-        r#"<resuma-for data-r-for="{}"{key_attr}>"#,
+        r#"<resuma-for data-r-for="{}"{key_attr}{virtual_attr}>"#,
         for_view.signal,
         key_attr = key_attr,
+        virtual_attr = virtual_attr,
     );
     buf.push_str(r#"<div data-r-for-list>"#);
+    if for_view.virtual_list.is_some() {
+        buf.push_str(r#"<div class="r-virtual-spacer" data-r-virtual-top=""></div>"#);
+    }
     for item in &for_view.items {
         let _ = write!(
             buf,
@@ -579,6 +666,15 @@ fn write_for(buf: &mut String, for_view: &crate::core::view::ForView) {
             write_child(buf, c);
         }
         buf.push_str("</div>");
+    }
+    if let Some(v) = &for_view.virtual_list {
+        let rest = v.total.saturating_sub(for_view.items.len());
+        let h = v.item_height.max(1) as usize;
+        let _ = write!(
+            buf,
+            r#"<div class="r-virtual-spacer" data-r-virtual-bot="" style="height:{}px"></div>"#,
+            rest * h,
+        );
     }
     buf.push_str("</div></resuma-for>");
 }
@@ -702,6 +798,83 @@ mod document_escape_tests {
             html.contains("&quot;") || html.contains("&lt;"),
             "lang must be attribute-escaped: {html}"
         );
+    }
+
+    #[test]
+    fn dir_attr_is_emitted_and_escaped() {
+        crate::server::page_cache::clear_request_staging();
+        let html = render_to_string(
+            &PageOptions {
+                title: "App".into(),
+                dir: "rtl".into(),
+                ..Default::default()
+            },
+            || View::text("ok"),
+        );
+        assert!(html.contains(r#" dir="rtl""#), "{html}");
+
+        crate::server::page_cache::set_page_dir(r#"rtl"><img src=x>"#);
+        let html = render_to_string(
+            &PageOptions {
+                title: "App".into(),
+                ..Default::default()
+            },
+            || View::text("ok"),
+        );
+        assert!(!html.contains(r#"<img src=x"#), "{html}");
+        crate::server::page_cache::clear_request_staging();
+    }
+
+    #[test]
+    fn html_theme_emits_data_theme_and_boot() {
+        crate::server::page_cache::clear_request_staging();
+        let html = render_to_string(
+            &PageOptions {
+                title: "App".into(),
+                html_theme: Some(crate::HtmlTheme::new(["paper", "slate"])),
+                ..Default::default()
+            },
+            || View::text("ok"),
+        );
+        assert!(html.contains(r#" data-theme="paper""#), "{html}");
+        assert!(html.contains("[data-r-theme]"), "{html}");
+        assert!(html.contains("__resumaSetTheme"), "{html}");
+        assert!(!html.contains("startViewTransition"), "{html}");
+        crate::server::page_cache::set_page_theme("slate");
+        let html = render_to_string(
+            &PageOptions {
+                title: "App".into(),
+                html_theme: Some(crate::HtmlTheme::new(["paper", "slate"])),
+                ..Default::default()
+            },
+            || View::text("ok"),
+        );
+        assert!(html.contains(r#" data-theme="slate""#), "{html}");
+        crate::server::page_cache::clear_request_staging();
+    }
+
+    #[test]
+    fn popup_document_links_ui_css() {
+        crate::server::page_cache::clear_request_staging();
+        let html = render_to_string(
+            &PageOptions {
+                title: "t".into(),
+                ..Default::default()
+            },
+            || {
+                crate::popup(
+                    crate::PopupOpts {
+                        id: "m".into(),
+                        ..Default::default()
+                    },
+                    vec![crate::Child::Text("Open".into())],
+                    vec![crate::Child::Text("Panel".into())],
+                )
+            },
+        );
+        assert!(html.contains("/_resuma/ui.css"), "{html}");
+        assert!(html.contains("id=\"r-live\""), "{html}");
+        assert!(html.contains("loader.js"), "{html}");
     }
 }
 

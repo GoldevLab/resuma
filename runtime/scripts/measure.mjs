@@ -16,10 +16,10 @@ const dist = join(__dirname, "..", "dist");
 const LOADER_GZIP_BUDGET = 1100;
 // Post-1.0 reactive For/Match/Show + SPA nav; visible tasks + view transitions;
 // mount cleanup registry; safeAction + field_errors; exclusive nav (1.3.x);
-// waitClient / onClientReady (pokeLegens ClientComponent dogfood).
-const CORE_GZIP_BUDGET = 9500;
+// waitClient / onClientReady; announce/measure/storage + lazy ui.js hook (1.3.x).
+const CORE_GZIP_BUDGET = 10000;
 
-const defaults = ["loader.js", "core.js", "flow.js", "runtime.js"].map((f) => join(dist, f));
+const defaults = ["loader.js", "core.js", "flow.js", "ui.js", "runtime.js"].map((f) => join(dist, f));
 
 function fmt(bytes) {
   if (bytes < 1024) return `${bytes} B`;

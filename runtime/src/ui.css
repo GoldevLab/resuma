@@ -1,0 +1,72 @@
+/* Resuma overlay / desktop UI — loaded only when Popup, Modal, GestureView, or VirtualFor is present. */
+
+[data-r-popup]:is(:popover-open, .\:popover-open, .r-popover-open) {
+  display: block;
+}
+
+.r-popup {
+  margin: 0;
+  border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+  border-radius: 0.5rem;
+  padding: 0.35rem;
+  background: Canvas;
+  color: CanvasText;
+  box-shadow: 0 12px 40px color-mix(in srgb, CanvasText 16%, transparent);
+  inset: auto;
+  /* Beat host `relative` / `overflow-hidden` utilities so clicks hit the panel. */
+  overflow: visible !important;
+  position: absolute !important;
+  position-area: block-end span-inline-end;
+  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+}
+[data-r-popup] {
+  overflow: visible !important;
+  position: absolute !important;
+}
+
+.r-popup[data-r-popup-positions^="top"] {
+  position-area: block-start span-inline-end;
+}
+.r-popup[data-r-popup-positions^="right"] {
+  position-area: inline-end span-block-end;
+}
+.r-popup[data-r-popup-positions^="left"] {
+  position-area: inline-start span-block-end;
+}
+.r-popup[data-r-popup-fallback] {
+  position: fixed !important;
+}
+
+dialog.r-modal {
+  border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  max-width: min(32rem, calc(100vw - 2rem));
+  background: Canvas;
+  color: CanvasText;
+}
+dialog.r-modal::backdrop {
+  background: color-mix(in srgb, CanvasText 42%, transparent);
+}
+
+.r-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.r-virtual-spacer {
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+html[data-r-nav="keyboard"] :focus {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}

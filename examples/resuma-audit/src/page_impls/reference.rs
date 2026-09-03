@@ -9,7 +9,7 @@ pub fn architecture(_req: FlowRequest) -> View {
         vec![Child::View(view! {
             <>
                 <p>"Resumability: components run once on server. SSR embeds signals + handler refs in HTML."</p>
-                <p>"907 B gzip loader resumes interactivity on first click — no hydration."</p>
+                <p>"1021 B gzip loader resumes interactivity on first click — no hydration."</p>
             </>
         })],
     )

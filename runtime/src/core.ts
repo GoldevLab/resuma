@@ -9,9 +9,10 @@ import { initEffects, flushEffectCleanups, type ClientEffectSpec } from "./effec
 import { prefetchLazyChunks } from "./boundaries.js";
 import { invalidateLazyChunks, warmHandlerChunks, warmIslandChunks, clearInlineHandlerCache } from "./handler-loader.js";
 import { resolveHandler, type Handler } from "./handler-loader.js";
-import { initNavLinks, followRedirect, navigate, buildUrl, invalidate, setPageMounter, updateNavActiveClasses } from "./navigation.js";
+import { retargetHandlerEvent } from "./handler-event.js";
+import { initNavLinks, followRedirect, navigate, buildUrl, invalidate, setPageMounter, updateNavActiveClasses, requestFocus, cancelFocus } from "./navigation.js";
 import { runVisibleTasks, type VisibleTaskEntry } from "./visible-tasks.js";
-import { flushMountCleanups } from "./mount-cleanups.js";
+import { flushMountCleanups, registerMountCleanup } from "./mount-cleanups.js";
 import { beginPortalMount, mountStaticPortals } from "./portals.js";
 import { onClientReady, waitClient } from "./client-ready.js";
 import type { ResumaGlobal } from "./types.js";
@@ -35,6 +36,23 @@ function hasFlowWidgets(scope: ParentNode): boolean {
 /** Injected at build time via esbuild `--define:__RESUMA_VERSION__=…` from package.json. */
 declare const __RESUMA_VERSION__: string;
 
+let uiPending: Promise<{
+  initUi: (scope: ParentNode) => void;
+  showPopup: (id: string) => boolean;
+  hidePopup: (id: string) => void;
+  showModal: (id: string) => boolean;
+  hideModal: (id: string) => void;
+  dismissAll: () => void;
+  bindVirtualFor: Function;
+}> | null = null;
+function loadUi() {
+  uiPending ??= import(`/_resuma/ui.js?v=${__RESUMA_VERSION__}`);
+  return uiPending;
+}
+function uiOp(name: "showPopup" | "hidePopup" | "showModal" | "hideModal" | "dismissAll", id = "") {
+  void loadUi().then((m) => m[name](id));
+}
+
 async function maybeInitFlowWidgets(scope: ParentNode): Promise<void> {
   if (!hasFlowWidgets(scope)) return;
   try {
@@ -42,6 +60,24 @@ async function maybeInitFlowWidgets(scope: ParentNode): Promise<void> {
     mod.initFlowWidgets(scope);
   } catch (err) {
     console.error("[r] flow load", err);
+  }
+}
+
+async function maybeInitUi(scope: ParentNode): Promise<void> {
+  if (!scope.querySelector("[data-r-popup],[data-r-modal],[data-r-gesture],[data-r-virtual]")) return;
+  try {
+    const mod = await loadUi();
+    mod.initUi(scope);
+    const r = window.__resuma;
+    if (r) Object.assign(r, {
+      showPopup: mod.showPopup,
+      hidePopup: mod.hidePopup,
+      showModal: mod.showModal,
+      hideModal: mod.hideModal,
+      dismissAll: mod.dismissAll,
+    });
+  } catch (err) {
+    console.error("[r] ui load", err);
   }
 }
 
@@ -120,6 +156,7 @@ let bootstrapped = false;
 export function mountPage(): void {
   // Tear down the previous mount's effect subscriptions, debounce timers, and
   // viewport observers before re-initializing against fresh signal cells.
+  cancelFocus();
   flushEffectCleanups();
   flushMountCleanups();
   beginPortalMount();
@@ -197,6 +234,64 @@ export function mountPage(): void {
     invalidate,
     waitClient,
     onClientReady,
+    announce: (msg: string) => {
+      const node = document.getElementById("r-live");
+      if (!node) return;
+      node.textContent = "";
+      requestAnimationFrame(() => {
+        node.textContent = msg;
+      });
+    },
+    measure: (el) => {
+      const n = typeof el === "string" ? document.querySelector(el) : el;
+      if (!(n instanceof Element)) return null;
+      const r = n.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    },
+    storage: {
+      get: (k) => {
+        try {
+          return localStorage.getItem(k);
+        } catch {
+          return null;
+        }
+      },
+      set: (k, v) => {
+        try {
+          localStorage.setItem(k, v);
+        } catch {
+          /* private mode */
+        }
+      },
+      remove: (k) => {
+        try {
+          localStorage.removeItem(k);
+        } catch {
+          /* private mode */
+        }
+      },
+    },
+    online: () => navigator.onLine,
+    presence: () => ({
+      idle: !!(window as unknown as { __rIdle?: boolean }).__rIdle || document.hidden,
+      hidden: document.hidden,
+    }),
+    isNavigatingWithKeyboard: () => document.documentElement.dataset.rNav === "keyboard",
+    contentSizeMultiplier: () => parseFloat(getComputedStyle(document.documentElement).fontSize) / 16 || 1,
+    focus: requestFocus,
+    onCleanup: registerMountCleanup,
+    showPopup: (id: string) => {
+      uiOp("showPopup", id);
+      return true;
+    },
+    hidePopup: (id: string) => uiOp("hidePopup", id),
+    showModal: (id: string) => {
+      uiOp("showModal", id);
+      return true;
+    },
+    hideModal: (id: string) => uiOp("hideModal", id),
+    dismissAll: () => uiOp("dismissAll"),
+    runHandler,
   };
   window.__resuma = __resuma;
   if (handlerChunks.size) warmHandlerChunks(handlerChunks);
@@ -212,6 +307,7 @@ export function mountPage(): void {
   mountStaticPortals(scope);
   initViewTransitions(scope);
   void maybeInitFlowWidgets(scope);
+  void maybeInitUi(scope);
   runVisibleTasks(payload.visible_tasks ?? {}, signals, state, root);
   initEffects(payload.effects ?? [], signals, __resuma);
   prefetchLazyChunks(payload.lazy_chunks ?? [], scope);
@@ -255,10 +351,12 @@ export async function runHandler(
   inline: string | null,
   ev: Event,
   captures: string[],
+  handlerEl?: EventTarget | null,
 ): Promise<void> {
   const fn: Handler = await resolveHandler(ref, inline);
   const localState = buildLocalState(captures);
-  await fn(ev, localState, window.__resuma!);
+  const event = retargetHandlerEvent(ev, handlerEl);
+  await fn(event, localState, window.__resuma!);
 }
 
 function setFormPending(form: HTMLFormElement, pending: boolean): void {

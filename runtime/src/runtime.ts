@@ -23,6 +23,7 @@ import { initSignals, signalId, type SignalCell, bindReactiveText, bindReactiveA
 import { initIslands } from "./islands.js";
 import { initEffects, flushEffectCleanups, type ClientEffectSpec } from "./effects.js";
 import { resolveHandler } from "./handler-loader.js";
+import { withHandlerCurrentTarget } from "./handler-event.js";
 import { followRedirect, initNavLinks, setPageMounter, navigate, buildUrl, invalidate } from "./navigation.js";
 import { runVisibleTasks, type VisibleTaskEntry } from "./visible-tasks.js";
 import { flushMountCleanups } from "./mount-cleanups.js";
@@ -181,7 +182,7 @@ async function dispatchEvent(ev: Event): Promise<void> {
         const fn = await resolveHandler(ref, inline);
         const localState = buildLocalState(captures);
         const actions = window.__resuma!;
-        await fn(ev, localState, actions);
+        await fn(withHandlerCurrentTarget(ev, target), localState, actions);
       } catch (err) {
         console.error("[resuma] handler error", err);
       }

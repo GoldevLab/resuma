@@ -83,20 +83,24 @@ pub use crate::client::{
 
 pub use crate::core::view::AttrValue;
 pub use crate::core::{
-    combine_js, error_boundary, for_signal, match_signal, nav_link, no_serialize, portal,
-    provide_context, provide_theme, push_slots, resolve_slot, show, show_signal, signal,
-    stream_chunk, stream_slot, theme_css_vars, try_use_context, use_computed, use_computed_with_js,
-    use_context, use_debounce, use_effect, use_signal, use_store, use_task, use_theme,
-    use_visible_task, use_visible_task_with_captures, visible_task_js, with_default_slot,
-    with_view_transition, Child, Component, Computed, ContextId, Effect, FlowRequest, IntoView,
-    NoSerialize, ReadSignal, RenderContext, RenderMode, Result, ResumaError, ResumePayload, Signal,
-    SlotGuard, SlottedChild, Store, Theme, View, VisibleTaskSpec, WriteSignal,
+    combine_js, error_boundary, for_signal, for_signal_virtual, gesture_view, match_signal, modal,
+    modal_trigger, nav_link, no_serialize, popup, popup_anchor, portal, provide_context,
+    provide_theme, push_slots, resolve_slot, show, show_signal, signal, stream_chunk, stream_slot,
+    theme_css_vars, theme_switch, try_use_context, use_computed, use_computed_with_js, use_context,
+    use_debounce, use_effect, use_signal, use_store, use_task, use_theme, use_visible_task,
+    use_visible_task_with_captures, visible_task_js, with_default_slot, with_view_transition,
+    Child, Component, Computed, ContextId, Effect, FlowRequest, GestureOpts, HtmlTheme, IntoView,
+    ModalOpts, NoSerialize, PopupOpts, ReadSignal, RenderContext, RenderMode, Result, ResumaError,
+    ResumePayload, Signal, SlotGuard, SlottedChild, Store, Theme, View, VisibleTaskSpec,
+    WriteSignal,
 };
 
 pub use crate::server::{
     build_content_security_policy, configure_security, register_server_action,
-    set_action_middleware, set_page_description, set_page_title, CspConfig, ResumaApp,
-    SecurityConfig, ServeOptions, CSRF_FIELD, CSRF_HEADER,
+    set_action_middleware, set_page_canonical, set_page_description, set_page_dir,
+    set_page_json_ld, set_page_robots, set_page_theme, set_page_title, stage_response_redirect,
+    stage_response_status, CspConfig, ResumaApp, SecurityConfig, ServeOptions, CSRF_FIELD,
+    CSRF_HEADER,
 };
 
 pub use crate::ssr::seo_kit::{AiCrawlerPolicy, MetaTag, SeoKit};
@@ -161,21 +165,24 @@ pub mod prelude {
     pub use super::{
         build_query_href, clear_cookie, client_component, client_script_url, combine_js, component,
         computed, configure_security, cookie_value, current_request, data, debounce, effect,
-        error_boundary, error_page, extract_redirect, flash_message, for_signal, form,
-        invalidate_href, invalidate_href_now, invalidate_link, island, js, layout, load, load_all2,
-        load_all3, load_all4, load_boundary, loader_poll, loader_refresh_form,
-        loader_refresh_input, match_signal, middleware, nav_link, not_found_page, portal,
-        provide_context, provide_theme, push_slots, query_nav_link, redirect, redirect_with_flash,
-        render_to_string, render_view, resolve_slot, server, set_action_middleware, set_cookie,
-        set_page_description, set_page_title, show, signal, stream_slot, submit, theme_css_vars,
-        try_use_context, try_use_load, try_use_load_value, upload, use_computed,
-        use_computed_with_js, use_context, use_debounce, use_effect, use_load, use_signal,
-        use_store, use_task, use_theme, use_visible_task, use_visible_task_with_captures, view,
-        visible_task, with_view_transition, worker, AttrValue, Child, ClientComponent, Component,
-        Computed, CookieOptions, CspConfig, Effect, FlowApp, FlowError, FlowPageRegistry,
-        FlowPwaConfig, FlowRequest, FlowServeOptions, FromFlowRequest, IntoView, LoadValue,
-        LoaderError, PageOptions, Path, PublicAsset, PwaShortcut, Query, ReadSignal, Redirect,
-        Result, ResumaApp, ResumaError, SameSite, SecurityConfig, ServeOptions, Signal,
+        error_boundary, error_page, extract_redirect, flash_message, for_signal,
+        for_signal_virtual, form, gesture_view, invalidate_href, invalidate_href_now,
+        invalidate_link, island, js, layout, load, load_all2, load_all3, load_all4, load_boundary,
+        loader_poll, loader_refresh_form, loader_refresh_input, match_signal, middleware, modal,
+        modal_trigger, nav_link, not_found_page, popup, popup_anchor, portal, provide_context,
+        provide_theme, push_slots, query_nav_link, redirect, redirect_with_flash, render_to_string,
+        render_view, resolve_slot, server, set_action_middleware, set_cookie, set_page_canonical,
+        set_page_description, set_page_dir, set_page_json_ld, set_page_robots, set_page_theme,
+        set_page_title, show, signal, stage_response_redirect, stage_response_status, stream_slot,
+        submit, theme_css_vars, theme_switch, try_use_context, try_use_load, try_use_load_value,
+        upload, use_computed, use_computed_with_js, use_context, use_debounce, use_effect,
+        use_load, use_signal, use_store, use_task, use_theme, use_visible_task,
+        use_visible_task_with_captures, view, visible_task, with_view_transition, worker,
+        AttrValue, Child, ClientComponent, Component, Computed, CookieOptions, CspConfig, Effect,
+        FlowApp, FlowError, FlowPageRegistry, FlowPwaConfig, FlowRequest, FlowServeOptions,
+        FromFlowRequest, GestureOpts, HtmlTheme, IntoView, LoadValue, LoaderError, ModalOpts,
+        PageOptions, Path, PopupOpts, PublicAsset, PwaShortcut, Query, ReadSignal, Redirect,
+        Result, ResumaApp, ResumaError, SameSite, SecurityConfig, SeoKit, ServeOptions, Signal,
         SlottedChild, Store, SubmitError, Theme, View, WriteSignal, CLIENT_SCRIPT_PREFIX,
         CSRF_FIELD, CSRF_HEADER,
     };
@@ -208,11 +215,13 @@ pub mod __private {
     pub use crate::core::effect::{attach_client_effect, use_computed_with_js, use_effect};
     pub use crate::core::task::{register_debounce_effect, use_debounce};
     pub use crate::core::{
-        combine_js, for_signal, match_signal, match_static, nav_link, show, show_signal,
+        combine_js, for_signal, for_signal_virtual, gesture_view, match_signal, match_static,
+        modal, modal_trigger, nav_link, popup, popup_anchor, show, show_signal, theme_switch,
     };
     pub use crate::core::{
         context::{current_context, with_handler_chunk, RenderContext, RenderMode},
         handler::{HandlerCapture, HandlerRef},
+        overlay::{GestureOpts, ModalOpts, PopupOpts},
         signal::SignalId,
         slot::{push_slots, resolve_slot, with_default_slot, SlottedChild},
         view::{AttrValue, Element, Fragment, Island as IslandView},

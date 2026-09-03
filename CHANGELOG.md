@@ -8,32 +8,32 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.3.1] - 2026-09-03
 
-### Fixed
-
-- **`set_page_description` / `lang` attribute injection** — the document
-  `<meta name="description">` and `<html lang>` now use `escape_attr` (same as
-  Open Graph tags). A CMS excerpt with quotes can no longer inject
-  `http-equiv="refresh"`.
-- **ClientComponents survive SPA navigation** — `innerHTML` swaps re-import
-  `/static/client/*.js` modules; `bootClientComponent` remounts on
-  `resuma:navigate` and signals ready only after sync or async init.
-- **`set_cookie` rejects `;` / CR/LF / controls** in name, value, and path so
-  session helpers cannot inject extra cookie attributes.
-- **Cookie percent-decoding is UTF-8** — `caf%C3%A9` reads as `café`.
-- **Rate-limit test backend** — `check_rate_limit` no longer reinstalls the
-  env backend after tests switch to memory (the first request used to wipe
-  the reset and miss per-action limits).
-- **`resuma dev` no longer kills port 3000 by default** — starting a second app used to
-  `fuser -k` the first one. Kill is now opt-in (`--kill-stale`); when `:3000` is busy the
-  CLI picks the next free port (`3001`, …) and sets `RESUMA_ADDR` so both apps stay up.
-- **Soft `invalidate` / `loader_poll`** — no longer `pushState`s `?_r=` into history or
-  scrolls to top on every tick (JobBot live queue dogfood).
-- **Submit/action redirects never reuse NavLink prefetch** — Keep/Dismiss/mark-applied
-  always refetch fresh SSR HTML so lists update immediately.
-- **Same-path redirects** soft-replace (no scroll); cross-path redirects still push + scroll.
-
 ### Added
 
+- **Native overlays in Rust** — `<Popup>`, `<Modal>`, and `<GestureView>` in `view!`
+  emit `popover` + CSS anchor, `<dialog closedby>` + Invoker Commands, and gesture
+  markers. The happy path is HTML/CSS; `/_resuma/ui.js` is a lazy fallback (Safari
+  light-dismiss, no-anchor flip, pan/pinch, virtual `<For>`).
+- **`__resuma.announce` / `measure` / `storage` / `online` / `presence`** — live
+  region, layout measure, SSR-safe storage, network, idle detection. `loader_poll`
+  skips ticks while the tab is idle.
+- **Focus arbitrator** — SPA swaps, dialogs, and popups share a deferred `focus()`
+  queue (`navigation.ts` `focusMain`).
+- **`<For virtual>`** — windowed lists (`itemHeight`, `overscan`) for large collections.
+- **`FlowApp::with_html_theme` / `HtmlTheme` / `<ThemeSwitch>`** — live
+  `html[data-theme]` palettes. `[data-r-theme]` buttons (or the `view!` tag) restyle
+  the whole document from a blocking head boot: cookie + `localStorage`, no layout
+  handler chunk, no View Transition (that races native popovers). `set_page_theme`
+  overrides SSR. `theme_css_vars` remains a one-shot inline snapshot.
+- Lazy **`/_resuma/ui.js`** + **`/_resuma/ui.css`** for overlay fallbacks (not in the
+  loader). `core.js` gzip budget is 10 KB so `__resuma.announce` / `measure` /
+  `storage` can live on every interactive page.
+- **`ClientComponent::lazy`** — defers the module `import()` until `requestIdleCallback`
+  (2.5s timeout) and skips the download when `prefers-reduced-motion`.
+- **`FlowApp::with_sitemap_exclude`** — omit aliases, search, and other noindex URLs from `/sitemap.xml`.
+- **`resuma install skill`** template — SEO/GEO/AEO (`SITE_URL`, `set_page_*`, sitemap exclude), deploy (not Lambda/Workers), `ClientComponent::lazy`, `resuma dev --no-update`, live palettes (`HtmlTheme` / `ThemeSwitch`), native overlays (`Popup` / `Modal` / `GestureView`), desktop `__resuma.*`, SPA vs `data-theme`, `SeoKit` in prelude.
+- **`set_page_robots` / `set_page_canonical` / `set_page_json_ld`** — per-response index and structured-data overrides.
+- **`SeoKit::with_llms_section` / `with_theme_color`** — GEO `llms.txt` sections; `robots.txt` emits `Allow: /` for GPTBot when the allow-list is empty, plus OAI-SearchBot, Google-Extended, and PerplexityBot.
 - **`resuma dev` offers a safe Resuma update** — asks first; only bumps
   `resuma` / `resuma-macros` via `cargo add` + `cargo update`. Path deps and
   `--no-update` / `RESUMA_SKIP_UPDATE=1` skip the prompt.
@@ -68,6 +68,65 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Flow routes regenerate on each watch cycle** (`resuma watch-prepare`) so new
   `src/pages/*.rs` files appear without restarting the CLI. Generated `_registry.rs`
   / `mod.rs` are ignored by cargo-watch to avoid a write loop.
+
+### Changed
+
+- Benchmark Resuma row refreshed for the 1.3.1 runtime (`1021 B` gzip initial / `9.90 KiB` first click: loader + core + handler).
+
+### Fixed
+
+- **`resuma new` templates** — interactive menu option `6` selects `production` (it listed the template but only accepted 1–5). `flow-booking` compiles on 1.3.1 (`page()` registry + `std::result::Result<_, SubmitError>` so it does not collide with prelude `Result`). Todo `SecurityConfig` includes `action_rate_limits`. Production session stub uses `#[middleware]` so `/ops` sees the cookie on page requests, not only `#[server]` actions. Package name is the directory basename, so `resuma new /tmp/my-app` writes a valid `Cargo.toml`.
+- **Open Graph** — drop invalid `meta name="og:*"` (OG uses `property`). JSON-LD `<script>` gets the CSP nonce. Non-200 pages stage `noindex` in HTML robots, matching `X-Robots-Tag`.
+- **`js!` `event.currentTarget`** — document-level delegation no longer leaves
+  `currentTarget` as `document`. Handlers see the `data-r-on:*` element, matching
+  the DOM contract (`dataset`, `closest("form")`).
+- **`.r-popup` positioning** — `position: absolute !important` + `overflow: visible !important`
+  so host `relative` / `overflow-hidden` utilities cannot steal hit-testing from the
+  top-layer panel. `data-r-popup-positions` CSS matches the first token (`^=`), not
+  every flip fallback (`~=`).
+- **Streaming omitted `#r-live`** — `stream_tail` now emits the polite live region
+  (docs and other `FlowApp::streaming(true)` apps).
+- **`HtmlTheme` boot** — `click` only (`pointerdown` hid the popover and could
+  retarget the click / double-announce); toggles `.r-theme-on`; `Secure` cookie on
+  HTTPS; `HtmlTheme::new(["light","dark"])` infers dark `color-scheme` without
+  `.dark()`. Do not bake a selected class from the SSR cookie — use `[aria-pressed]`
+  / `.r-theme-on`.
+- **SPA View Transitions vs popovers** — skip VT while a popover/dialog is open
+  (Chromium skips the update callback) and on soft `invalidate` / `loader_poll`
+  (no full-page flash every tick). `dir` copies from the fetched document so RTL
+  survives client navigations. Live `html[data-theme]` is **not** copied — NavLink
+  prefetch can be older than a palette pick and would clobber HtmlTheme.
+- **`loader_poll` idle listeners leaked** — each remount added `pointerdown` /
+  `keydown` listeners on `document`; cleanup now removes them.
+- **`FlowApp::with_seo_kit` panics** — `/robots.txt` was mounted twice (`ResumaApp`
+  then `attach_flow_routes`). Kit routes stay on `into_router`; Flow only adds the
+  fallback `robots.txt` when no kit is set.
+- **`SeoKit` in prelude** — `use resuma::prelude::*` exports the type (docs SEO helper).
+- **Popup / ThemeSwitch `type`** — attribute merge so a `type="submit"` trigger
+  becomes `type="button"`. Host `style` is concatenated with `anchor-name` (not
+  replaced). Native popover `toggle` updates `aria-expanded` on invokers.
+
+- **`set_page_description` / `lang` attribute injection** — the document
+  `<meta name="description">` and `<html lang>` now use `escape_attr` (same as
+  Open Graph tags). A CMS excerpt with quotes can no longer inject
+  `http-equiv="refresh"`.
+- **ClientComponents survive SPA navigation** — `innerHTML` swaps re-import
+  `/static/client/*.js` modules; `bootClientComponent` remounts on
+  `resuma:navigate` and signals ready only after sync or async init.
+- **`set_cookie` rejects `;` / CR/LF / controls** in name, value, and path so
+  session helpers cannot inject extra cookie attributes.
+- **Cookie percent-decoding is UTF-8** — `caf%C3%A9` reads as `café`.
+- **Rate-limit test backend** — `check_rate_limit` no longer reinstalls the
+  env backend after tests switch to memory (the first request used to wipe
+  the reset and miss per-action limits).
+- **`resuma dev` no longer kills port 3000 by default** — starting a second app used to
+  `fuser -k` the first one. Kill is now opt-in (`--kill-stale`); when `:3000` is busy the
+  CLI picks the next free port (`3001`, …) and sets `RESUMA_ADDR` so both apps stay up.
+- **Soft `invalidate` / `loader_poll`** — no longer `pushState`s `?_r=` into history or
+  scrolls to top on every tick (JobBot live queue dogfood).
+- **Submit/action redirects never reuse NavLink prefetch** — Keep/Dismiss/mark-applied
+  always refetch fresh SSR HTML so lists update immediately.
+- **Same-path redirects** soft-replace (no scroll); cross-path redirects still push + scroll.
 
 ## [1.3.0] - 2026-08-03
 

@@ -84,6 +84,7 @@ The resumability payload carries signals and **lazy chunk refs** — not full ha
 When the user clicks the button:
 
 1. The runtime's document-level click delegator finds the closest ancestor with `data-r-on:click`.
+   `event.currentTarget` is retargeted to that node (native `currentTarget` would be `document`).
 2. It loads the inline JS source from `data-r-inline:click` and compiles it once via `new Function(...)`.
 3. It calls the function with `(event, state, __resuma)` where `state` exposes `state.count` as a `SignalCell`.
 4. `state.count.update((c) => c + 1)` triggers any subscribers, including the reactive `<resuma-dyn>` text node bound to `count`, which updates the visible count.

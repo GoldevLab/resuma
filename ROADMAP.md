@@ -74,6 +74,9 @@
 - [x] `Redirect::revalidate()` — soft revalidate current path after mutations
 - [x] Form pending (`aria-busy` / disable submit) during enhanced form posts
 - [x] `load_all2` / `load_all3` / `load_all4` — multi-loader boundary helper (JobBot queue + profile)
+- [x] Native `<Popup>` / `<Modal>` / `<GestureView>` (HTML popover + dialog; lazy ui.js fallback)
+- [x] Virtual `<For>` for large lists
+- [x] `__resuma.announce` / presence / storage / measure; `set_page_dir` RTL
 - [ ] Optional partial loader refresh (invalidate one loader without full page SPA swap)
 - [ ] Document concurrent background `tokio` worker + Flow SSR SQLite patterns (WAL / busy_timeout)
 

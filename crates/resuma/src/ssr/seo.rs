@@ -64,24 +64,78 @@ pub fn page_description(opts: &PageOptions, path: &str) -> String {
     opts.title.clone()
 }
 
-pub fn json_ld_script(json_ld: &str) -> String {
+fn robots_content() -> String {
+    crate::server::page_cache::page_robots_override()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "index, follow, max-image-preview:large".into())
+}
+
+fn robots_noindex(robots: &str) -> bool {
+    robots
+        .split(',')
+        .any(|part| part.trim().eq_ignore_ascii_case("noindex"))
+}
+
+fn og_image_type(url: &str) -> &'static str {
+    let path = url.split('?').next().unwrap_or(url).to_ascii_lowercase();
+    if path.ends_with(".png") {
+        "image/png"
+    } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if path.ends_with(".webp") {
+        "image/webp"
+    } else if path.ends_with(".gif") {
+        "image/gif"
+    } else {
+        "image/svg+xml"
+    }
+}
+
+fn site_name(opts: &PageOptions) -> &str {
+    opts.seo_kit
+        .as_ref()
+        .map(|k| k.site_name.as_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(opts.title.as_str())
+}
+
+/// JSON-LD `<script>` with an optional CSP nonce.
+pub fn json_ld_script(json_ld: &str, nonce: &str) -> String {
     if json_ld.is_empty() {
         return String::new();
     }
     let safe = crate::core::serialize::sanitize_json_for_script(json_ld.trim());
-    format!("\n<script type=\"application/ld+json\">\n{safe}\n</script>\n",)
+    let nonce_attr = if nonce.is_empty() {
+        String::new()
+    } else {
+        format!(r#" nonce="{}""#, escape_attr(nonce))
+    };
+    format!("\n<script type=\"application/ld+json\"{nonce_attr}>\n{safe}\n</script>\n")
+}
+
+/// JSON-LD for this document (page override, then [`PageOptions::json_ld`]).
+pub fn document_json_ld(opts: &PageOptions) -> String {
+    let raw =
+        crate::server::page_cache::page_json_ld_override().unwrap_or_else(|| opts.json_ld.clone());
+    json_ld_script(&raw, &opts.csp_nonce)
 }
 
 pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
     let mut out = String::new();
     let title = page_title(opts, path);
     let description = page_description(opts, path);
+    let robots = robots_content();
+    let indexable = !robots_noindex(&robots);
 
-    if !opts.site_url.is_empty() {
+    out.push_str(&format!(
+        r#"<meta name="robots" content="{robots}" />"#,
+        robots = escape_attr(&robots),
+    ));
+
+    if indexable && !opts.site_url.is_empty() {
         let base = opts.site_url.trim_end_matches('/');
-        let canonical = opts
-            .canonical
-            .clone()
+        let canonical = crate::server::page_cache::page_canonical_override()
+            .or_else(|| opts.canonical.clone())
             .unwrap_or_else(|| canonical_url(base, path));
 
         out.push_str(&format!(
@@ -89,21 +143,23 @@ pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
             canonical = escape_attr(&canonical),
         ));
 
-        let og_image =
-            if opts.og_image.starts_with("http://") || opts.og_image.starts_with("https://") {
-                opts.og_image.clone()
+        if !opts.og_image.is_empty() {
+            let og_image =
+                if opts.og_image.starts_with("http://") || opts.og_image.starts_with("https://") {
+                    opts.og_image.clone()
+                } else {
+                    format!("{base}{}", opts.og_image)
+                };
+            let og_type = if opts.og_type.is_empty() {
+                "website"
             } else {
-                format!("{base}{}", opts.og_image)
+                &opts.og_type
             };
+            let image_type = og_image_type(&og_image);
+            let og_image_alt = "Resuma — resumable SSR web framework for Rust";
 
-        let og_type = if opts.og_type.is_empty() {
-            "website"
-        } else {
-            &opts.og_type
-        };
-
-        out.push_str(&format!(
-            r#"
+            out.push_str(&format!(
+                r#"
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="/favicon.svg" />
 <meta property="og:type" content="{og_type}" />
@@ -113,33 +169,87 @@ pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
 <meta property="og:description" content="{description}" />
 <meta property="og:url" content="{canonical}" />
 <meta property="og:image" content="{og_image}" />
-<meta property="og:image:type" content="image/svg+xml" />
+<meta property="og:image:type" content="{image_type}" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta property="og:image:alt" content="{og_image_alt}" />
-<meta name="og:title" content="{title}" />
-<meta name="og:description" content="{description}" />
-<meta name="og:image" content="{og_image}" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="{title}" />
 <meta name="twitter:description" content="{description}" />
 <meta name="twitter:image" content="{og_image}" />
 <meta name="twitter:image:alt" content="{og_image_alt}" />"#,
-            og_type = escape_attr(og_type),
-            site = escape_attr(&opts.title),
-            title = escape_attr(&title),
-            description = escape_attr(&description),
-            canonical = escape_attr(&canonical),
-            og_image = escape_attr(&og_image),
-            og_image_alt = escape_attr("Resuma — resumable SSR web framework for Rust"),
-        ));
+                og_type = escape_attr(og_type),
+                site = escape_attr(site_name(opts)),
+                title = escape_attr(&title),
+                description = escape_attr(&description),
+                canonical = escape_attr(&canonical),
+                og_image = escape_attr(&og_image),
+                image_type = escape_attr(image_type),
+                og_image_alt = escape_attr(og_image_alt),
+            ));
+        }
     }
-
-    out.push_str(r#"<meta name="robots" content="index, follow" />"#);
 
     if let Some(pwa) = &opts.pwa {
         out.push_str(&super::pwa::pwa_head_tags(pwa, &opts.csp_nonce));
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::view::View;
+    use crate::ssr::render_to_string_at_path;
+    use crate::ssr::PageOptions;
+
+    fn html_at(opts: PageOptions, path: &str) -> String {
+        crate::server::page_cache::clear_request_staging();
+        render_to_string_at_path(&opts, path, || View::text("ok"))
+    }
+
+    #[test]
+    fn og_tags_use_property_not_name() {
+        let html = html_at(
+            PageOptions {
+                title: "App".into(),
+                site_url: "https://example.com".into(),
+                og_image: "/og.png".into(),
+                ..Default::default()
+            },
+            "/docs",
+        );
+        assert!(html.contains(r#"property="og:title""#));
+        assert!(!html.contains(r#"name="og:title""#));
+        assert!(!html.contains(r#"name="og:description""#));
+        assert!(!html.contains(r#"name="og:image""#));
+        assert!(html.contains(r#"content="image/png""#));
+    }
+
+    #[test]
+    fn non_200_stages_noindex_robots() {
+        crate::server::page_cache::clear_request_staging();
+        crate::server::page_cache::stage_response_status(404);
+        let html = render_to_string_at_path(
+            &PageOptions {
+                title: "App".into(),
+                site_url: "https://example.com".into(),
+                og_image: "/og.svg".into(),
+                ..Default::default()
+            },
+            "/missing",
+            || View::text("not found"),
+        );
+        assert!(html.contains(r#"name="robots" content="noindex""#));
+        assert!(!html.contains(r#"rel="canonical""#));
+        crate::server::page_cache::clear_request_staging();
+    }
+
+    #[test]
+    fn json_ld_script_includes_csp_nonce() {
+        let tag = json_ld_script(r#"{"@type":"WebSite"}"#, "abc123");
+        assert!(tag.contains(r#"nonce="abc123""#));
+        assert!(tag.contains(r#"type="application/ld+json""#));
+    }
 }

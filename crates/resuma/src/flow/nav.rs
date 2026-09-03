@@ -84,7 +84,9 @@ pub fn query_nav_link(
 /// `<input>` / `<select>` that SPA-navigates on change to refresh server `#[load]` data.
 ///
 /// Updates `param` on `path`, preserving `preserve` query keys from the current URL.
-/// Uses `__resuma.navigate` + `__resuma.buildUrl` (always use `event.target`, not `currentTarget`).
+/// Uses `__resuma.navigate` + `__resuma.buildUrl`.
+/// Read the control from `event.target` (the `<input>` / `<select>` that fired `change`).
+/// `event.currentTarget` is the same node when the handler is on that control.
 pub fn loader_refresh_input(
     path: &str,
     param: &str,

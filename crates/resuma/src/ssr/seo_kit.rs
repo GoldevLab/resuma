@@ -135,6 +135,16 @@ impl SeoKit {
         self
     }
 
+    pub fn with_llms_section(mut self, title: impl Into<String>, desc: impl Into<String>) -> Self {
+        self.llms_sections.push((title.into(), desc.into()));
+        self
+    }
+
+    pub fn with_theme_color(mut self, color: impl Into<String>) -> Self {
+        self.theme_color = Some(color.into());
+        self
+    }
+
     pub fn push_json_ld(mut self, block: Value) -> Self {
         self.json_ld_blocks.push(block);
         self
@@ -198,13 +208,8 @@ impl SeoKit {
         if !self.author.is_empty() {
             out.push_str(&MetaTag::name("author", &self.author).render());
         }
-        out.push_str(
-            &MetaTag::name(
-                "robots",
-                "index, follow, max-image-preview:large, max-snippet:-1",
-            )
-            .render(),
-        );
+        // Robots belong in `seo_head_tags` so pages can set `noindex` without
+        // a conflicting `index, follow` tag from the kit.
         out.push_str(
             &MetaTag::name(
                 "format-detection",
@@ -273,14 +278,21 @@ fbq('init','{id}');fbq('track','PageView');
         }
         if self.ai.allow_gptbot {
             body.push_str("\nUser-agent: GPTBot\n");
-            for a in &self.ai.gptbot_allow {
-                body.push_str(&format!("Allow: {a}\n"));
+            if self.ai.gptbot_allow.is_empty() {
+                body.push_str("Allow: /\n");
+            } else {
+                for a in &self.ai.gptbot_allow {
+                    body.push_str(&format!("Allow: {a}\n"));
+                }
             }
             for d in &self.ai.disallow {
                 body.push_str(&format!("Disallow: {d}\n"));
             }
+            body.push_str("\nUser-agent: OAI-SearchBot\nAllow: /\n");
             body.push_str("\nUser-agent: ChatGPT-User\nAllow: /\n");
+            body.push_str("\nUser-agent: Google-Extended\nAllow: /\n");
             body.push_str("\nUser-agent: Claude-Web\nAllow: /\n");
+            body.push_str("\nUser-agent: PerplexityBot\nAllow: /\n");
         }
         body.push_str(&format!("\nSitemap: {origin}/sitemap.xml\n"));
         if !self.llms_summary.is_empty() {
@@ -303,6 +315,10 @@ fbq('init','{id}');fbq('track','PageView');
             }
         }
         out.push_str(&format!("\n## Canonical origin\n\n{}\n", self.site_url));
+        out.push_str(&format!(
+            "\n## Optional\n\n- [Sitemap]({origin}/sitemap.xml)\n- [Robots]({origin}/robots.txt)\n",
+            origin = self.site_url.trim_end_matches('/')
+        ));
         out
     }
 }
@@ -315,8 +331,24 @@ mod tests {
     fn robots_includes_gptbot_when_enabled() {
         let kit = SeoKit::new("Test", "https://example.com");
         let txt = kit.robots_txt();
-        assert!(txt.contains("GPTBot"));
-        assert!(txt.contains("llms.txt") || txt.contains("Sitemap"));
+        assert!(txt.contains("User-agent: GPTBot\nAllow: /"));
+        assert!(txt.contains("User-agent: OAI-SearchBot\nAllow: /"));
+        assert!(txt.contains("User-agent: Google-Extended\nAllow: /"));
+        assert!(txt.contains("Sitemap"));
+    }
+
+    #[test]
+    fn llms_txt_lists_sitemap() {
+        let kit = SeoKit::new("Test", "https://example.com").with_llms_summary("Hello.");
+        let txt = kit.llms_txt();
+        assert!(txt.contains("https://example.com/sitemap.xml"));
+        assert!(txt.contains("Hello."));
+    }
+
+    #[test]
+    fn head_extras_does_not_emit_robots() {
+        let kit = SeoKit::new("Test", "https://example.com");
+        assert!(!kit.head_extras().contains(r#"name="robots""#));
     }
 
     #[test]

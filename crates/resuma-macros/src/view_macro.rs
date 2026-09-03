@@ -318,6 +318,14 @@ fn emit_node(node: Node) -> TokenStream {
                 emit_show(attrs, children)
             } else if tag == "For" {
                 emit_for(attrs, children)
+            } else if tag == "Popup" {
+                emit_popup(attrs, children)
+            } else if tag == "Modal" {
+                emit_modal(attrs, children)
+            } else if tag == "GestureView" {
+                emit_gesture_view(attrs, children)
+            } else if tag == "ThemeSwitch" {
+                emit_theme_switch(attrs, children)
             } else if tag == "Match" {
                 emit_match(attrs, children)
             } else if is_component {
@@ -530,6 +538,9 @@ fn emit_for(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
     let mut each_expr: Option<TokenStream> = None;
     let mut let_name = syn::Ident::new("item", Span::call_site());
     let mut key_field: Option<String> = None;
+    let mut virtual_list = false;
+    let mut item_height = quote!(48u32);
+    let mut overscan = quote!(6u32);
 
     for a in attrs {
         match a.name.as_str() {
@@ -555,6 +566,21 @@ fn emit_for(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
                     AttrVal::Bool => "id".to_string(),
                 });
             }
+            "virtual" => {
+                virtual_list = match a.value {
+                    AttrVal::Bool => true,
+                    AttrVal::StaticStr(s) => s != "false" && s != "0",
+                    AttrVal::Expr(ts) => {
+                        return quote! {{ let _ = { #ts }; compile_error!("For virtual must be a boolean attribute"); ::resuma::__private::View::empty() }};
+                    }
+                };
+            }
+            "itemHeight" | "item_height" => {
+                item_height = u32_tokens(a.value, 48);
+            }
+            "overscan" => {
+                overscan = u32_tokens(a.value, 6);
+            }
             s if s.starts_with("let:") => {
                 let binding = s.strip_prefix("let:").unwrap_or("item");
                 let_name = syn::Ident::new(binding, Span::call_site());
@@ -573,6 +599,17 @@ fn emit_for(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
             .as_deref()
             .map(|k| quote!(Some(#k)))
             .unwrap_or_else(|| quote!(None));
+        if virtual_list {
+            return quote! {
+                ::resuma::__private::for_signal_virtual(
+                    &#signal,
+                    #key_lit,
+                    #item_height,
+                    #overscan,
+                    |#let_name| vec![ #(#child_pushes),* ],
+                )
+            };
+        }
         return quote! {
             ::resuma::__private::for_signal(
                 &#signal,
@@ -592,6 +629,202 @@ fn emit_for(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
                 __views.into_iter().map(::resuma::__private::Child::View).collect(),
             )
         }
+    }
+}
+
+fn u32_tokens(value: AttrVal, default: u32) -> TokenStream {
+    match value {
+        AttrVal::StaticStr(s) => {
+            let n: u32 = s.parse().unwrap_or(default);
+            quote!(#n)
+        }
+        AttrVal::Expr(ts) => quote!({ #ts as u32 }),
+        AttrVal::Bool => quote!(#default),
+    }
+}
+
+fn str_tokens(value: AttrVal, default: &str) -> TokenStream {
+    match value {
+        AttrVal::StaticStr(s) => quote!(#s.to_string()),
+        AttrVal::Expr(ts) => quote!({ #ts }.to_string()),
+        AttrVal::Bool => quote!(#default.to_string()),
+    }
+}
+
+fn bool_tokens(value: AttrVal) -> TokenStream {
+    match value {
+        AttrVal::Bool => quote!(true),
+        AttrVal::StaticStr(s) => {
+            let v = s != "false" && s != "0";
+            quote!(#v)
+        }
+        AttrVal::Expr(ts) => quote!({ #ts }),
+    }
+}
+
+fn take_leading_tag(nodes: &mut Vec<Node>, tag: &str) -> Option<Node> {
+    match nodes.first() {
+        Some(Node::Element { tag: t, .. }) if t == tag => Some(nodes.remove(0)),
+        _ => None,
+    }
+}
+
+fn partition_slot(children: Vec<Node>, slot: &str) -> (Vec<Node>, Vec<Node>) {
+    let mut hit = Vec::new();
+    let mut rest = Vec::new();
+    for mut n in children {
+        let is_hit = match &mut n {
+            Node::Element { attrs, .. } => {
+                if let Some(idx) = attrs.iter().position(|a| a.name == "slot") {
+                    let matches = match &attrs[idx].value {
+                        AttrVal::StaticStr(s) => s == slot,
+                        _ => false,
+                    };
+                    if matches {
+                        attrs.remove(idx);
+                    }
+                    matches
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        };
+        if is_hit {
+            hit.push(n);
+        } else {
+            rest.push(n);
+        }
+    }
+    (hit, rest)
+}
+
+fn emit_open_signal(value: AttrVal) -> TokenStream {
+    match value {
+        AttrVal::Expr(ts) => {
+            if let Some(signal) = parse_signal_each(ts) {
+                quote!(Some((&#signal).id()))
+            } else {
+                quote!(None)
+            }
+        }
+        _ => quote!(None),
+    }
+}
+
+fn emit_popup(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
+    let mut id = quote!("popup".to_string());
+    let mut positions = quote!("bottom right top left".to_string());
+    let mut dismiss = quote!(true);
+    let mut cacheable = quote!(true);
+    let mut open = quote!(None);
+    let mut class = quote!(String::new());
+    for a in attrs {
+        match a.name.as_str() {
+            "id" => id = str_tokens(a.value, "popup"),
+            "positions" => positions = str_tokens(a.value, "bottom right top left"),
+            "dismissIfShown" | "dismiss_if_shown" => dismiss = bool_tokens(a.value),
+            "cacheable" => cacheable = bool_tokens(a.value),
+            "open" => open = emit_open_signal(a.value),
+            "class" => class = str_tokens(a.value, ""),
+            _ => {}
+        }
+    }
+    let (mut anchor, mut panel) = partition_slot(children, "anchor");
+    if anchor.is_empty() && !panel.is_empty() {
+        anchor.push(panel.remove(0));
+    }
+    let anchor_push = anchor.into_iter().map(emit_child);
+    let panel_push = panel.into_iter().map(emit_child);
+    quote! {
+        ::resuma::__private::popup(
+            ::resuma::__private::PopupOpts {
+                id: #id,
+                positions: #positions,
+                dismiss_if_shown: #dismiss,
+                cacheable: #cacheable,
+                open: #open,
+                class: #class,
+            },
+            vec![ #(#anchor_push),* ],
+            vec![ #(#panel_push),* ],
+        )
+    }
+}
+
+fn emit_modal(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
+    let mut id = quote!("modal".to_string());
+    let mut closed_by = quote!("any".to_string());
+    let mut open = quote!(None);
+    let mut class = quote!(String::new());
+    for a in attrs {
+        match a.name.as_str() {
+            "id" => id = str_tokens(a.value, "modal"),
+            "closedBy" | "closed_by" => closed_by = str_tokens(a.value, "any"),
+            "open" => open = emit_open_signal(a.value),
+            "class" => class = str_tokens(a.value, ""),
+            _ => {}
+        }
+    }
+    let (mut trigger, mut body) = partition_slot(children, "trigger");
+    // Match Popup DX: a leading <button> is the opener when `slot="trigger"` is omitted.
+    // Leave non-button first children in the dialog (programmatic `showModal`).
+    if trigger.is_empty() {
+        if let Some(btn) = take_leading_tag(&mut body, "button") {
+            trigger.push(btn);
+        }
+    }
+    let trigger_push = trigger.into_iter().map(emit_child);
+    let body_push = body.into_iter().map(emit_child);
+    quote! {
+        ::resuma::__private::modal(
+            ::resuma::__private::ModalOpts {
+                id: #id,
+                closed_by: #closed_by,
+                open: #open,
+                class: #class,
+            },
+            vec![ #(#trigger_push),* ],
+            vec![ #(#body_push),* ],
+        )
+    }
+}
+
+fn emit_gesture_view(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
+    let mut preferred = quote!(String::new());
+    let mut threshold = quote!(10u32);
+    let mut rest = Vec::new();
+    for a in attrs {
+        match a.name.as_str() {
+            "preferredPan" | "preferred_pan" => preferred = str_tokens(a.value, ""),
+            "panThreshold" | "pan_threshold" => threshold = u32_tokens(a.value, 10),
+            _ => rest.push(a),
+        }
+    }
+    let attr_pushes = rest.into_iter().map(emit_attr);
+    let child_pushes = children.into_iter().map(emit_child);
+    quote! {
+        ::resuma::__private::gesture_view(
+            ::resuma::__private::GestureOpts {
+                preferred_pan: #preferred,
+                pan_threshold: #threshold,
+            },
+            vec![ #(#attr_pushes),* ],
+            vec![ #(#child_pushes),* ],
+        )
+    }
+}
+
+fn emit_theme_switch(attrs: Vec<Attr>, children: Vec<Node>) -> TokenStream {
+    let mut id = quote!("theme".to_string());
+    for a in attrs {
+        if a.name.as_str() == "id" {
+            id = str_tokens(a.value, "theme");
+        }
+    }
+    let child_pushes = children.into_iter().map(emit_child);
+    quote! {
+        ::resuma::__private::theme_switch(#id, vec![ #(#child_pushes),* ])
     }
 }
 
@@ -798,6 +1031,14 @@ fn emit_slotted_child(node: Node) -> TokenStream {
                 emit_show(attrs, children)
             } else if tag == "For" {
                 emit_for(attrs, children)
+            } else if tag == "Popup" {
+                emit_popup(attrs, children)
+            } else if tag == "Modal" {
+                emit_modal(attrs, children)
+            } else if tag == "GestureView" {
+                emit_gesture_view(attrs, children)
+            } else if tag == "ThemeSwitch" {
+                emit_theme_switch(attrs, children)
             } else if tag == "Match" {
                 emit_match(attrs, children)
             } else if is_component {

@@ -61,9 +61,10 @@ pub fn render_deferred_page_stream(
     plan: DeferredStreamPlan,
 ) -> Pin<Box<dyn futures_util::Stream<Item = StreamChunk> + Send>> {
     let path = path.to_string();
+    let head = stream_head(&opts, &path);
     Box::pin(async_stream::stream! {
         let shell_html = render_view(&shell);
-        yield Ok(stream_head(&opts, &path));
+        yield Ok(head);
         yield Ok(shell_html.clone());
 
         let mut req = plan.request;

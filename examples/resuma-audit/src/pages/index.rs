@@ -12,7 +12,7 @@ pub fn page(_req: FlowRequest) -> View {
                 <a href="https://resuma-docs.fly.dev/docs" target="_blank">"resuma-docs.fly.dev"</a>
                 ". Each route tests one docs topic."
             </p>
-            <p class="pill">"907 B loader · zero hydration · resumable SSR"</p>
+            <p class="pill">"1021 B loader · zero hydration · resumable SSR"</p>
             <p><NavLink href="/audit/reference/matrix" activeClass="active">"View full audit matrix →"</NavLink></p>
         </div>
         <div class="grid">

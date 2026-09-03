@@ -1,9 +1,6 @@
-mod book;
-mod gracias;
-mod index;
+pub mod book;
+pub mod gracias;
+pub mod index;
 
-pub use book::BookPage;
-pub use gracias::GraciasPage;
-pub use index::IndexPage;
-
-include!("_registry.rs");
+mod _registry;
+pub use _registry::PagesRegistry;

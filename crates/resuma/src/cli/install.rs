@@ -144,4 +144,25 @@ mod tests {
         let t = parse_targets(&["agents".into()], true).unwrap();
         assert_eq!(t, vec![InstallTarget::CursorProject]);
     }
+
+    #[test]
+    fn skill_covers_live_apis() {
+        for needle in [
+            "HtmlTheme",
+            "ThemeSwitch",
+            "<Popup>",
+            "<Modal>",
+            "SeoKit",
+            "__resuma.announce",
+            "data-theme",
+            "with_html_theme",
+            "stream_tail",
+            "install skill --force",
+        ] {
+            assert!(
+                SKILL_MD.contains(needle),
+                "install skill template missing `{needle}`"
+            );
+        }
+    }
 }

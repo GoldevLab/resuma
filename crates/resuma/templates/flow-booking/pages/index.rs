@@ -1,7 +1,6 @@
 use resuma::prelude::*;
 
-#[component]
-pub fn IndexPage() -> View {
+pub fn page(_req: FlowRequest) -> View {
     view! {
         <main>
             <h1>"%NAME%"</h1>

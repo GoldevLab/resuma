@@ -2,8 +2,10 @@
 name: resuma
 description: >-
   Build and debug Resuma Rust SSR apps — view!, signals, Flow routing, #[server],
-  #[load], #[submit], Resuma OS (workers, queue, scheduler, flow.js widgets).
-  Use for reactivity bugs, exec/HTTP integration, dynamic Flow panels, tests/E2E,
+  #[load], #[submit], HtmlTheme / ThemeSwitch, Popup / Modal / GestureView,
+  SeoKit / SITE_URL (SEO GEO AEO), deploy (Fly/Docker, not Lambda/Workers),
+  Resuma OS (workers, queue, scheduler). Use for reactivity bugs, live palettes,
+  native overlays, exec/HTTP integration, dynamic Flow panels, tests/E2E,
   and resuma-docs live demos.
 ---
 
@@ -13,17 +15,23 @@ Resuma is a **resumable SSR** Rust web framework (Qwik-like, Rust-native). Compo
 
 **Repos:** framework `resuma/` · docs site `resuma-docs/` · live docs https://resuma-docs.fly.dev/docs
 
+**This file is the install template.** `resuma install skill` embeds it via `include_str!`. After changing it, copy to `resuma-docs/.cursor/skills/resuma/SKILL.md` and tell users `resuma install skill --force` so Cursor / agents pick up the new traps.
+
 ## When to use this skill
 
 | Area | Triggers |
 |------|----------|
-| **UI / reactivity** | `view!`, signals, `<Show>`, `<For>`, effects, islands, `js!` |
+| **UI / reactivity** | `view!`, signals, `<Show>`, `<For>` / `virtual`, effects, islands, `js!`, `ClientComponent` |
+| **Overlays / theme** | `<Popup>`, `<Modal>`, `<GestureView>`, `HtmlTheme`, `<ThemeSwitch>`, `data-r-theme`, `html[data-theme]`, `with_html_theme` |
+| **Desktop UI** | `__resuma.announce`, `measure`, `storage`, `online`, `presence`, `set_page_dir`, `set_page_theme` |
 | **Flow** | `FlowApp`, `src/pages/`, `#[load]`, `#[submit]`, middleware, NavLink SPA |
 | **Server** | `#[server]`, `#[submit]`, CSRF, origin checks, `ResumaApp` vs `FlowApp` |
+| **SEO / GEO / AEO** | `SeoKit` (prelude), `SITE_URL`, `set_page_title`, `llms.txt`, sitemap, canonicals, FAQ JSON-LD |
+| **Deploy** | Fly, Docker, `RESUMA_ADDR`, trust proxy — **not** Lambda, Cloudflare Workers, or Vercel JS adapters |
 | **Resuma OS** | `#[worker]`, `FlowEngine`, `/_resuma/*`, queue, scheduler, webhooks |
 | **Flow widgets** | `flow.js`, execution graph, event stream, ops dashboard |
 | **Tests** | `crates/resuma/tests/`, `exec/tests.rs`, `e2e/run.mjs`, Playwright |
-| **Docs** | `resuma-docs` live demos, `exec_demo.rs`, sidebar pages |
+| **Docs** | `resuma-docs` live demos, Theme/Explore/Search chrome, sidebar pages |
 
 ---
 
@@ -53,6 +61,15 @@ Prefer `onInput` with `js!` — avoid `value={signal.get()}` (one-way SSR snapsh
 <input onInput={js! { state.q.set(event.target.value); }} />
 ```
 
+### `js!` events (`target` vs `currentTarget`)
+
+Handlers are delegated from `document`. The runtime sets `event.currentTarget` to the node that declared the handler (`data-r-on:*`).
+
+- `event.target` — the node that was clicked or typed into (a child `<span>` inside a button).
+- `event.currentTarget` — the handler element. Use `.dataset` and `.closest("form")` here.
+
+Chrome in a layout (`src/pages/_layout.rs`) lives in a lazy chunk (`/_resuma/handler/__page__.js`). The first click waits on that import. For theme/nav that must work instantly, use `FlowApp::with_html_theme` + `data-r-theme` / `<ThemeSwitch>`, a boot script in `<head>`, or `data-r-inline`. Do **not** wrap document theme swaps in `startViewTransition` while a popover is open (Chromium skips the update callback).
+
 ### `js!` and signals
 
 - `+=` on signals in `js!` must compile to `.update()` (rs2js).
@@ -80,8 +97,29 @@ ResumaApp::new()
 ### `FlowApp` (file-based pages)
 
 ```rust
+use resuma::prelude::*; // SeoKit, HtmlTheme, FlowApp, set_page_*
+
+let origin = std::env::var("SITE_URL")
+    .unwrap_or_else(|_| "https://my-app.fly.dev".into());
+
+let kit = SeoKit::new("My App", &origin)
+    .with_locale("en_US")
+    .with_llms_summary("My App does X for Y. Disambiguate lookalikes.")
+    .with_llms_section("Docs", format!("{origin}/docs — how to use it."));
+
 FlowApp::new()
-    .with_seo_kit(SeoKit::new("My App", "https://example.com"))
+    .with_title("My App")
+    .with_description("Homepage snippet — unique per site, override per page.")
+    .with_site_url(&origin)
+    .with_og_image("/og.png") // PNG/JPEG 1200×630 in public/; avoid SVG for Facebook/LinkedIn
+    .with_seo_kit(kit)       // /robots.txt + /llms.txt + sitemap hint — call once
+    .with_sitemap_exclude(["/search"]) // noindex / thin URLs
+    .with_html_theme(
+        HtmlTheme::new(["paper", "slate", "midnight"])
+            .dark(["midnight"])
+            // .cookie("my_app_theme")      // default: resuma_theme
+            // .storage_key("my-app-theme") // default: resuma-theme
+    )
     .auto_pages(path_to_pages, PagesRegistry)
     .serve(FlowServeOptions::default())
     .await
@@ -91,7 +129,110 @@ FlowApp::new()
 resuma routes --generate --path src/pages   # → src/pages/_registry.rs
 ```
 
-Each page: `pub fn page(req: &FlowRequest) -> View` in `src/pages/...`.
+Each page: `pub fn page(req: FlowRequest) -> View` in `src/pages/...` (owned `FlowRequest`, not a reference).
+
+`SeoKit` is in `resuma::prelude`. Kit routes stay on `ResumaApp::into_router`; Flow only adds a fallback `/robots.txt` when **no** kit is set. Do not remount robots yourself.
+
+---
+
+## Overlays, live theme, desktop UI
+
+Public API is Rust `view!`. Overlay JS is lazy `/_resuma/ui.css` + `/_resuma/ui.js` only. Do **not** put overlay logic in `loader.js`. Do **not** `import("./ui.js")` from core (that bundles ui into core and blows the gzip budget).
+
+Docs: https://resuma-docs.fly.dev/docs/components/popup · [modal](https://resuma-docs.fly.dev/docs/components/modal) · [theme](https://resuma-docs.fly.dev/docs/cookbook/theme) · [desktop UI](https://resuma-docs.fly.dev/docs/components/desktop_ui) · [virtual For](https://resuma-docs.fly.dev/docs/components/virtual_for)
+
+### Popup (anchored popover)
+
+SSR emits `popovertarget` + `[popover=auto]` + CSS `anchor-name` / `position-anchor` / `position-try-fallbacks`. Chromium needs no overlay JS. Safari without CSS anchor loads `ui.js`.
+
+```rust
+view! {
+    <Popup id="menu" positions="bottom right top left" dismissIfShown>
+        <button slot="anchor" type="button">"Menu"</button>
+        <div>
+            <a href="/docs">"Docs"</a>
+        </div>
+    </Popup>
+}
+```
+
+- No `slot="anchor"` → first child is the trigger.
+- Framework forces `type="button"` on the trigger (last-write-wins attrs). Host `style` is **concatenated** with `anchor-name`, not replaced.
+- Do **not** put `position: relative` / `overflow: hidden` on the popup **panel** (breaks top-layer hit-testing). `.r-popup` already sets `position: absolute` + `overflow: visible`.
+- Native `toggle` updates `aria-expanded` on invokers.
+- Programmatic: `__resuma.showPopup("menu")` / `hidePopup("menu")`.
+
+### Modal (stacked `<dialog>`)
+
+```rust
+view! {
+    <Modal id="confirm" closedBy="any">
+        <button slot="trigger" type="button">"Delete"</button>
+        <h2>"Delete this job?"</h2>
+        <form method="dialog">
+            <button type="submit">"Cancel"</button>
+        </form>
+    </Modal>
+}
+```
+
+- No `slot="trigger"` → a **leading `<button>`** becomes the opener. Non-button first children stay in the dialog (programmatic `showModal`).
+- Chrome: Invoker Commands, no JS. Safari: click fallback in `ui.js`.
+- `__resuma.showModal` / `hideModal` / `dismissAll`.
+
+### GestureView / virtual For
+
+`<GestureView preferredPan="horizontal">` — pan/pinch/long-press; handlers are **not** in the loader event list (`ui.js` calls `runHandler`).
+
+```rust
+view! {
+    <div data-r-virtual-scroller="true" style="height: 24rem; overflow: auto">
+        <For each={jobs} key="id" virtual itemHeight={48} overscan={6} let:job>
+            <div>{job.title.clone()}</div>
+        </For>
+    </div>
+}
+```
+
+SSR paints the first window. Row recycle lives in `ui.js`.
+
+### Live palettes (`html[data-theme]`)
+
+Not a layout `onClick`. `with_html_theme` injects a **blocking** head boot that listens for `[data-r-theme]` on **click** (not `pointerdown` — that hid the popover and retargeted the click).
+
+```rust
+view! {
+    <Popup id="themes">
+        <button slot="anchor" type="button">"Theme"</button>
+        <ThemeSwitch id="slate">"Slate"</ThemeSwitch>
+        <button type="button" data-r-theme="midnight">"Midnight"</button>
+    </Popup>
+}
+```
+
+- Selected chip: `[aria-pressed="true"]` / `.r-theme-on`. The boot toggles them. **Do not** bake a selected class from the SSR cookie (it stays after a live swap).
+- Cookie + `localStorage`; HTTPS sets `Secure`. Ids: `[A-Za-z0-9_-]`, max 48. `HtmlTheme::new(["light","dark"])` infers dark `color-scheme` without `.dark()`.
+- `prefers-color-scheme` listener when nothing is stored.
+- `set_page_theme("slate")` overrides SSR for that response. `provide_theme` / `theme_css_vars` are **one-shot inline snapshots** — they do not follow `html[data-theme]`.
+- SPA NavLink **must not copy** `data-theme` from prefetch HTML (the prefetch can be older than a palette pick). `dir` **is** copied so RTL survives.
+- Skip View Transitions while `:popover-open` / `dialog[open]`, and on soft `invalidate` / `loader_poll` (`!pushState && !scroll`).
+
+### Desktop helpers (`__resuma.*`)
+
+Every interactive page gets `#r-live` (`role="status"`), including **streaming** SSR (`stream_tail`). Prefer `__resuma.announce("Saved")` over per-widget `aria-live`.
+
+```javascript
+__resuma.announce("Saved");
+__resuma.measure(el);              // { x, y, width, height }
+__resuma.isNavigatingWithKeyboard();
+__resuma.contentSizeMultiplier();
+__resuma.presence();               // { idle, hidden } — loader_poll skips idle ticks
+__resuma.online();
+__resuma.storage.set("k", "v");    // no-op if localStorage throws — not the document palette API
+__resuma.focus(el);                // deferred; shared with SPA / popup / dialog
+```
+
+`FlowApp::with_dir("rtl")` or `set_page_dir("rtl")` sets `<html dir>`. Use logical CSS.
 
 ---
 
@@ -165,7 +306,7 @@ let started = FlowEngine::start("my_worker", json!({ "topic": "x" })).await?;
 | `POST /worker/{name}` | API key | Start graph |
 | `POST /queue/{name}` | API key | Enqueue job |
 | `GET /queue/{name}/stats` | API key | Queue depth |
-| `GET|POST /scheduler` | API key | Cron jobs |
+| `GET\|POST /scheduler` | API key | Cron jobs |
 | `POST /scheduler/tick` | API key | Fire due jobs |
 | `GET /status`, `GET /metrics` | API key (or public flags) | Ops |
 | `GET /graph/{id}` | Graph token | Snapshot (+ `progress`) |
@@ -256,9 +397,12 @@ flow.initFlowWidgets(slot, { flush: false });
 ## resuma-docs conventions
 
 - **Interactive demos** live on `/docs/...` pages via `{crate::site::demos::...()}`, **not** on the marketing home.
+- Header dogfood: **Theme** = `<Popup>` + `HtmlTheme` / `data-r-theme`; **Explore** = `<Popup>`; **Search** = `<Modal>` (`/` shortcut). Apply theme instantly — no View Transition around the swap.
 - Worker showcase: `src/site/exec_demo.rs` + `src/site/workers.rs` (`docs_showcase`).
 - Home: ultralight, links to "Try it in the docs".
-- Deploy: push to GitHub → CI → Fly (avoid manual `fly deploy` unless asked).
+- **Copy page / Copy nav** — docs chrome for pasting markdown into an AI (AEO/GEO).
+- Canonical origin is `SITE_URL` (`https://resuma-docs.fly.dev` until a custom domain).
+- Deploy: user will push GitHub then `fly deploy` — do not push or deploy unless asked.
 - `RESUMA_EXEC_PUBLIC=1`, `RESUMA_DATA_DIR`, `RESUMA_TRUSTED_PROXY_CIDRS` on Fly.
 
 ---
@@ -312,9 +456,11 @@ RESUMA_ENV=development
 ```bash
 cargo test --workspace
 cargo clippy --workspace -- -D warnings   # if CI expects it
-cd runtime && npm run build && cp dist/flow.js ../crates/resuma/assets/flow.js
+cd runtime && npm run build && cp dist/loader.js dist/core.js dist/flow.js dist/runtime.js dist/ui.js dist/ui.css ../crates/resuma/assets/
 npm run e2e
 ```
+
+`include_str!` embeds assets — rebuild the docs / app binary after copying. Core gzip budget is **10000** (`runtime/scripts/measure.mjs`).
 
 ---
 
@@ -330,6 +476,15 @@ npm run e2e
 8. **Graph control 401** — used `?token=` on POST; must use `X-Resuma-Graph-Token`.
 9. **Route 404** — `resuma routes --generate`; check `_registry.rs`.
 10. **Flow widgets stuck** — see event stream table above.
+11. **Canonical / OG / sitemap on localhost** — `SITE_URL` must be the public origin (not `http://127.0.0.1`).
+12. **Duplicate docs URLs** — 301 the alias; `with_sitemap_exclude` the old path.
+13. **Theme click does nothing / first click waits** — switcher `onClick` is in a layout handler chunk. Use `with_html_theme` + `[data-r-theme]`.
+14. **Two theme chips look selected** — SSR baked a selected class; use `[aria-pressed]` / `.r-theme-on`.
+15. **Theme reverts after NavLink** — SPA copied `data-theme` from a stale prefetch. Framework must leave the live attribute alone.
+16. **SPA swap skipped / content stale with menu open** — View Transition + open popover. Skip VT while `:popover-open`.
+17. **`FlowApp::with_seo_kit` panic** — `/robots.txt` mounted twice. Kit once on the app; Flow must not remount it.
+18. **Popup trigger submits a form / lost `style`** — merge must force `type="button"` and concatenate `style` with `anchor-name`.
+19. **No screen-reader “Saved” on streaming pages** — `#r-live` must be in `stream_tail`, not only the non-stream shell.
 
 ---
 
@@ -337,29 +492,104 @@ npm run e2e
 
 | Command | Purpose |
 |---------|---------|
-| `resuma new` | Scaffold (basic, todo, flow, …) |
-| `resuma dev` | Hot reload |
+| `resuma new` | Scaffold (`basic`, `todo`, `flow`, `flow-booking`, `flow-fullstack`, `production`) |
+| `resuma dev` | Hot reload (pidfile reclaims leftover `cargo-watch` for the same project) |
+| `resuma dev --no-update` | Skip the “update Resuma?” prompt (`RESUMA_SKIP_UPDATE=1` too) |
+| `resuma dev --kill-stale` | Opt-in: free the listen port (`fuser -k`); default is pick the next free port |
 | `resuma routes --generate` | Regenerate page registry |
 | `resuma add sqlx` / `turso` / `tailwind` | Integrations |
-| `resuma install skill` | Copy this skill to `.cursor/skills/` |
+| `resuma install skill` | Copy this skill to `~/.cursor/skills/resuma/` |
+| `resuma install skill --force` | Overwrite after a CLI / template upgrade (picks up HtmlTheme, overlays, SEO traps) |
+| `resuma install skill --project` | `.cursor/skills/resuma/` in the current repo |
+| `resuma install skill --target agents` | `~/.agents/skills/resuma/` |
+| `resuma install skill --target all` | Cursor global + agents |
 | `resuma doctor` | Toolchain health |
 
-Build runtime assets: `cd runtime && npm run build` (copies to `crates/resuma/assets/` via CLI build step).
+Build runtime assets: `cd runtime && npm run build` then copy `loader.js`, `core.js`, `flow.js`, `runtime.js`, `ui.js`, `ui.css` into `crates/resuma/assets/`.
 
 ---
 
-## SEO / GEO
+## SEO / GEO / AEO
+
+Canonicals, Open Graph, JSON-LD, sitemap `<loc>`, and `llms.txt` links all follow **`SITE_URL`** (no trailing slash). Ship on `*.fly.dev` today; tomorrow set `SITE_URL=https://docs.example.com` and redeploy. Do not hardcode the host in page bodies — use relative `/docs/…` links.
+
+Guide: https://resuma-docs.fly.dev/docs/integrations/seo_geo
 
 ```rust
-SeoKit::new("Site", "https://example.com")
-    .with_default_json_ld()
-    .with_llms_summary("…")  // → /llms.txt
+// Per page (layout or page fn). View is built before the document head, including streaming SSR.
+set_page_title("Workers | My App");
+set_page_description("Background workers next to SSR — one binary.");
+
+// Search / faceted / thin URLs:
+set_page_robots("noindex, follow");
+
+// FAQ JSON-LD only when the same Q&A is visible HTML (not a rich-result guarantee).
+set_page_json_ld(faq_graph);
+
+// Alias → canonical (omit the alias from the sitemap):
+stage_response_status(301);
+stage_response_redirect("/docs/cookbook/deploy");
+View::empty()
 ```
+
+| Control | What it does | What it does **not** do |
+|---------|----------------|-------------------------|
+| `robots.txt` | Crawler **access** | Indexing guarantee |
+| `meta robots` / `X-Robots-Tag` | Index / snippet hints | Ranking |
+| Canonical | Preferred URL signal | Merge duplicates by itself |
+| Sitemap | Discovery | Indexing |
+| `llms.txt` | Assistants / some AI crawlers | Google ranking (Google: neither helps nor harms, 2026-08) |
+
+**GEO crawler split (OpenAI):** `OAI-SearchBot` = ChatGPT Search discovery; `GPTBot` = possible training; `ChatGPT-User` = user-triggered fetch (robots may not apply the same way). Do not treat one directive as a switch for all three.
+
+**AEO:** one H1, a lead paragraph that answers before the first code sample, FAQ as H2+paragraph in SSR HTML. Do not hide the answer behind a client-only fetch.
+
+**Do not:** same description on every URL; list 301 aliases or search URLs in the sitemap; `meta name="og:*"` (use `property`); keyword stuffing; fake Review/AggregateRating; Lambda/Workers “SEO adapters”.
+
+**OG image:** `public/og.png` 1200×630 PNG/JPEG. `FlowApp::with_og_image("/og.png")` + `with_public_dir` (or `CARGO_MANIFEST_DIR=/app` in Docker).
+
+---
+
+## Deploy (long-running process — not JS serverless)
+
+Resuma’s entry is `FlowApp::serve()` / `ResumaApp::serve()` (TCP + Tokio + optional disk). **There is no Lambda, Cloudflare Workers, or Vercel Edge adapter.** Qwik can target those because the app is a JS `fetch` handler; Resuma is not.
+
+Production pattern (Fly / Docker):
+
+```
+RESUMA_ADDR=0.0.0.0:8080
+RESUMA_TRUST_PROXY=1
+RESUMA_TRUSTED_PROXY_CIDRS=fdaa::/16   # Fly 6PN; other fabrics use their proxy CIDR
+SITE_URL=https://my-app.fly.dev        # then your custom domain
+CARGO_MANIFEST_DIR=/app               # so public/ resolves in the image
+RESUMA_DATA_DIR=/data                 # writable by the non-root user
+```
+
+Health: `GET /health`. Copy `public/` into the image. Docs: https://resuma-docs.fly.dev/docs/cookbook/deploy
+
+Custom domain cutover: certs + DNS → change `SITE_URL` → deploy → 301 old `.fly.dev` → new Search Console property + sitemap. Do not 301 until HTTPS works on the new host.
+
+---
+
+## ClientComponent
+
+```rust
+ClientComponent::new("hero-particles").lazy(true) // idle import(); skip if prefers-reduced-motion
+```
+
+Register with `FlowApp::client_asset("hero-particles", include_bytes!("../static/client/hero-particles.js"))`.
 
 ---
 
 ## Docs & references
 
 - https://resuma-docs.fly.dev/docs
-- https://docs.rs/resuma/1.2.0
-- In-repo: `docs/SECURITY.md`, `ROADMAP.md`, `CHANGELOG.md`
+- https://resuma-docs.fly.dev/docs/cookbook/theme
+- https://resuma-docs.fly.dev/docs/components/popup
+- https://resuma-docs.fly.dev/docs/components/modal
+- https://resuma-docs.fly.dev/docs/components/desktop_ui
+- https://resuma-docs.fly.dev/docs/integrations/seo_geo
+- https://resuma-docs.fly.dev/docs/integrations/ai_assistant
+- https://resuma-docs.fly.dev/docs/cookbook/deploy
+- https://docs.rs/resuma/1.3.1
+- In-repo: `docs/SECURITY.md`, `ROADMAP.md`, `CHANGELOG.md`, `docs/FLOW_COOKBOOK.md`

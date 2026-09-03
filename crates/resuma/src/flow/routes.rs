@@ -40,6 +40,8 @@ pub struct FlowSeoConfig {
     pub seo_kit: Option<SeoKit>,
     /// Which auto SEO kit routes to mount (skip paths already registered as pages).
     pub seo_kit_opts: SeoKitRouteOpts,
+    /// Static Flow paths omitted from `/sitemap.xml` (aliases, search, noindex URLs).
+    pub sitemap_exclude: Vec<String>,
 }
 
 /// Which auto-generated SEO text routes to mount (skip paths already registered as pages).
@@ -74,7 +76,7 @@ const OG_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="1200" he
 <rect width="1200" height="630" fill="url(#bg)"/>
 <text x="96" y="250" fill="#ffffff" font-family="Segoe UI, system-ui, sans-serif" font-size="96" font-weight="700">Resuma</text>
 <text x="96" y="340" fill="#e9d5ff" font-family="Segoe UI, system-ui, sans-serif" font-size="42">Instantly-interactive Rust — without hydration</text>
-<text x="96" y="430" fill="#ddd6fe" font-family="Segoe UI, system-ui, sans-serif" font-size="28">907 B initial · 5.08 KiB first click · 0 B static pages</text>
+<text x="96" y="430" fill="#ddd6fe" font-family="Segoe UI, system-ui, sans-serif" font-size="28">1021 B initial · 9.90 KiB first click · 0 B static pages</text>
 </svg>"##;
 
 pub async fn handle_submit(
@@ -302,7 +304,11 @@ fn sitemap_xml(seo: &FlowSeoConfig) -> String {
     let mut paths: Vec<String> = seo
         .paths
         .iter()
-        .filter(|p| !p.contains(':') && !p.contains('*'))
+        .filter(|p| {
+            !p.contains(':')
+                && !p.contains('*')
+                && !seo.sitemap_exclude.iter().any(|skip| skip == *p)
+        })
         .cloned()
         .collect();
     if !paths.iter().any(|p| p == "/") {
@@ -348,8 +354,10 @@ async fn serve_favicon() -> impl IntoResponse {
 }
 
 pub fn attach_flow_routes(router: Router, seo: FlowSeoConfig) -> Router {
-    let router = if let Some(kit) = seo.seo_kit.clone() {
-        attach_seo_kit_routes(router, kit, seo.seo_kit_opts)
+    // `ResumaApp::into_router` already mounts SeoKit `/robots.txt` + `/llms.txt`.
+    // Mounting them again panics (`Overlapping method route`).
+    let router = if seo.seo_kit.is_some() {
+        router
     } else {
         let robots_seo = seo.clone();
         router.route(
@@ -379,4 +387,44 @@ pub fn attach_flow_routes(router: Router, seo: FlowSeoConfig) -> Router {
         .route("/favicon.svg", axum::routing::get(serve_favicon))
         .route("/favicon.ico", axum::routing::get(serve_favicon))
         .route("/_resuma/submit/{name}", axum::routing::post(handle_submit))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sitemap_omits_excluded_and_dynamic_paths() {
+        let xml = sitemap_xml(&FlowSeoConfig {
+            site_url: "https://example.com".into(),
+            paths: vec![
+                "/".into(),
+                "/docs".into(),
+                "/docs/search".into(),
+                "/docs/:slug".into(),
+            ],
+            sitemap_exclude: vec!["/docs/search".into()],
+            ..Default::default()
+        });
+        assert!(xml.contains("https://example.com/</loc>"));
+        assert!(xml.contains("https://example.com/docs</loc>"));
+        assert!(!xml.contains("/docs/search"));
+        assert!(!xml.contains("/docs/:slug"));
+    }
+
+    #[test]
+    fn seo_kit_flow_routes_do_not_double_mount_robots() {
+        let kit = SeoKit::new("Demo", "https://example.com");
+        let router = attach_seo_kit_routes(Router::new(), kit.clone(), SeoKitRouteOpts::all());
+        let _ = attach_flow_routes(
+            router,
+            FlowSeoConfig {
+                site_url: "https://example.com".into(),
+                paths: vec!["/".into()],
+                seo_kit: Some(kit),
+                seo_kit_opts: SeoKitRouteOpts::all(),
+                sitemap_exclude: vec![],
+            },
+        );
+    }
 }

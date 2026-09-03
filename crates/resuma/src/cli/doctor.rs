@@ -12,7 +12,7 @@ use super::update::{
 
 // Keep in sync with `runtime/scripts/measure.mjs` and `docs/STABILITY.md`.
 const LOADER_GZIP_BUDGET: usize = 1100;
-const CORE_GZIP_BUDGET: usize = 9500;
+const CORE_GZIP_BUDGET: usize = 10000;
 
 pub fn doctor_command() -> Result<()> {
     println!("[resuma] doctor\n");

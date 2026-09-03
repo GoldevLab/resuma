@@ -1,18 +1,31 @@
 app = "%NAME%"
 
+[build]
+  dockerfile = "Dockerfile"
+
 [env]
   RESUMA_ENV = "production"
   RESUMA_TRUST_PROXY = "1"
+  RESUMA_TRUSTED_PROXY_CIDRS = "fdaa::/16"
   RESUMA_ADDR = "0.0.0.0:8080"
+  RESUMA_DATA_DIR = "/data"
+  CARGO_MANIFEST_DIR = "/app"
+  SITE_URL = "https://%NAME%.fly.dev"
 
 [http_service]
   internal_port = 8080
   force_https = true
   auto_stop_machines = true
   auto_start_machines = true
-  min_machines_running = 1
+  min_machines_running = 0
+  processes = ["app"]
 
   [[http_service.checks]]
+    grace_period = "20s"
     path = "/health"
     interval = "15s"
     timeout = "2s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

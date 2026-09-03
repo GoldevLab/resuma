@@ -41,8 +41,8 @@ pub fn benchmark(_req: FlowRequest) -> View {
             <>
                 <p>"Measured bundle sizes (from docs landing page):"</p>
                 <ul>
-                    <li><strong>"907 B"</strong>" initial JS (gzip)"</li>
-                    <li><strong>"5.08 KiB"</strong>" first interaction"</li>
+                    <li><strong>"1021 B"</strong>" initial JS (gzip)"</li>
+                    <li><strong>"9.90 KiB"</strong>" first interaction"</li>
                     <li><strong>"0 B"</strong>" static pages"</li>
                     <li><strong>"1 crate"</strong>" — core + Flow + CLI unified"</li>
                 </ul>
@@ -96,7 +96,7 @@ pub fn faq(_req: FlowRequest) -> View {
                 <h3>"Is this a resume builder?"</h3>
                 <p>"No — Resuma is a resumable SSR Rust web framework."</p>
                 <h3>"Do I need WASM?"</h3>
-                <p>"No — default runtime is ~907 B JS loader, not WASM."</p>
+                <p>"No — default runtime is ~1021 B JS loader, not WASM."</p>
                 <h3>"Hydration?"</h3>
                 <p>"No hydration — components run once on server; client resumes on first interaction."</p>
             </>

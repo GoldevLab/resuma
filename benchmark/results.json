@@ -1,21 +1,21 @@
 {
-  "generatedAt": "2026-08-03T21:00:20.340Z",
+  "generatedAt": "2026-09-03T01:44:45.888Z",
   "methodology": "SSR counter page (heading + increment button). Gzip/brotli from minified artifacts or framework build output.",
   "frameworks": [
     {
       "framework": "Resuma",
-      "version": "1.3.0",
+      "version": "1.3.1",
       "initial": {
         "path": "/home/golfredo/Documentos/apps/resuma/runtime/dist/loader.js",
         "name": "loader.js",
         "raw": 2131,
         "gzip": 1021,
-        "brotli": 860
+        "brotli": 854
       },
       "firstInteraction": {
-        "raw": 26604,
-        "gzip": 9351,
-        "brotli": 8351,
+        "raw": 28952,
+        "gzip": 10141,
+        "brotli": 9055,
         "note": "loader.js + core.js + Counter handler chunk (first click)"
       },
       "staticPage": {
@@ -29,21 +29,21 @@
           "name": "loader.js",
           "raw": 2131,
           "gzip": 1021,
-          "brotli": 860
+          "brotli": 854
         },
         "core": {
           "path": "/home/golfredo/Documentos/apps/resuma/runtime/dist/core.js",
           "name": "core.js",
-          "raw": 24343,
-          "gzip": 8203,
-          "brotli": 7378
+          "raw": 26688,
+          "gzip": 8991,
+          "brotli": 8092
         },
         "handler": {
           "path": "/home/golfredo/Documentos/apps/resuma/benchmark/.resuma-counter-handler.js",
           "name": ".resuma-counter-handler.js",
-          "raw": 130,
-          "gzip": 127,
-          "brotli": 113
+          "raw": 133,
+          "gzip": 129,
+          "brotli": 109
         }
       },
       "note": "Rust SSR + resumability",
@@ -51,19 +51,19 @@
         "label": "Initial load",
         "raw": 2131,
         "gzip": 1021,
-        "brotli": 860,
+        "brotli": 854,
         "rawFmt": "2.08 KiB",
         "gzipFmt": "1021 B",
-        "brotliFmt": "860 B"
+        "brotliFmt": "854 B"
       },
       "firstRow": {
         "label": "First interaction",
-        "raw": 26604,
-        "gzip": 9351,
-        "brotli": 8351,
-        "rawFmt": "25.98 KiB",
-        "gzipFmt": "9.13 KiB",
-        "brotliFmt": "8.16 KiB"
+        "raw": 28952,
+        "gzip": 10141,
+        "brotli": 9055,
+        "rawFmt": "28.27 KiB",
+        "gzipFmt": "9.90 KiB",
+        "brotliFmt": "8.84 KiB"
       },
       "staticRow": {
         "label": "Static page",

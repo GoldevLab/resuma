@@ -1,12 +1,9 @@
 use crate::booking_store::SERVICES;
-use crate::BookFormData;
-use resuma::core::view::AttrValue;
 use resuma::prelude::*;
 
-#[component]
-pub fn BookPage() -> View {
+pub fn page(_req: FlowRequest) -> View {
     load_boundary(
-        use_book_form_load(),
+        crate::use_book_form_load(),
         |data| {
             let fecha = data.fecha.clone();
             let servicio = data.servicio.clone();

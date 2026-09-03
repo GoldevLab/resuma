@@ -38,6 +38,39 @@ export interface ResumaGlobal {
   /** Resolve when ClientComponent `id` finished init (`bootClientComponent` / `notifyClientReady`). */
   waitClient: (id: string, timeoutMs?: number) => Promise<void>;
   onClientReady: (id: string, cb: () => void) => () => void;
+  /** Polite live region (`#r-live`). */
+  announce: (msg: string) => void;
+  measure: (el: Element | string | null | undefined) => {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
+  storage: {
+    get: (key: string) => string | null;
+    set: (key: string, value: string) => void;
+    remove: (key: string) => void;
+  };
+  online: () => boolean;
+  presence: () => { idle: boolean; hidden: boolean };
+  isNavigatingWithKeyboard: () => boolean;
+  contentSizeMultiplier: () => number;
+  /** Queued focus — last writer in the frame wins (SPA / modal / popup). */
+  focus: (el: HTMLElement | (() => HTMLElement | null | undefined)) => void;
+  /** Register a teardown hook flushed on the next `mountPage()`. */
+  onCleanup: (fn: () => void) => void;
+  showPopup: (id: string) => boolean | Promise<boolean>;
+  hidePopup: (id: string) => void;
+  showModal: (id: string) => boolean | Promise<boolean>;
+  hideModal: (id: string) => void;
+  dismissAll: () => void;
+  runHandler?: (
+    ref: string,
+    inline: string | null,
+    ev: Event,
+    captures: string[],
+    handlerEl?: EventTarget | null,
+  ) => Promise<void>;
 }
 
 declare global {

@@ -40,6 +40,22 @@ const TEMPLATE_CHOICES: &[(&str, &str)] = &[
     ("production", "Flow + security stub + Docker + Fly"),
 ];
 
+/// Map a prompt reply (index, empty = 1, or template id) to a template name.
+fn resolve_template_choice(choice: &str) -> Option<&'static str> {
+    match choice {
+        "" | "1" => Some("basic"),
+        "2" => Some("todo"),
+        "3" => Some("flow"),
+        "4" => Some("flow-booking"),
+        "5" => Some("flow-fullstack"),
+        "6" => Some("production"),
+        other => TEMPLATE_CHOICES
+            .iter()
+            .find(|(id, _)| *id == other)
+            .map(|(id, _)| *id),
+    }
+}
+
 pub fn prompt_template() -> Result<String> {
     println!("\nChoose a template:");
     for (i, (id, desc)) in TEMPLATE_CHOICES.iter().enumerate() {
@@ -47,19 +63,14 @@ pub fn prompt_template() -> Result<String> {
     }
     loop {
         let choice = read_line("\nTemplate [1]: ")?;
-        let picked = match choice.as_str() {
-            "" | "1" => "basic",
-            "2" => "todo",
-            "3" => "flow",
-            "4" => "flow-booking",
-            "5" => "flow-fullstack",
-            other if TEMPLATE_CHOICES.iter().any(|(id, _)| *id == other) => other,
-            _ => {
-                eprintln!("  (pick 1–5 or type basic/todo/flow/flow-booking/flow-fullstack)");
-                continue;
+        match resolve_template_choice(&choice) {
+            Some(picked) => return Ok(picked.to_string()),
+            None => {
+                eprintln!(
+                    "  (pick 1–6 or type basic/todo/flow/flow-booking/flow-fullstack/production)"
+                );
             }
-        };
-        return Ok(picked.to_string());
+        }
     }
 }
 
@@ -117,5 +128,20 @@ mod tests {
         assert!(parse_confirm("si", false));
         assert!(!parse_confirm("n", true));
         assert!(!parse_confirm("no", true));
+    }
+
+    #[test]
+    fn resolve_template_choice_covers_every_listed_template() {
+        assert_eq!(TEMPLATE_CHOICES.len(), 6);
+        assert_eq!(resolve_template_choice(""), Some("basic"));
+        assert_eq!(resolve_template_choice("1"), Some("basic"));
+        assert_eq!(resolve_template_choice("6"), Some("production"));
+        assert_eq!(resolve_template_choice("production"), Some("production"));
+        assert_eq!(
+            resolve_template_choice("flow-booking"),
+            Some("flow-booking")
+        );
+        assert_eq!(resolve_template_choice("7"), None);
+        assert_eq!(resolve_template_choice("nope"), None);
     }
 }

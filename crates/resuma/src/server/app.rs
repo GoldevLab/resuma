@@ -29,11 +29,11 @@ use tracing::info;
 
 use super::actions::dispatch as dispatch_action;
 use super::compressed_asset::{
-    self, core_asset, flow_asset, loader_asset, runtime_asset, serve_js,
+    self, core_asset, flow_asset, loader_asset, runtime_asset, serve_js, ui_asset,
 };
 use super::deferred_stream::try_deferred_stream;
 use super::page_cache::take_response_cache_control;
-use super::runtime_asset::{CORE_JS, FLOW_CSS, FLOW_JS, LOADER_JS, RUNTIME_JS};
+use super::runtime_asset::{CORE_JS, FLOW_CSS, FLOW_JS, LOADER_JS, RUNTIME_JS, UI_CSS, UI_JS};
 use super::security::{
     self, client_ip_from_parts, csrf_set_cookie, guard_mutation, http_status, request_is_https,
     resolve_page_csp_nonce, resolve_page_csrf, validate_config, CspNonce, SecurityConfig,
@@ -110,6 +110,19 @@ impl ResumaApp {
 
     pub fn with_title(mut self, title: impl Into<String>) -> Self {
         self.page_options.title = title.into();
+        self
+    }
+
+    /// Set `<html dir>` (`ltr`, `rtl`, or `auto`). Pages can override with [`set_page_dir`].
+    pub fn with_dir(mut self, dir: impl Into<String>) -> Self {
+        self.page_options.dir = dir.into();
+        self
+    }
+
+    /// Live `html[data-theme]` palettes. Buttons with `data-r-theme` restyle the
+    /// whole document (blocking head boot — not a layout handler chunk).
+    pub fn with_html_theme(mut self, theme: impl Into<crate::HtmlTheme>) -> Self {
+        self.page_options.html_theme = Some(theme.into());
         self
     }
 
@@ -327,6 +340,8 @@ impl ResumaApp {
             .route("/_resuma/core.js", get(serve_core))
             .route("/_resuma/flow.js", get(serve_flow))
             .route("/_resuma/flow.css", get(serve_flow_css))
+            .route("/_resuma/ui.js", get(serve_ui))
+            .route("/_resuma/ui.css", get(serve_ui_css))
             .route("/_resuma/runtime.js", get(serve_runtime))
             .route("/_resuma/action/{name}", post(serve_action))
             .route("/_resuma/handler/{chunk}", get(serve_handler_chunk))
@@ -403,6 +418,17 @@ fn page_security_opts(
     opts.csp_nonce = resolve_page_csp_nonce(cfg.csp.enabled)?;
     let (token, is_new) = resolve_page_csrf(headers, cfg.csrf)?;
     opts.csrf_token = token;
+    if let Some(theme) = &opts.html_theme {
+        if crate::server::page_cache::page_theme_override().is_none() {
+            if let Some(raw) = headers.get(header::COOKIE).and_then(|v| v.to_str().ok()) {
+                if let Some(id) = crate::cookie_value(raw, &theme.cookie) {
+                    if theme.allows(&id) {
+                        crate::server::page_cache::set_page_theme(id);
+                    }
+                }
+            }
+        }
+    }
     Ok((opts, is_new))
 }
 
@@ -644,6 +670,10 @@ async fn serve_flow(headers: HeaderMap) -> Response {
     serve_js(&headers, flow_asset(), FLOW_JS)
 }
 
+async fn serve_ui(headers: HeaderMap) -> Response {
+    serve_js(&headers, ui_asset(), UI_JS)
+}
+
 async fn serve_flow_css() -> Response {
     (
         [
@@ -658,6 +688,23 @@ async fn serve_flow_css() -> Response {
             ),
         ],
         FLOW_CSS,
+    )
+        .into_response()
+}
+
+async fn serve_ui_css() -> Response {
+    (
+        [
+            (
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("text/css; charset=utf-8"),
+            ),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("public, max-age=60, must-revalidate"),
+            ),
+        ],
+        UI_CSS,
     )
         .into_response()
 }

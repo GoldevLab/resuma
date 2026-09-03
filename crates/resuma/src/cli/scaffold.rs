@@ -158,8 +158,8 @@ Created with [Resuma](https://github.com/GoldevLab/resuma).
 - **basic** - static SSR page, zero client JS
 - **todo** - full Resuma showcase (signals, server, island, security, js!)
 - **flow** - multi-page app with `src/pages/` and FlowApp
-- **flow-fullstack** - Flow + SQLx (SQLite) with users CRUD sample
 - **flow-booking** - appointments with query-driven `#[load]` + `loader_refresh_input`
+- **flow-fullstack** - Flow + SQLx (SQLite) with users CRUD sample
 - **production** - Flow + security stub + Dockerfile + fly.toml
 
 ## Develop
@@ -183,14 +183,38 @@ fn render_cargo(template: &str, name: &str) -> String {
         .replace("%RESUMA_VERSION%", env!("CARGO_PKG_VERSION"))
 }
 
+fn crate_name_from_path(path: &str) -> Result<String> {
+    let base = Path::new(path)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(path);
+    if !is_valid_crate_name(base) {
+        return Err(anyhow!(
+            "invalid project name `{base}` — use a Cargo package name (letters, digits, `-`, `_`)"
+        ));
+    }
+    Ok(base.to_string())
+}
+
+fn is_valid_crate_name(s: &str) -> bool {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
+        _ => return false,
+    }
+    s.chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
 pub fn create_project(name: &str, template: &str) -> Result<()> {
     let dir = Path::new(name);
     if dir.exists() {
         return Err(anyhow!("directory `{}` already exists", name));
     }
+    let crate_name = crate_name_from_path(name)?;
     fs::create_dir_all(dir.join("src"))?;
 
-    let readme = README.replace("%NAME%", name);
+    let readme = README.replace("%NAME%", &crate_name);
     fs::write(dir.join("README.md"), readme).context("write README.md")?;
     fs::write(dir.join(".gitignore"), "target/\n").context("write .gitignore")?;
     fs::write(dir.join("rust-toolchain.toml"), RUST_TOOLCHAIN)
@@ -198,17 +222,26 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
 
     match template {
         "basic" => {
-            fs::write(dir.join("Cargo.toml"), render_cargo(CARGO_BASIC, name))
-                .context("write Cargo.toml")?;
-            fs::write(dir.join("src/main.rs"), BASIC_MAIN.replace("%NAME%", name))
-                .context("write src/main.rs")?;
+            fs::write(
+                dir.join("Cargo.toml"),
+                render_cargo(CARGO_BASIC, &crate_name),
+            )
+            .context("write Cargo.toml")?;
+            fs::write(
+                dir.join("src/main.rs"),
+                BASIC_MAIN.replace("%NAME%", &crate_name),
+            )
+            .context("write src/main.rs")?;
         }
         "todo" => {
-            fs::write(dir.join("Cargo.toml"), render_cargo(CARGO_TODO, name))
-                .context("write Cargo.toml")?;
+            fs::write(
+                dir.join("Cargo.toml"),
+                render_cargo(CARGO_TODO, &crate_name),
+            )
+            .context("write Cargo.toml")?;
             let main_rs = TODO_MAIN
-                .replace("Resuma · Todo", name)
-                .replace("example-todo", name);
+                .replace("Resuma · Todo", &crate_name)
+                .replace("example-todo", &crate_name);
             fs::write(dir.join("src/main.rs"), main_rs).context("write src/main.rs")?;
             fs::write(dir.join("src/security.rs"), TODO_SECURITY)
                 .context("write src/security.rs")?;
@@ -216,10 +249,16 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
                 .context("write src/todo_store.rs")?;
         }
         "flow" => {
-            fs::write(dir.join("Cargo.toml"), render_cargo(CARGO_FLOW, name))
-                .context("write Cargo.toml")?;
-            fs::write(dir.join("src/main.rs"), FLOW_MAIN.replace("%NAME%", name))
-                .context("write src/main.rs")?;
+            fs::write(
+                dir.join("Cargo.toml"),
+                render_cargo(CARGO_FLOW, &crate_name),
+            )
+            .context("write Cargo.toml")?;
+            fs::write(
+                dir.join("src/main.rs"),
+                FLOW_MAIN.replace("%NAME%", &crate_name),
+            )
+            .context("write src/main.rs")?;
             let pages = dir.join("src/pages");
             fs::create_dir_all(&pages)?;
             fs::write(pages.join("mod.rs"), FLOW_MOD).context("write pages/mod.rs")?;
@@ -231,12 +270,12 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
         "flow-booking" => {
             fs::write(
                 dir.join("Cargo.toml"),
-                render_cargo(CARGO_FLOW_BOOKING, name),
+                render_cargo(CARGO_FLOW_BOOKING, &crate_name),
             )
             .context("write Cargo.toml")?;
             fs::write(
                 dir.join("src/main.rs"),
-                FLOW_BOOKING_MAIN.replace("%NAME%", name),
+                FLOW_BOOKING_MAIN.replace("%NAME%", &crate_name),
             )
             .context("write src/main.rs")?;
             fs::write(dir.join("src/booking_store.rs"), FLOW_BOOKING_STORE)
@@ -248,7 +287,7 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
                 .context("write pages/_registry.rs")?;
             fs::write(
                 pages.join("index.rs"),
-                FLOW_BOOKING_INDEX.replace("%NAME%", name),
+                FLOW_BOOKING_INDEX.replace("%NAME%", &crate_name),
             )
             .context("write pages/index.rs")?;
             fs::write(pages.join("book.rs"), FLOW_BOOKING_BOOK).context("write pages/book.rs")?;
@@ -259,11 +298,14 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
             fs::write(public.join(".gitkeep"), "").ok();
         }
         "flow-fullstack" => {
-            fs::write(dir.join("Cargo.toml"), render_cargo(CARGO_FULLSTACK, name))
-                .context("write Cargo.toml")?;
+            fs::write(
+                dir.join("Cargo.toml"),
+                render_cargo(CARGO_FULLSTACK, &crate_name),
+            )
+            .context("write Cargo.toml")?;
             fs::write(
                 dir.join("src/main.rs"),
-                FULLSTACK_MAIN.replace("%NAME%", name),
+                FULLSTACK_MAIN.replace("%NAME%", &crate_name),
             )
             .context("write src/main.rs")?;
             fs::write(dir.join("src/db.rs"), FULLSTACK_DB).context("write src/db.rs")?;
@@ -280,11 +322,14 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
             fs::write(dir.join(".env.example"), "DATABASE_URL=sqlite:local.db\n").ok();
         }
         "production" => {
-            fs::write(dir.join("Cargo.toml"), render_cargo(CARGO_PRODUCTION, name))
-                .context("write Cargo.toml")?;
+            fs::write(
+                dir.join("Cargo.toml"),
+                render_cargo(CARGO_PRODUCTION, &crate_name),
+            )
+            .context("write Cargo.toml")?;
             fs::write(
                 dir.join("src/main.rs"),
-                PRODUCTION_MAIN.replace("%NAME%", name),
+                PRODUCTION_MAIN.replace("%NAME%", &crate_name),
             )
             .context("write src/main.rs")?;
             fs::write(dir.join("src/security.rs"), PRODUCTION_SECURITY)
@@ -296,18 +341,23 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
                 .context("write pages/_registry.rs")?;
             fs::write(
                 pages.join("index.rs"),
-                PRODUCTION_INDEX.replace("%NAME%", name),
+                PRODUCTION_INDEX.replace("%NAME%", &crate_name),
             )
             .context("write pages/index.rs")?;
             fs::write(pages.join("ops.rs"), PRODUCTION_OPS).context("write pages/ops.rs")?;
             fs::write(
                 dir.join("Dockerfile"),
-                PRODUCTION_DOCKERFILE.replace("%NAME%", name),
+                PRODUCTION_DOCKERFILE.replace("%NAME%", &crate_name),
             )
             .context("write Dockerfile")?;
-            fs::write(dir.join("fly.toml"), PRODUCTION_FLY.replace("%NAME%", name))
-                .context("write fly.toml")?;
+            fs::write(
+                dir.join("fly.toml"),
+                PRODUCTION_FLY.replace("%NAME%", &crate_name),
+            )
+            .context("write fly.toml")?;
             fs::write(dir.join(".env.example"), PRODUCTION_ENV).context("write .env.example")?;
+            fs::write(dir.join(".dockerignore"), "/target\n.git\n.github\n")
+                .context("write .dockerignore")?;
             let public = dir.join("public");
             fs::create_dir_all(&public)?;
             fs::write(public.join(".gitkeep"), "").ok();
@@ -346,11 +396,23 @@ mod tests {
             CARGO_FLOW,
             CARGO_FLOW_BOOKING,
             CARGO_FULLSTACK,
+            CARGO_PRODUCTION,
         ] {
             let rendered = render_cargo(cargo_template, "smoke-app");
             assert!(rendered.contains("name = \"smoke-app\""));
             assert!(rendered.contains(&format!("\"{}\"", env!("CARGO_PKG_VERSION"))));
             assert!(!rendered.contains("%RESUMA_VERSION%"));
         }
+    }
+
+    #[test]
+    fn crate_name_uses_basename_of_a_path() {
+        assert_eq!(crate_name_from_path("my-app").unwrap(), "my-app");
+        assert_eq!(
+            crate_name_from_path("/tmp/resuma-tpl/basic").unwrap(),
+            "basic"
+        );
+        assert!(crate_name_from_path("/tmp/foo/bar/baz").is_ok());
+        assert!(crate_name_from_path("/tmp/not valid").is_err());
     }
 }

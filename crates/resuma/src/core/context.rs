@@ -495,6 +495,10 @@ pub fn page_needs_client(payload: &ResumePayload, body_html: &str) -> bool {
         "data-r-portal",
         "data-r-stream",
         "data-r-vt",
+        "data-r-popup",
+        "data-r-modal",
+        "data-r-gesture",
+        "data-r-virtual",
     ];
     MARKERS.iter().any(|marker| body_html.contains(marker))
 }
@@ -662,5 +666,30 @@ mod tests {
         };
         let body = r#"<resuma-match data-r-match="s1"></resuma-match>"#;
         assert!(page_needs_client(&payload, body));
+    }
+
+    #[test]
+    fn page_needs_client_detects_overlay_markers() {
+        let payload = ResumePayload {
+            signals: vec![],
+            handlers: Default::default(),
+            islands: vec![],
+            actions: vec![],
+            contexts: Default::default(),
+            visible_tasks: Default::default(),
+            effects: vec![],
+            lazy_chunks: vec![],
+            chunk_digests: Default::default(),
+            csrf_token: None,
+            serialization_error: None,
+        };
+        assert!(page_needs_client(
+            &payload,
+            r#"<div data-r-popup="menu" popover="auto"></div>"#
+        ));
+        assert!(page_needs_client(
+            &payload,
+            r#"<dialog data-r-modal="x" closedby="any"></dialog>"#
+        ));
     }
 }

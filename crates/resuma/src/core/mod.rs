@@ -26,6 +26,7 @@ pub mod handler;
 pub mod handler_combine;
 pub mod match_branch;
 pub mod nav;
+pub mod overlay;
 pub mod portal;
 pub mod serialize;
 pub mod show;
@@ -52,11 +53,15 @@ pub use effect::{
 pub use error::{Result, ResumaError};
 pub use error_boundary::error_boundary;
 pub use flow_request::FlowRequest;
-pub use for_list::{for_signal, ListSignal};
+pub use for_list::{for_signal, for_signal_virtual, ListSignal};
 pub use handler::{HandlerCapture, HandlerRef, IslandRef, ServerActionRef};
 pub use handler_combine::combine_js;
 pub use match_branch::{match_signal, match_static, match_value_string, MatchSignal};
 pub use nav::nav_link;
+pub use overlay::{
+    gesture_view, modal, modal_trigger, popup, popup_anchor, GestureOpts, ModalOpts, PopupOpts,
+    DEFAULT_POPUP_POSITIONS,
+};
 pub use portal::portal;
 pub use show::{show, show_signal};
 pub use signal::{signal, use_signal, ReadSignal, Signal, SignalId, WriteSignal};
@@ -67,6 +72,6 @@ pub use task::{
     register_debounce_effect, use_debounce, use_task, use_visible_task,
     use_visible_task_with_captures, visible_task_js, VisibleTaskId,
 };
-pub use theme::{provide_theme, theme_css_vars, use_theme, Theme};
+pub use theme::{provide_theme, theme_css_vars, theme_switch, use_theme, HtmlTheme, Theme};
 pub use view::{Attr, AttrValue, Child, Element, Fragment, SlotView, View};
 pub use view_transition::with_view_transition;

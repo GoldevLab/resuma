@@ -85,7 +85,7 @@ function needsCoreNow(payload: ResumePayload, scope: HTMLElement): boolean {
   if (payload.lazy_chunks?.length) return true;
   const handlerSelectors = KNOWN_EVENTS.map((ev) => `[data-r-on\\:${ev}]`).join(", ");
   return !!scope.querySelector(
-    `resuma-island, resuma-boundary, resuma-dyn, resuma-show, resuma-for, resuma-match, [data-r-bind], [data-r-submit], ${handlerSelectors}, template[data-r-portal], template[data-r-stream-chunk], [data-r-vt], a[data-r-nav]`,
+    `resuma-island, resuma-boundary, resuma-dyn, resuma-show, resuma-for, resuma-match, [data-r-bind], [data-r-submit], ${handlerSelectors}, template[data-r-portal], template[data-r-stream-chunk], [data-r-vt], a[data-r-nav], [data-r-popup], [data-r-modal], [data-r-gesture], [data-r-virtual], dialog[data-r-modal]`,
   );
 }
 
@@ -135,7 +135,7 @@ async function dispatchEvent(ev: Event): Promise<void> {
       try {
         await ensureCore();
         const core = await import(CORE_URL);
-        await core.runHandler(ref, inline, ev, captures);
+        await core.runHandler(ref, inline, ev, captures, target);
       } catch (err) {
         console.error("[resuma] handler error", err);
       }

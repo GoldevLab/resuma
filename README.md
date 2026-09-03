@@ -35,7 +35,7 @@ Same UX everywhere — SSR counter (heading + increment button). Production buil
 
 | Framework | Initial load | First click | Static page |
 |-----------|-------------:|------------:|------------:|
-| **Resuma** | **1021 B** | **9.13 KiB** | **0 B** |
+| **Resuma** | **1021 B** | **9.90 KiB** | **0 B** |
 | Leptos | 79.02 KiB | 79.02 KiB | — |
 | Next.js (App Router) | 142.43 KiB | 142.43 KiB | — |
 | React (Vite SPA) | 57.99 KiB | 57.99 KiB | — |
@@ -81,12 +81,13 @@ resuma dev --open
 
 ### AI assistants (Cursor, Codex, Gemini)
 
-Teach your editor Resuma patterns — signals, `view!`, Flow, `#[server]` — with one command:
+Teach your editor Resuma patterns — `view!`, Flow, `HtmlTheme` / `Popup` / `Modal`, `SeoKit`, deploy — with one command:
 
 ```bash
 resuma install skill              # ~/.cursor/skills/resuma/ (global)
 resuma install skill --project    # .cursor/skills/resuma/ (this repo)
 resuma install skill --target agents  # ~/.agents/skills/ (Codex-style)
+resuma install skill --force      # overwrite after a CLI upgrade
 ```
 
 **Skill vs MCP:** start with the **skill** (guidance for writing code). An official MCP for docs search / CLI tools may come later.  

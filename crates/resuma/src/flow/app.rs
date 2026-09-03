@@ -58,6 +58,8 @@ pub struct FlowApp {
     client_dir: Option<PathBuf>,
     /// When set, merges [`Theme`](crate::Theme) colors into auto PWA config.
     theme_for_pwa: Option<crate::Theme>,
+    /// Static page paths omitted from `/sitemap.xml`.
+    sitemap_exclude: Vec<String>,
 }
 
 /// Listen and security options for [`FlowApp::serve`].
@@ -112,6 +114,7 @@ impl FlowApp {
             public_dir: None,
             client_dir: None,
             theme_for_pwa: None,
+            sitemap_exclude: Vec::new(),
         }
     }
 
@@ -219,6 +222,18 @@ impl FlowApp {
         self
     }
 
+    /// Set `<html dir>` (`ltr`, `rtl`, or `auto`). Pages can override with [`set_page_dir`].
+    pub fn with_dir(mut self, dir: impl Into<String>) -> Self {
+        self.inner = self.inner.with_dir(dir);
+        self
+    }
+
+    /// Live `html[data-theme]` palettes. See [`crate::ResumaApp::with_html_theme`].
+    pub fn with_html_theme(mut self, theme: impl Into<crate::HtmlTheme>) -> Self {
+        self.inner = self.inner.with_html_theme(theme);
+        self
+    }
+
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
         self.inner = self.inner.with_description(description);
         self
@@ -242,6 +257,17 @@ impl FlowApp {
     /// SEO / GEO / analytics (Meta Pixel, JSON-LD, robots/llms helpers).
     pub fn with_seo_kit(mut self, kit: crate::ssr::seo_kit::SeoKit) -> Self {
         self.inner = self.inner.with_seo_kit(kit);
+        self
+    }
+
+    /// Omit these static Flow paths from `/sitemap.xml` (redirect aliases, search, noindex URLs).
+    pub fn with_sitemap_exclude<I, S>(mut self, paths: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.sitemap_exclude
+            .extend(paths.into_iter().map(Into::into));
         self
     }
 
@@ -531,6 +557,7 @@ impl FlowApp {
                     robots: !skip_robots,
                     llms: !skip_llms,
                 },
+                sitemap_exclude: self.sitemap_exclude,
             },
         );
 

@@ -17,7 +17,7 @@ on:change={js! {
 }}
 ```
 
-**Important:** In `js!` handlers always read form values from `event.target`, not `event.currentTarget` (the latter is often `null` in async handlers).
+**Events in `js!`:** `event.target` is the node that fired the event (the `<input>`). `event.currentTarget` is the element that declared the handler (`data-r-on:*`). On an `<input on:change=…>` they are the same — read `.value` from `event.target`. On a `<button>` whose child was clicked, use `currentTarget` for the button (`dataset`, `closest("form")`).
 
 Built-in helpers:
 
@@ -110,6 +110,14 @@ FlowApp::new()
     .with_theme_pwa(theme.clone())
     // layout still uses provide_theme(theme)
 ```
+
+For **clickable palettes that restyle the whole site**, do not use layout `onClick`
+or `theme_css_vars` on a wrapper. Use `with_html_theme` + `html[data-theme]` CSS +
+`data-r-theme` / `<ThemeSwitch>` (see `/docs/cookbook/theme`). Optional
+`.cookie("my_app_theme")` / `.storage_key("my-app-theme")`. Style the active
+chip with `[aria-pressed]` / `.r-theme-on`, not an SSR-only selected class.
+SPA navigation must not copy `data-theme` from prefetch HTML (it can be older
+than a live pick). Skip View Transitions while a popover/dialog is open.
 
 ## PWA defaults
 

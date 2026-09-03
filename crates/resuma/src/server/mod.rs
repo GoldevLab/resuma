@@ -12,10 +12,12 @@
 //! |-------|---------|
 //! | `GET /health` | Liveness probe (process is up) |
 //! | `GET /ready` | Readiness probe (ready for traffic) |
-//! | `GET /_resuma/loader.js` | Tiny bootstrap (~884 B gzip) |
+//! | `GET /_resuma/loader.js` | Tiny bootstrap (~1021 B gzip) |
 //! | `GET /_resuma/core.js` | Lazy-loaded resumability core |
 //! | `GET /_resuma/flow.js` | Lazy-loaded Flow exec widgets |
 //! | `GET /_resuma/flow.css` | Flow widget stylesheet (CSP-safe for dynamic panels) |
+//! | `GET /_resuma/ui.js` | Lazy overlay fallbacks (Popup / Modal / GestureView / VirtualFor) |
+//! | `GET /_resuma/ui.css` | Overlay stylesheet (CSS anchor + dialog) |
 //! | `GET /_resuma/runtime.js` | Legacy monolithic runtime |
 //! | `GET /_resuma/handler/:chunk.js` | Lazy handler chunk (`#[component]` boundaries) |
 //! | `GET /_resuma/island-chunk/:chunk.js` | Optional `#[island]` chunk |
@@ -52,9 +54,12 @@ pub use ops::{
     REQUEST_ID_HEADER,
 };
 pub use page_cache::{
-    page_csp_nonce, page_csrf, page_description_override, page_title_override,
-    sanitize_cache_for_session, set_page_description, set_page_title, stage_page_csp_nonce,
-    stage_page_csrf, stage_response_cache_control, take_response_cache_control,
+    page_canonical_override, page_csp_nonce, page_csrf, page_description_override,
+    page_dir_override, page_json_ld_override, page_robots_override, page_theme_override,
+    page_title_override, sanitize_cache_for_session, set_page_canonical, set_page_description,
+    set_page_dir, set_page_json_ld, set_page_robots, set_page_theme, set_page_title,
+    stage_page_csp_nonce, stage_page_csrf, stage_response_cache_control, stage_response_redirect,
+    stage_response_status, take_response_cache_control,
 };
 pub use rate_limit::{configure_rate_limit_backend, reset_rate_limits_for_tests, RateLimitBackend};
 pub use request_path::{stage_response_path, take_response_path};

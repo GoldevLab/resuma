@@ -161,6 +161,7 @@ pub fn serve_options() -> ServeOptions {
             body_limit_bytes: 256 * 1024,
             actions_per_minute: 90,
             submits_per_minute: 45,
+            action_rate_limits: Default::default(),
             hide_benchmark: true,
             production: matches!(
                 std::env::var("RESUMA_ENV").as_deref(),

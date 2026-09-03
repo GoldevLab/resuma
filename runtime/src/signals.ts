@@ -12,6 +12,8 @@ import {
 } from "./portals.js";
 import { registerMountCleanup } from "./mount-cleanups.js";
 
+declare const __RESUMA_VERSION__: string;
+
 export interface SignalCell<T> {
   readonly id: string;
   value: T;
@@ -306,6 +308,14 @@ export function bindFor(root: HTMLElement, signals: Map<string, SignalCell<unkno
     const listEl = el.querySelector<HTMLElement>("[data-r-for-list]");
     const cell = signals.get(sigId);
     if (!cell || !listEl) return;
+
+    if (el.hasAttribute("data-r-virtual")) {
+      boundForEls.add(el);
+      void import(`/_resuma/ui.js?v=${__RESUMA_VERSION__}`).then((m) => {
+        m.bindVirtualFor(el, cell, keyField, (node) => bindReactiveSubtree(node, signals));
+      });
+      return;
+    }
 
     const apply = (v: unknown) => {
       const list = Array.isArray(v) ? v : [];

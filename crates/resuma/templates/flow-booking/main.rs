@@ -39,7 +39,8 @@ struct BookInput {
 }
 
 #[submit]
-async fn book_slot(form: BookInput, _req: &FlowRequest) -> Result<Redirect, SubmitError> {
+async fn book_slot(form: BookInput, _req: &FlowRequest) -> std::result::Result<Redirect, SubmitError> {
+    let date = form.date.clone();
     match booking_store::book(
         form.name,
         form.phone,
@@ -47,7 +48,7 @@ async fn book_slot(form: BookInput, _req: &FlowRequest) -> Result<Redirect, Subm
         form.date,
         form.time,
     ) {
-        Ok(()) => Ok(redirect(&format!("/gracias?fecha={}", form.date))),
+        Ok(()) => Ok(redirect(&format!("/gracias?fecha={date}"))),
         Err((field, msg)) => Err(SubmitError::new("Fix the highlighted fields.").field(field, msg)),
     }
 }
