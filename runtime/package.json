@@ -23,7 +23,7 @@
     "test": "node --experimental-strip-types scripts/test-handler-event.ts"
   },
   "devDependencies": {
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "typescript": "^6.0.3"
   }
 }
