@@ -16,11 +16,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            runtime/package-lock.json
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
 
       - name: Format
         run: cargo fmt --all -- --check
@@ -62,9 +79,7 @@ jobs:
         run: cargo test --workspace
 
       - name: Supply chain (cargo-deny)
-        run: |
-          cargo install cargo-deny --locked
-          cargo deny check bans licenses sources
+        run: cargo deny check bans licenses sources
 
       - name: Build JS runtime
         working-directory: runtime
@@ -84,7 +99,7 @@ jobs:
       - name: Install E2E browser
         run: |
           npm ci
-          npx playwright install --with-deps chromium
+          npx playwright install chromium
 
       - name: Browser E2E
         run: npm run e2e:all
