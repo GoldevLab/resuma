@@ -1,5 +1,7 @@
 //! HTTP security integration tests — CSRF, origin, rate limits.
 
+#![allow(clippy::await_holding_lock)] // serializes tests that mutate process-wide SecurityConfig
+
 use axum::body::Body;
 use axum::extract::ConnectInfo;
 use axum::http::{header, HeaderValue, Request, StatusCode};
@@ -9,7 +11,13 @@ use resuma::server::{
     validate_origin, SecurityConfig,
 };
 use std::net::SocketAddr;
+use std::sync::{Mutex, MutexGuard};
 use tower::ServiceExt;
+
+fn security_http_lock() -> MutexGuard<'static, ()> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 fn test_connect_info() -> ConnectInfo<SocketAddr> {
     ConnectInfo("127.0.0.1:3000".parse().unwrap())
@@ -17,6 +25,7 @@ fn test_connect_info() -> ConnectInfo<SocketAddr> {
 
 #[test]
 fn security_guards_sequential() {
+    let _guard = security_http_lock();
     configure_security(SecurityConfig {
         csrf: true,
         origin_check: true,
@@ -56,16 +65,24 @@ fn security_guards_sequential() {
     let unique = resuma::exec::id::next_id();
     let ip = format!("10.0.0.{}", (unique % 200) + 1);
     let bucket = format!("test_rate_bucket_{unique}");
-    assert!(guard_mutation(&headers, "localhost", &ip, &bucket, 2, None).is_ok());
-    assert!(guard_mutation(&headers, "localhost", &ip, &bucket, 2, None).is_ok());
+    assert!(
+        guard_mutation(&headers, "localhost", &ip, &bucket, 2, None).is_ok(),
+        "first mutation in the window must pass"
+    );
+    assert!(
+        guard_mutation(&headers, "localhost", &ip, &bucket, 2, None).is_ok(),
+        "second mutation in the window must pass"
+    );
     assert!(matches!(
         guard_mutation(&headers, "localhost", &ip, &bucket, 2, None),
         Err(ResumaError::RateLimited)
     ));
+    configure_security(SecurityConfig::from_env());
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn action_post_without_csrf_returns_403() {
+    let _guard = security_http_lock();
     configure_security(SecurityConfig {
         csrf: true,
         origin_check: false,
@@ -98,6 +115,7 @@ async fn action_post_without_csrf_returns_403() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn interactive_page_includes_csrf_token_in_state() {
+    let _guard = security_http_lock();
     configure_security(SecurityConfig::from_env());
 
     #[component]
