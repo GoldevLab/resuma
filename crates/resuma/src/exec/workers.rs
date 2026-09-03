@@ -123,10 +123,7 @@ impl WorkerContext {
             let changed = t.last_value != Some(value);
             let elapsed = t.last_emit.elapsed() >= PROGRESS_MIN_INTERVAL;
             let milestone = value == 0 || value == 100;
-            if (changed && elapsed)
-                || (changed && milestone)
-                || (milestone && t.last_value != Some(value))
-            {
+            if changed && (elapsed || milestone) {
                 t.last_emit = Instant::now();
                 t.last_value = Some(value);
                 true
@@ -182,7 +179,7 @@ impl WorkerContext {
         .await
         .map_err(|e| crate::core::ResumaError::Other(format!("blocking join: {e}")))?;
         self.check_cancelled()?;
-        out.ok_or_else(|| crate::core::ResumaError::Cancelled)
+        out.ok_or(crate::core::ResumaError::Cancelled)
     }
 
     /// Like [`run_blocking`], with a progress callback (`0..=100`) safe from the blocking thread.
@@ -212,7 +209,7 @@ impl WorkerContext {
                     let changed = t.last_value != Some(value);
                     let elapsed = t.last_emit.elapsed() >= PROGRESS_MIN_INTERVAL;
                     let milestone = value == 0 || value == 100;
-                    if (changed && elapsed) || (changed && milestone) {
+                    if changed && (elapsed || milestone) {
                         t.last_emit = Instant::now();
                         t.last_value = Some(value);
                         true
@@ -229,7 +226,7 @@ impl WorkerContext {
         .await
         .map_err(|e| crate::core::ResumaError::Other(format!("blocking join: {e}")))?;
         self.check_cancelled()?;
-        out.ok_or_else(|| crate::core::ResumaError::Cancelled)
+        out.ok_or(crate::core::ResumaError::Cancelled)
     }
 
     /// Persist a large result outside durable graph JSON (bound to this graph).

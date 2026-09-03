@@ -119,6 +119,14 @@ pub fn load_all4<A, B, C, D>(
     }
 }
 
+/// Type-erased loader dispatch signature used by the Flow registry.
+pub type LoadFn = fn(&FlowRequest) -> LoadDispatch;
+
+pub enum LoadDispatch {
+    Ready(Value),
+    Pending,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,12 +171,4 @@ mod tests {
         );
         assert!(matches!(v, View::Text(t) if t == "1+2+3+4"));
     }
-}
-
-/// Type-erased loader dispatch signature used by the Flow registry.
-pub type LoadFn = fn(&FlowRequest) -> LoadDispatch;
-
-pub enum LoadDispatch {
-    Ready(Value),
-    Pending,
 }

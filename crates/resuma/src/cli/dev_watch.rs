@@ -254,7 +254,7 @@ pub fn is_resuma_dev_watch(cmdline: &str) -> bool {
     let has_cargo = tokens
         .iter()
         .any(|w| *w == "cargo" || w.ends_with("/cargo"));
-    let has_watch = tokens.iter().any(|w| *w == "watch");
+    let has_watch = tokens.contains(&"watch");
     has_cargo && has_watch && (c.contains("watch-prepare") || c.contains("--watch-when-idle"))
 }
 

@@ -74,32 +74,6 @@ pub fn registry_miss_page(module: &str) -> View {
     )))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::server::page_cache::{
-        clear_request_staging, take_response_redirect, take_response_status,
-    };
-
-    #[test]
-    fn redirect_error_stages_302_and_location() {
-        clear_request_staging();
-        let _ = error_page(&FlowError::from_resuma(ResumaError::Redirect(
-            "/login".into(),
-        )));
-        assert_eq!(take_response_status(), Some(302));
-        assert_eq!(take_response_redirect(), Some("/login".to_string()));
-    }
-
-    #[test]
-    fn non_redirect_middleware_error_stages_status_without_location() {
-        clear_request_staging();
-        let _ = error_page(&FlowError::from_resuma(ResumaError::Unauthorized));
-        assert_eq!(take_response_status(), Some(401));
-        assert_eq!(take_response_redirect(), None);
-    }
-}
-
 fn view_error_shell(status: u16, message: &str) -> View {
     View::Element(Element {
         tag: "main".into(),
@@ -129,4 +103,30 @@ fn view_error_shell(status: u16, message: &str) -> View {
         ],
         dom_id: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::server::page_cache::{
+        clear_request_staging, take_response_redirect, take_response_status,
+    };
+
+    #[test]
+    fn redirect_error_stages_302_and_location() {
+        clear_request_staging();
+        let _ = error_page(&FlowError::from_resuma(ResumaError::Redirect(
+            "/login".into(),
+        )));
+        assert_eq!(take_response_status(), Some(302));
+        assert_eq!(take_response_redirect(), Some("/login".to_string()));
+    }
+
+    #[test]
+    fn non_redirect_middleware_error_stages_status_without_location() {
+        clear_request_staging();
+        let _ = error_page(&FlowError::from_resuma(ResumaError::Unauthorized));
+        assert_eq!(take_response_status(), Some(401));
+        assert_eq!(take_response_redirect(), None);
+    }
 }

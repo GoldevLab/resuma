@@ -56,6 +56,7 @@ pub fn client_dir() -> PathBuf {
 }
 
 /// Relative path under the client dir (`play.js`, `fw-inventory.js`). No `..`.
+#[allow(clippy::result_unit_err)]
 pub fn validate_client_disk_file(file: &str) -> Result<(), ()> {
     if file.is_empty() || file.len() > 128 {
         return Err(());
