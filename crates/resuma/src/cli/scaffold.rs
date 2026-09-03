@@ -323,7 +323,8 @@ pub fn create_project(name: &str, template: &str) -> Result<()> {
     println!("[resuma] created `{}` (template: {})", name, template);
     println!("\n  cd {}", name);
     println!("  resuma dev      # hot reload at http://127.0.0.1:3000");
-    println!("  cargo run       # or plain cargo\n");
+    println!("  resuma --help   # build, routes, update, doctor, add…");
+    println!("  cargo run       # works, but no hot reload — prefer resuma dev\n");
     Ok(())
 }
 

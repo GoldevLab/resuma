@@ -259,6 +259,7 @@ impl ResumaApp {
     }
 
     pub async fn serve(self, opts: ServeOptions) -> std::io::Result<()> {
+        super::cli_hint::maybe_hint_cli();
         crate::exec::init_exec().await;
         validate_config(&opts.security).map_err(|e| std::io::Error::other(e.to_string()))?;
         security::configure(opts.security.clone());

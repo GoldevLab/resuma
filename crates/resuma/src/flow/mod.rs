@@ -51,9 +51,9 @@ pub use public::{collect_public_dir, default_public_dir, PublicAsset};
 pub use pwa::{FlowPwaConfig, PwaShortcut};
 pub use redirect::{
     attach_set_cookies, extract_redirect, flash_message, prepare_navigation, redirect,
-    redirect_response, redirect_response_with_cookies, redirect_with_flash, resolve_redirect_location,
-    take_response_cookies, Redirect, COOKIES_KEY, FLASH_KEY, REDIRECT_KEY, REVALIDATE_KEY,
-    REVALIDATE_SENTINEL,
+    redirect_response, redirect_response_with_cookies, redirect_with_flash,
+    resolve_redirect_location, take_response_cookies, Redirect, COOKIES_KEY, FLASH_KEY,
+    REDIRECT_KEY, REVALIDATE_KEY, REVALIDATE_SENTINEL,
 };
 pub use registry::{dispatch_load, dispatch_submit, register_loader, register_submit};
 pub use request::FlowRequest;

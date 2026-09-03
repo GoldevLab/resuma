@@ -15,8 +15,9 @@ const dist = join(__dirname, "..", "dist");
 // Keep in sync with `crates/resuma/src/cli/doctor.rs` and `docs/STABILITY.md`.
 const LOADER_GZIP_BUDGET = 1100;
 // Post-1.0 reactive For/Match/Show + SPA nav; visible tasks + view transitions;
-// mount cleanup registry; safeAction + field_errors; exclusive nav (1.3.x).
-const CORE_GZIP_BUDGET = 8500;
+// mount cleanup registry; safeAction + field_errors; exclusive nav (1.3.x);
+// waitClient / onClientReady (pokeLegens ClientComponent dogfood).
+const CORE_GZIP_BUDGET = 9500;
 
 const defaults = ["loader.js", "core.js", "flow.js", "runtime.js"].map((f) => join(dist, f));
 

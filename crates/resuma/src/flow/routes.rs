@@ -149,9 +149,7 @@ pub async fn handle_submit(
                 attach_set_cookies(&mut res, &cookies);
                 res
             } else if let Some(loc) = redirect {
-                let referer = headers
-                    .get(header::REFERER)
-                    .and_then(|v| v.to_str().ok());
+                let referer = headers.get(header::REFERER).and_then(|v| v.to_str().ok());
                 let loc = super::redirect::resolve_redirect_location(&loc, referer);
                 redirect_response_with_cookies(&loc, &cookies)
             } else {

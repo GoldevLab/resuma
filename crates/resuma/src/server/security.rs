@@ -29,10 +29,6 @@ pub const CSRF_FIELD: &str = "_csrf";
 
 static CONFIG: Lazy<RwLock<SecurityConfig>> = Lazy::new(|| RwLock::new(SecurityConfig::from_env()));
 
-static RATE_INIT: Lazy<()> = Lazy::new(|| {
-    rate_limit::install_default_backend();
-});
-
 /// Content-Security-Policy tuning (Qwik-style per-request nonces + configurable directives).
 ///
 /// In dev (`RESUMA_DEV=1`), CSP is **off** by default so tooling matches Qwik's `isDev` skip.
@@ -199,7 +195,11 @@ impl SecurityConfig {
     ///         .with_action_rate_limit("search", 60),
     /// );
     /// ```
-    pub fn with_action_rate_limit(mut self, name: impl Into<String>, limit_per_minute: u32) -> Self {
+    pub fn with_action_rate_limit(
+        mut self,
+        name: impl Into<String>,
+        limit_per_minute: u32,
+    ) -> Self {
         let name = name.into();
         if !name.is_empty() && limit_per_minute > 0 {
             self.action_rate_limits.insert(name, limit_per_minute);
@@ -539,7 +539,7 @@ fn peer_is_trusted_proxy(connect: Option<SocketAddr>) -> bool {
 
 /// Sliding-window rate limit. Returns `Err(RateLimited)` when exceeded.
 pub fn check_rate_limit(ip: &str, bucket: &str, limit_per_minute: u32) -> Result<()> {
-    Lazy::force(&RATE_INIT);
+    rate_limit::ensure_backend();
     let effective_limit = if ip == "unknown" {
         (limit_per_minute / 4).max(1)
     } else {
@@ -745,6 +745,11 @@ pub fn build_content_security_policy(nonce: Option<&str>, https: bool, csp: &Csp
     directives.push(format!("font-src {}", font_src.join(" ")));
 
     let mut connect_src = vec!["'self'"];
+    if crate::server::dev::dev_mode_enabled() {
+        // Some browsers still require an explicit ws/wss scheme for HMR.
+        connect_src.push("ws:");
+        connect_src.push("wss:");
+    }
     connect_src.extend(csp.connect_src.iter().map(String::as_str));
     directives.push(format!("connect-src {}", connect_src.join(" ")));
 
@@ -1110,7 +1115,7 @@ mod tests {
 
     #[test]
     fn csp_omitted_when_disabled() {
-        let _guard = TEST_LOCK.lock().unwrap();
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         configure(SecurityConfig {
             csp: CspConfig::disabled(),
             ..SecurityConfig::from_env()
@@ -1148,6 +1153,7 @@ mod tests {
 
     #[test]
     fn guard_mutation_strict_origin_when_csrf_enabled() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         configure(SecurityConfig {
             csrf: true,
             origin_check: true,
@@ -1190,6 +1196,7 @@ mod tests {
 
     #[test]
     fn check_action_rate_limit_noops_without_override() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         rate_limit::reset_rate_limits_for_tests();
         configure(SecurityConfig {
             actions_per_minute: 10_000,
@@ -1201,19 +1208,17 @@ mod tests {
 
     #[test]
     fn check_action_rate_limit_trips_when_override_exceeded() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         rate_limit::reset_rate_limits_for_tests();
-        configure(
-            SecurityConfig::from_env()
-                .with_action_rate_limit("login", 2),
-        );
-        assert!(check_action_rate_limit("10.0.0.9", "login").is_ok());
-        assert!(check_action_rate_limit("10.0.0.9", "login").is_ok());
+        let action = "login_rate_limit_trip";
+        configure(SecurityConfig::from_env().with_action_rate_limit(action, 2));
+        assert!(check_action_rate_limit("10.0.0.9", action).is_ok());
+        assert!(check_action_rate_limit("10.0.0.9", action).is_ok());
         assert!(matches!(
-            check_action_rate_limit("10.0.0.9", "login"),
+            check_action_rate_limit("10.0.0.9", action),
             Err(ResumaError::RateLimited)
         ));
-        // A different IP still has budget.
-        assert!(check_action_rate_limit("10.0.0.10", "login").is_ok());
+        assert!(check_action_rate_limit("10.0.0.10", action).is_ok());
     }
 
     #[test]

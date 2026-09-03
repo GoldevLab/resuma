@@ -76,8 +76,44 @@ impl CookieOptions {
     }
 }
 
+fn is_safe_cookie_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 128
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+}
+
+fn is_safe_cookie_value(value: &str) -> bool {
+    value.len() <= 4096
+        && value
+            .chars()
+            .all(|c| c.is_ascii() && !c.is_ascii_control() && !matches!(c, ';' | ',' | '\\'))
+}
+
+fn is_safe_cookie_path(path: &str) -> bool {
+    path.starts_with('/')
+        && path.len() <= 256
+        && path
+            .chars()
+            .all(|c| !c.is_ascii_control() && c != ';' && c != ',')
+}
+
 /// Build a `Set-Cookie` header value (name=value + attributes).
+///
+/// Returns an empty string (skipped by [`crate::flow::redirect::attach_set_cookies`])
+/// when `name`, `value`, or `path` would inject extra cookie attributes.
 pub fn set_cookie(name: &str, value: &str, opts: CookieOptions) -> String {
+    if !is_safe_cookie_name(name)
+        || !is_safe_cookie_value(value)
+        || !is_safe_cookie_path(&opts.path)
+    {
+        tracing::warn!(
+            cookie_name = name,
+            "refusing Set-Cookie — name, value, or path contains forbidden characters"
+        );
+        return String::new();
+    }
     let mut out = format!("{name}={value}; Path={}", opts.path);
     if let Some(max_age) = opts.max_age {
         out.push_str(&format!("; Max-Age={max_age}"));
@@ -118,20 +154,20 @@ pub fn cookie_value(raw: &str, name: &str) -> Option<String> {
 
 fn percent_decode(s: &str) -> String {
     let bytes = s.as_bytes();
-    let mut out = String::with_capacity(s.len());
+    let mut out = Vec::with_capacity(s.len());
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'%' && i + 2 < bytes.len() {
             if let (Some(h), Some(l)) = (from_hex(bytes[i + 1]), from_hex(bytes[i + 2])) {
-                out.push((h << 4 | l) as char);
+                out.push((h << 4) | l);
                 i += 3;
                 continue;
             }
         }
-        out.push(bytes[i] as char);
+        out.push(bytes[i]);
         i += 1;
     }
-    out
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 fn from_hex(b: u8) -> Option<u8> {
@@ -167,5 +203,27 @@ mod tests {
     fn parses_cookie_header() {
         let raw = "a=1; sid=token%2Dvalue; b=2";
         assert_eq!(cookie_value(raw, "sid").as_deref(), Some("token-value"));
+    }
+
+    #[test]
+    fn percent_decode_is_utf8() {
+        let raw = "sid=caf%C3%A9";
+        assert_eq!(cookie_value(raw, "sid").as_deref(), Some("café"));
+    }
+
+    #[test]
+    fn set_cookie_rejects_attribute_injection() {
+        let injected = set_cookie("sid", "abc; Domain=evil.test", CookieOptions::session(60));
+        assert!(injected.is_empty(), "semicolon in value must be rejected");
+        assert!(set_cookie("sid\nSet-Cookie", "x", CookieOptions::default()).is_empty());
+        assert!(set_cookie(
+            "ok",
+            "x",
+            CookieOptions {
+                path: "/; Domain=evil.test".into(),
+                ..CookieOptions::default()
+            }
+        )
+        .is_empty());
     }
 }

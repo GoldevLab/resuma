@@ -48,10 +48,14 @@ pub struct FlowApp {
     extensions: super::extensions::FlowExtensions,
     /// Extra GET routes (e.g. bundled JS/CSS for marketing pages).
     static_assets: Vec<(String, &'static [u8], &'static str)>,
+    /// Client component bundles (`/static/client/{id}.js`) with optional on-disk filename.
+    client_assets: Vec<(String, &'static [u8], String)>,
     /// Additional axum routes (e.g. demo webhook inbox).
     extra_routes: Vec<(String, MethodRouter)>,
     /// Optional `public/` directory (defaults to `{CARGO_MANIFEST_DIR}/public`).
     public_dir: Option<PathBuf>,
+    /// Optional `static/client/` directory for [`crate::client::client_disk_mode`].
+    client_dir: Option<PathBuf>,
     /// When set, merges [`Theme`](crate::Theme) colors into auto PWA config.
     theme_for_pwa: Option<crate::Theme>,
 }
@@ -103,8 +107,10 @@ impl FlowApp {
             pwa_disabled: false,
             extensions: super::extensions::FlowExtensions::default(),
             static_assets: Vec::new(),
+            client_assets: Vec::new(),
             extra_routes: Vec::new(),
             public_dir: None,
+            client_dir: None,
             theme_for_pwa: None,
         }
     }
@@ -114,6 +120,16 @@ impl FlowApp {
     /// Defaults to `{CARGO_MANIFEST_DIR}/public` when not called explicitly.
     pub fn with_public_dir(mut self, dir: impl AsRef<std::path::Path>) -> Self {
         self.public_dir = Some(dir.as_ref().to_path_buf());
+        self
+    }
+
+    /// Directory for [`crate::client::client_disk_mode`] reads (`static/client/{file}`).
+    ///
+    /// Defaults to `{CARGO_MANIFEST_DIR}/static/client` (or `RESUMA_CLIENT_DIR`).
+    pub fn with_client_dir(mut self, dir: impl AsRef<std::path::Path>) -> Self {
+        let dir = dir.as_ref().to_path_buf();
+        crate::client::set_client_dir(&dir);
+        self.client_dir = Some(dir);
         self
     }
 
@@ -143,8 +159,23 @@ impl FlowApp {
     /// Register a TypeScript client component bundle at `/static/client/{id}.js`.
     ///
     /// Records a content digest so HTML script tags use `?v=<hash>` (immutable-safe cache bust).
+    /// On-disk file defaults to `{id}.js` under [`Self::with_client_dir`] when disk mode is on.
     pub fn client_asset(self, id: impl AsRef<str>, body: &'static [u8]) -> Self {
         let id = id.as_ref();
+        let file = format!("{id}.js");
+        self.client_asset_file(id, file, body)
+    }
+
+    /// Like [`Self::client_asset`], but the on-disk filename may differ from `{id}.js`
+    /// (e.g. id `pl-play` → file `play.js` for esbuild output folders).
+    pub fn client_asset_file(
+        mut self,
+        id: impl AsRef<str>,
+        disk_file: impl AsRef<str>,
+        body: &'static [u8],
+    ) -> Self {
+        let id = id.as_ref();
+        let disk_file = disk_file.as_ref();
         if crate::client::validate_client_id(id).is_err() {
             tracing::warn!(
                 client_id = id,
@@ -152,9 +183,19 @@ impl FlowApp {
             );
             return self;
         }
+        if crate::client::validate_client_disk_file(disk_file).is_err() {
+            tracing::warn!(
+                client_id = id,
+                disk_file,
+                "invalid client disk file — asset not registered"
+            );
+            return self;
+        }
         crate::client::register_client_asset_digest(id, body);
-        let path = crate::client::client_script_path(id);
-        self.static_asset(path, body, "application/javascript; charset=utf-8")
+        crate::client::register_client_disk_file(id, disk_file);
+        self.client_assets
+            .push((id.to_string(), body, disk_file.to_string()));
+        self
     }
 
     /// Attach a JSON-serializable value to every request (`req.extension("key")` in loads/submits).
@@ -363,6 +404,7 @@ impl FlowApp {
     }
 
     pub async fn serve(self, opts: FlowServeOptions) -> std::io::Result<()> {
+        crate::server::cli_hint::maybe_hint_cli();
         crate::exec::init_exec().await;
         crate::server::security::validate_config(&opts.security)
             .map_err(|e| std::io::Error::other(e.to_string()))?;
@@ -501,6 +543,29 @@ impl FlowApp {
                 &path,
                 get(move || async move {
                     crate::server::static_assets::static_asset_response(content_type, body)
+                }),
+            );
+        }
+
+        if let Some(dir) = self.client_dir.clone() {
+            crate::client::set_client_dir(dir);
+        }
+
+        for (id, body, _disk_file) in self.client_assets {
+            let path = crate::client::client_script_path(&id);
+            let id_for_handler = id.clone();
+            router = router.route(
+                &path,
+                get(move || {
+                    let id = id_for_handler.clone();
+                    async move {
+                        let bytes = crate::client::client_asset_body(&id, body);
+                        crate::server::static_assets::static_bytes_response(
+                            "application/javascript; charset=utf-8",
+                            bytes,
+                            crate::client::client_asset_cache_control(),
+                        )
+                    }
                 }),
             );
         }

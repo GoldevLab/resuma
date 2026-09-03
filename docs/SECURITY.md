@@ -46,6 +46,12 @@ Resuma ships with **secure defaults** comparable to Express + Helmet + rate limi
 | `RESUMA_UPLOAD_MAX_BYTES` | `8388608` | Max multipart upload size |
 | `RESUMA_PUBLIC_DISK` | off | Serve large `public/` files from disk |
 | `RESUMA_PUBLIC_INLINE_MAX` | `524288` | Inline threshold when `PUBLIC_DISK=1` |
+| `RESUMA_CLIENT_DISK` | follows `RESUMA_DEV` | Serve `/static/client/{id}.js` from disk (`1`/`0` force) |
+| `RESUMA_CLIENT_DIR` | `{CARGO_MANIFEST_DIR}/static/client` | Override client disk root |
+| `RESUMA_SKIP_UPDATE` | off | Skip the `resuma dev` “update Resuma?” prompt |
+| `RESUMA_CLI_HINT` | on | Set `0` to skip the `cargo run` CLI install tip |
+| `RESUMA_VIA_CLI` | set by `resuma dev` | Suppresses the cargo-run hint when the CLI launched the app |
+| `RESUMA_BIND_EXACT` | set by `resuma dev` | Retry the chosen port on restart (do not scan to the next port) |
 | `RESUMA_FETCH_ALLOWLIST` | — | Optional comma-separated host allowlist for `fetch` tool |
 | `RESUMA_FETCH_MAX_BYTES` | `5242880` | Max response body from `fetch` tool (5 MB) |
 | `RESUMA_METRICS_PUBLIC` | off | Allow `GET /_resuma/metrics` without API key (VPC only) |
@@ -200,6 +206,12 @@ budget does not starve unrelated actions.
 Files under `public/` are indexed at startup. By default bodies are loaded into RAM;
 set **`RESUMA_PUBLIC_DISK=1`** so files larger than **`RESUMA_PUBLIC_INLINE_MAX`**
 (default 512 KiB) are read from disk on each request.
+
+**Client bundles** registered via `FlowApp::client_asset` / `client_asset_file` normally
+embed `include_bytes!` at compile time. In **`RESUMA_DEV`** (or **`RESUMA_CLIENT_DISK=1`**)
+the same URL re-reads `{client_dir}/{file}` each request so `npm run watch:client` works
+without restarting the Rust server — set `FlowApp::with_client_dir` (or `RESUMA_CLIENT_DIR`).
+Force memory-only with `RESUMA_CLIENT_DISK=0`.
 
 Content-Types are hardened: `.html` → `text/plain`, `.svg` → `application/octet-stream`
 (not executable document types). **Do not store user uploads in `public/`** — use

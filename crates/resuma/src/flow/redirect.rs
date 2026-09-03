@@ -213,9 +213,9 @@ pub fn extract_redirect(value: &Value) -> Option<String> {
     }
     let obj = value.as_object()?;
     let path = obj.get("redirect")?.as_str()?;
-    let allowed = obj.keys().all(|k| {
-        k == "redirect" || k == COOKIES_KEY || k == "cookies" || k == REVALIDATE_KEY
-    });
+    let allowed = obj
+        .keys()
+        .all(|k| k == "redirect" || k == COOKIES_KEY || k == "cookies" || k == REVALIDATE_KEY);
     if !allowed {
         return None;
     }
@@ -497,10 +497,7 @@ mod tests {
         let mut v = serde_json::to_value(&r).unwrap();
         assert_eq!(v.get(REVALIDATE_KEY), Some(&json!(true)));
         assert!(v.get(REDIRECT_KEY).is_none());
-        assert_eq!(
-            extract_redirect(&v).as_deref(),
-            Some(REVALIDATE_SENTINEL)
-        );
+        assert_eq!(extract_redirect(&v).as_deref(), Some(REVALIDATE_SENTINEL));
         scrub_resuma_meta(&mut v);
         assert!(v.get(REVALIDATE_KEY).is_none());
     }
@@ -511,10 +508,7 @@ mod tests {
             resolve_redirect_location(REVALIDATE_SENTINEL, Some("https://app.test/profile?x=1")),
             "/profile?x=1"
         );
-        assert_eq!(
-            resolve_redirect_location(REVALIDATE_SENTINEL, None),
-            "/"
-        );
+        assert_eq!(resolve_redirect_location(REVALIDATE_SENTINEL, None), "/");
         assert_eq!(resolve_redirect_location("/done", None), "/done");
     }
 }

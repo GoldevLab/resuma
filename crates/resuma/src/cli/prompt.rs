@@ -81,8 +81,41 @@ pub fn prompt_integration() -> Result<String> {
     }
 }
 
+/// Parse a yes/no reply. Empty uses `default_yes`. Accepts y/yes/s/si/sí.
+pub fn parse_confirm(line: &str, default_yes: bool) -> bool {
+    match line.trim().to_ascii_lowercase().as_str() {
+        "" => default_yes,
+        "y" | "yes" | "s" | "si" | "sí" => true,
+        "n" | "no" => false,
+        _ => default_yes,
+    }
+}
+
+/// Interactive yes/no. Returns `default_yes` on empty input.
+pub fn confirm(question: &str, default_yes: bool) -> Result<bool> {
+    let hint = if default_yes { "Y/n" } else { "y/N" };
+    let line = read_line(&format!("{question} [{hint}]: "))?;
+    Ok(parse_confirm(&line, default_yes))
+}
+
 pub fn missing_arg(hint: &str) -> Result<()> {
     Err(anyhow!(
         "{hint}\n  (pass the argument directly, or run in an interactive terminal)"
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_confirm_defaults_and_aliases() {
+        assert!(!parse_confirm("", false));
+        assert!(parse_confirm("", true));
+        assert!(parse_confirm("y", false));
+        assert!(parse_confirm("YES", false));
+        assert!(parse_confirm("si", false));
+        assert!(!parse_confirm("n", true));
+        assert!(!parse_confirm("no", true));
+    }
 }

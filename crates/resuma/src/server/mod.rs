@@ -25,6 +25,7 @@
 
 pub mod actions;
 pub mod app;
+pub mod cli_hint;
 pub mod compressed_asset;
 pub mod deferred_stream;
 pub mod dev;

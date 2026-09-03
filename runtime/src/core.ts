@@ -13,6 +13,7 @@ import { initNavLinks, followRedirect, navigate, buildUrl, invalidate, setPageMo
 import { runVisibleTasks, type VisibleTaskEntry } from "./visible-tasks.js";
 import { flushMountCleanups } from "./mount-cleanups.js";
 import { beginPortalMount, mountStaticPortals } from "./portals.js";
+import { onClientReady, waitClient } from "./client-ready.js";
 import type { ResumaGlobal } from "./types.js";
 import "./types.js";
 
@@ -194,6 +195,8 @@ export function mountPage(): void {
     navigate,
     buildUrl,
     invalidate,
+    waitClient,
+    onClientReady,
   };
   window.__resuma = __resuma;
   if (handlerChunks.size) warmHandlerChunks(handlerChunks);
@@ -517,40 +520,14 @@ async function refreshIsland(instance: string): Promise<void> {
 }
 
 function connectDevBridge(): void {
-  // Only in dev: the dev-reload script (injected when RESUMA_DEV=1) sets this
-  // flag. In production the /_resuma/dev/ws route does not exist, so connecting
-  // would loop on reconnects forever.
+  // The injected dev-reload script owns the single HMR WebSocket and reloads
+  // the page on reconnect. core.js only handles island patches via the
+  // `resuma:dev` event — a second socket would double-reload and fight drain.
   if (!(window as unknown as { __resumaDev?: boolean }).__resumaDev) return;
-  if (typeof WebSocket === "undefined") return;
-  const proto = location.protocol === "https:" ? "wss" : "ws";
-  let hadConnection = false;
-
-  const connect = (): void => {
-    const ws = new WebSocket(`${proto}://${location.host}/_resuma/dev/ws`);
-    ws.addEventListener("open", () => {
-      if (hadConnection) {
-        location.reload();
-        return;
-      }
-      hadConnection = true;
-    });
-    ws.addEventListener("message", (ev) => {
-      const msg = String(ev.data);
-      if (msg === "reload") {
-        location.reload();
-        return;
-      }
-      if (msg.startsWith("island:")) {
-        void refreshIsland(msg.slice("island:".length));
-      }
-    });
-    ws.addEventListener("close", () => {
-      setTimeout(connect, 500);
-    });
-    ws.addEventListener("error", () => {
-      ws.close();
-    });
-  };
-
-  connect();
+  window.addEventListener("resuma:dev", (ev) => {
+    const msg = String((ev as CustomEvent<string>).detail ?? "");
+    if (msg.startsWith("island:")) {
+      void refreshIsland(msg.slice("island:".length));
+    }
+  });
 }

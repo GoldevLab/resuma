@@ -1,6 +1,6 @@
-# Stability policy (1.0)
+# Stability policy (1.3)
 
-Resuma **1.0.0** marks a stable public API for production use.
+Resuma **1.3.x** follows the stable public API committed at 1.0.0.
 
 ## Semver
 
@@ -46,7 +46,7 @@ Documented in `runtime/scripts/measure.mjs` and enforced in CI:
 | Asset | Gzip budget |
 |-------|-------------|
 | `loader.js` | ≤ 1100 B |
-| `core.js` | ≤ 8500 B |
+| `core.js` | ≤ 9500 B |
 | `flow.js` | lazy (exec/Flow widgets only) |
 
 These match `runtime/scripts/measure.mjs` (CI) and `resuma doctor`.

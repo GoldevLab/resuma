@@ -77,7 +77,9 @@ pub fn registry_miss_page(module: &str) -> View {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::page_cache::{clear_request_staging, take_response_redirect, take_response_status};
+    use crate::server::page_cache::{
+        clear_request_staging, take_response_redirect, take_response_status,
+    };
 
     #[test]
     fn redirect_error_stages_302_and_location() {

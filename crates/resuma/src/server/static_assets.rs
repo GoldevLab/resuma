@@ -31,6 +31,21 @@ pub fn static_asset_response(
     )
 }
 
+/// Owned-bytes variant (disk-backed client assets, etc.).
+pub fn static_bytes_response(
+    content_type: &str,
+    body: Vec<u8>,
+    cache_control: &'static str,
+) -> ([(header::HeaderName, HeaderValue); 2], Vec<u8>) {
+    let ct = HeaderValue::from_str(content_type)
+        .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream"));
+    let cache = HeaderValue::from_static(cache_control);
+    (
+        [(header::CONTENT_TYPE, ct), (header::CACHE_CONTROL, cache)],
+        body,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

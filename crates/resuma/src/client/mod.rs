@@ -18,11 +18,23 @@
 //! [`client_script_url`] emits `?v=<hash>`. Browsers cache `/static/client/{id}.js` as immutable;
 //! the query busts the cache when bytes change — no manual `v2`/`v3` renames.
 //!
+//! In `RESUMA_DEV` (or `RESUMA_CLIENT_DISK=1`), handlers re-read `{client_dir}/{id}.js` so
+//! `npm run watch:client` refreshes without a cargo rebuild. After the module runs,
+//! `ClientComponent` fires `resuma:client-ready` — use `__resuma.waitClient(id)` instead of polling.
+//!
 //! ## TypeScript
 //!
 //! Copy [`client-sdk/resuma-client.ts`](https://github.com/GoldevLab/resuma/blob/main/client-sdk/resuma-client.ts)
 //! into your app and call [`bootClientComponent`](https://github.com/GoldevLab/resuma/blob/main/client-sdk/resuma-client.ts)
 //! from each bundled entry.
+
+mod disk;
+
+pub use disk::{
+    client_asset_body, client_asset_cache_control, client_dir, client_disk_mode, client_disk_rel,
+    default_client_dir, read_client_disk_bytes, register_client_disk_file,
+    resolve_client_disk_path, set_client_dir, validate_client_disk_file,
+};
 
 use std::collections::HashMap;
 
@@ -115,15 +127,18 @@ impl ClientComponent {
 ///
 /// When the asset was registered via [`register_client_asset_digest`], appends `?v=<digest>`
 /// so `Cache-Control: immutable` stays correct across content changes.
+///
+/// Under [`client_disk_mode`], prefers a live digest of the on-disk file so watch rebuilds
+/// bust the module URL without restarting the Rust server.
 pub fn client_script_url(id: &str) -> String {
-    let path = client_script_path(id);
-    match CLIENT_DIGESTS.read().get(id) {
-        Some(v) => format!("{path}?v={v}"),
-        None => path,
-    }
+    let memory = CLIENT_DIGESTS.read().get(id).cloned();
+    disk::client_script_url_disk_aware(id, memory.as_deref())
 }
 
-/// Mount point + deferred module script for a [`ClientComponent`].
+/// Mount point + deferred module that imports the bundle then fires `resuma:client-ready`.
+///
+/// Prefer `__resuma.waitClient(id)` (or `onClientReady`) over polling `window.*` globals —
+/// the race with deferred scripts is what pokeLegens dogfood hit.
 pub fn client_component(comp: ClientComponent) -> View {
     if let Err(()) = validate_client_id(&comp.id) {
         tracing::warn!(
@@ -154,17 +169,41 @@ pub fn client_component(comp: ClientComponent) -> View {
         }
     }
 
-    let script = escape_attr(&comp.script_url());
+    let script_url = comp.script_url();
+    let script_js = escape_js_str(&script_url);
     let nonce = crate::server::page_csp_nonce();
     let nonce_attr = if nonce.is_empty() {
         String::new()
     } else {
         format!(r#" nonce="{}""#, escape_attr(&nonce))
     };
+    // Import only — `bootClientComponent` / `notifyClientReady` fire
+    // `resuma:client-ready` after sync or async init, not at import time.
     View::raw(format!(
         r#"<div {attrs}></div>
-<script type="module" src="{script}" defer{nonce_attr}></script>"#
+<script type="module" defer{nonce_attr}>
+import "{script_js}";
+</script>"#
     ))
+}
+
+fn escape_js_str(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for c in value.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '<' => out.push_str("\\u003c"),
+            '>' => out.push_str("\\u003e"),
+            '&' => out.push_str("\\u0026"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\u{2028}' => out.push_str("\\u2028"),
+            '\u{2029}' => out.push_str("\\u2029"),
+            other => out.push(other),
+        }
+    }
+    out
 }
 
 /// Validate a client component bundle id (`/static/client/{id}.js`).
@@ -211,7 +250,11 @@ mod tests {
         assert!(html.contains(r#"data-r-client="hero-particles""#));
         assert!(html.contains(r#"id="r-client-hero-particles""#));
         assert!(html.contains(r#"class="hero-particles""#));
-        assert!(html.contains(r#"src="/static/client/hero-particles.js""#));
+        assert!(html.contains(r#"import "/static/client/hero-particles.js""#));
+        assert!(
+            !html.contains("resuma:client-ready"),
+            "ready is signaled by bootClientComponent after init, not the import wrapper"
+        );
     }
 
     #[test]
@@ -238,7 +281,7 @@ mod tests {
             View::Raw(s) => s,
             _ => panic!("expected raw view"),
         };
-        assert!(html.contains(&format!(r#"src="{expected}""#)));
+        assert!(html.contains(&format!(r#"import "{expected}""#)));
     }
 
     #[test]

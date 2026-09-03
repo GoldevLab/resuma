@@ -6,8 +6,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-03
+
 ### Fixed
 
+- **`set_page_description` / `lang` attribute injection** — the document
+  `<meta name="description">` and `<html lang>` now use `escape_attr` (same as
+  Open Graph tags). A CMS excerpt with quotes can no longer inject
+  `http-equiv="refresh"`.
+- **ClientComponents survive SPA navigation** — `innerHTML` swaps re-import
+  `/static/client/*.js` modules; `bootClientComponent` remounts on
+  `resuma:navigate` and signals ready only after sync or async init.
+- **`set_cookie` rejects `;` / CR/LF / controls** in name, value, and path so
+  session helpers cannot inject extra cookie attributes.
+- **Cookie percent-decoding is UTF-8** — `caf%C3%A9` reads as `café`.
+- **Rate-limit test backend** — `check_rate_limit` no longer reinstalls the
+  env backend after tests switch to memory (the first request used to wipe
+  the reset and miss per-action limits).
 - **`resuma dev` no longer kills port 3000 by default** — starting a second app used to
   `fuser -k` the first one. Kill is now opt-in (`--kill-stale`); when `:3000` is busy the
   CLI picks the next free port (`3001`, …) and sets `RESUMA_ADDR` so both apps stay up.
@@ -19,6 +34,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`resuma dev` offers a safe Resuma update** — asks first; only bumps
+  `resuma` / `resuma-macros` via `cargo add` + `cargo update`. Path deps and
+  `--no-update` / `RESUMA_SKIP_UPDATE=1` skip the prompt.
+- **`cargo run` CLI tip** — recommends `resuma dev`; in a TTY can install the
+  CLI and print the command list. Off in production, under `resuma dev`
+  (`RESUMA_VIA_CLI=1`), or `RESUMA_CLI_HINT=0`.
+- **`__resuma.waitClient` / `onClientReady`** — wait for a ClientComponent
+  `id` after `bootClientComponent` finishes (pokeLegens / False World dogfood).
+- **`FlowApp::client_asset_file` + `RESUMA_CLIENT_DISK`** — live disk reads of
+  `/static/client/{file}` in dev so `npm run watch:client` does not need a
+  cargo rebuild.
 - **`loader_poll(path, interval_ms)`** — live dashboard helper that re-runs `#[load]` via
   SPA `__resuma.invalidate` on an interval (visible-task + mount cleanup; skips hidden
   tabs). Dogfooded by JobBot replacing `<meta http-equiv="refresh">`.
@@ -31,6 +57,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   disables submit controls while the request is in flight.
 - **File routes `_id_.rs`** — module-safe param files now map to `/…/:id` the same as
   `[id].rs` (JobBot `/jobs/:id` was registering as a literal `/jobs/_id_` before).
+- **Hot reload stayed on the same port** — `resuma dev` sets `RESUMA_BIND_EXACT=1` so
+  a cargo-watch restart retries `:3000` instead of hopping to `:3001` (browser HMR
+  was left talking to a dead process).
+- **One HMR WebSocket** — the injected dev script owns the socket; `core.js` only
+  handles `island:` patches via `resuma:dev`. Two sockets used to double-reload and
+  keep graceful shutdown waiting on the browser.
+- **Dev sockets close on SIGTERM** so `cargo watch` can recycle the process immediately.
+- **HMR reconnect backs off** (400 ms → 2 s) while the crate recompiles.
+- **Flow routes regenerate on each watch cycle** (`resuma watch-prepare`) so new
+  `src/pages/*.rs` files appear without restarting the CLI. Generated `_registry.rs`
+  / `mod.rs` are ignored by cargo-watch to avoid a write loop.
 
 ## [1.3.0] - 2026-08-03
 

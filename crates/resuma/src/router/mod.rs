@@ -145,9 +145,7 @@ fn convert_segment(seg: &str) -> String {
     {
         let inner = &seg[1..seg.len() - 1];
         if !inner.is_empty()
-            && inner
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+            && inner.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
             && !inner.contains("__")
         {
             return format!(":{inner}");

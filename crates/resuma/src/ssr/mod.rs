@@ -284,9 +284,9 @@ fn wrap_document(
 {dev_script}
 </body>
 </html>"#,
-        lang = lang,
+        lang = escape_attr(lang),
         title = escape_text(&title),
-        description = escape_text(&description),
+        description = escape_attr(&description),
         seo_tags = seo_tags,
         json_ld = json_ld,
         head = head,
@@ -653,6 +653,56 @@ fn is_void_element(tag: &str) -> bool {
             | "track"
             | "wbr"
     )
+}
+
+#[cfg(test)]
+mod document_escape_tests {
+    use super::*;
+    use crate::core::view::View;
+
+    #[test]
+    fn description_quotes_cannot_break_out_of_meta() {
+        crate::server::page_cache::clear_request_staging();
+        crate::server::page_cache::set_page_description(
+            r#"hi" http-equiv="refresh" content="0;url=https://evil.test"#,
+        );
+        let html = render_to_string(
+            &PageOptions {
+                title: "App".into(),
+                ..Default::default()
+            },
+            || View::text("ok"),
+        );
+        assert!(
+            !html.contains(r#"content="hi" http-equiv"#),
+            "unescaped quote breaks meta: {html}"
+        );
+        assert!(
+            html.contains("&quot;"),
+            "description must be attribute-escaped: {html}"
+        );
+        crate::server::page_cache::clear_request_staging();
+    }
+
+    #[test]
+    fn lang_is_attribute_escaped() {
+        let html = render_to_string(
+            &PageOptions {
+                title: "App".into(),
+                lang: r#"en"><img src=x onerror=alert(1)>"#.into(),
+                ..Default::default()
+            },
+            || View::text("ok"),
+        );
+        assert!(
+            !html.contains(r#"<img src=x"#),
+            "lang must not inject tags: {html}"
+        );
+        assert!(
+            html.contains("&quot;") || html.contains("&lt;"),
+            "lang must be attribute-escaped: {html}"
+        );
+    }
 }
 
 #[cfg(test)]

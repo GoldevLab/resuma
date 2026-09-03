@@ -273,7 +273,9 @@ async fn flow_middleware_redirect_returns_bare_302_with_location() {
     fn Gate() {
         use resuma::core::ResumaError;
         use resuma::flow::errors::{error_page, FlowError};
-        error_page(&FlowError::from_resuma(ResumaError::Redirect("/login".into())))
+        error_page(&FlowError::from_resuma(ResumaError::Redirect(
+            "/login".into(),
+        )))
     }
 
     let app = FlowApp::new()
@@ -292,7 +294,10 @@ async fn flow_middleware_redirect_returns_bare_302_with_location() {
     let body = axum::body::to_bytes(res.into_body(), usize::MAX)
         .await
         .unwrap();
-    assert!(body.is_empty(), "redirect response must not carry an HTML body");
+    assert!(
+        body.is_empty(),
+        "redirect response must not carry an HTML body"
+    );
 }
 
 /// A `#[layout]` body can only see the request via `current_request()` (the
@@ -320,8 +325,7 @@ async fn layout_sees_middleware_populated_request_via_current_request() {
 
     #[layout("/regr-layout-req")]
     fn RegrLayout() -> View {
-        let marked = current_request()
-            .is_some_and(|r| r.extension("test_marker").is_some());
+        let marked = current_request().is_some_and(|r| r.extension("test_marker").is_some());
         view! {
             <div>
                 { if marked { "marked" } else { "unmarked" } }

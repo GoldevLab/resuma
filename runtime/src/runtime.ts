@@ -27,6 +27,7 @@ import { followRedirect, initNavLinks, setPageMounter, navigate, buildUrl, inval
 import { runVisibleTasks, type VisibleTaskEntry } from "./visible-tasks.js";
 import { flushMountCleanups } from "./mount-cleanups.js";
 import { beginPortalMount, mountStaticPortals } from "./portals.js";
+import { onClientReady, waitClient } from "./client-ready.js";
 import type { ResumaGlobal } from "./types.js";
 import "./types.js";
 
@@ -104,6 +105,8 @@ function mountCurrentPage(): void {
     handlers: payload.handlers,
     contexts: payload.contexts ?? {},
     loaded: prev?.loaded ?? new Map(),
+    islandLoaded: prev?.islandLoaded ?? new Map(),
+    chunkDigests: prev?.chunkDigests ?? {},
     action: callServerAction,
     safeAction: callServerActionSafe,
     refreshIsland,
@@ -111,6 +114,8 @@ function mountCurrentPage(): void {
     navigate,
     buildUrl,
     invalidate,
+    waitClient,
+    onClientReady,
   };
   window.__resuma = __resuma;
 

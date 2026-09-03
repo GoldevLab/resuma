@@ -67,6 +67,14 @@ cd my-app
 resuma dev
 ```
 
+`resuma dev` may ask to update the `resuma` crate (yes/no). It only bumps
+`resuma` / `resuma-macros` — path dependencies and your app sources are left
+alone. Saving a file rebuilds on the same port and refreshes the browser
+(Flow also regenerates `src/pages/_registry.rs` when you add a page).
+`cargo run` works but has no hot reload; the server will suggest
+`cargo install resuma` and list CLI commands. Skip prompts with
+`resuma dev --no-update`, `RESUMA_SKIP_UPDATE=1`, or `RESUMA_CLI_HINT=0`.
+
 | Template | What you get |
 |----------|--------------|
 | `basic` | Single SSR page, zero client JS |

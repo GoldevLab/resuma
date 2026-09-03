@@ -115,5 +115,6 @@ pub async fn shutdown_signal() {
         _ = terminate => {}
     }
 
+    crate::server::dev::notify_dev_shutdown();
     tracing::info!("shutdown signal received; draining connections");
 }

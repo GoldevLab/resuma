@@ -44,9 +44,9 @@ pub fn stream_head(opts: &PageOptions, path: &str) -> String {
 </head>
 <body>
 <div id="resuma-root">"#,
-        lang = lang,
+        lang = escape_attr(lang),
         title = escape_text(&title),
-        description = escape_text(&description),
+        description = escape_attr(&description),
         seo_tags = seo_tags,
         json_ld = json_ld,
         head = head,
@@ -137,4 +137,33 @@ where
         yield Ok(body);
         yield Ok(tail);
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ssr::PageOptions;
+
+    #[test]
+    fn stream_head_escapes_description_and_lang() {
+        crate::server::page_cache::clear_request_staging();
+        crate::server::page_cache::set_page_description(r#"x" http-equiv="refresh"#);
+        let head = stream_head(
+            &PageOptions {
+                title: "App".into(),
+                lang: r#"en" onclick="x"#.into(),
+                ..Default::default()
+            },
+            "/",
+        );
+        assert!(
+            !head.contains(r#"content="x" http-equiv"#),
+            "stream head leaked description quotes: {head}"
+        );
+        assert!(
+            !head.contains(r#"lang="en" onclick"#),
+            "stream head leaked lang quotes: {head}"
+        );
+        crate::server::page_cache::clear_request_staging();
+    }
 }

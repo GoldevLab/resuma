@@ -196,6 +196,100 @@ fn versions_compatible(current: &str, target: &str) -> bool {
     current == target || current.starts_with(&format!("{target}.")) || target.starts_with(current)
 }
 
+fn parse_semver(s: &str) -> (u64, u64, u64) {
+    let mut parts = s
+        .trim()
+        .trim_start_matches('v')
+        .split(|c: char| !c.is_ascii_digit());
+    let maj = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
+    let min = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
+    let pat = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
+    (maj, min, pat)
+}
+
+/// True when `current` is a lower semver than `target` (`1.2.16` < `1.3.0`).
+pub(crate) fn version_is_older(current: &str, target: &str) -> bool {
+    parse_semver(current) < parse_semver(target)
+}
+
+fn env_skip_update() -> bool {
+    matches!(
+        std::env::var("RESUMA_SKIP_UPDATE").as_deref(),
+        Ok("1") | Ok("true") | Ok("TRUE") | Ok("yes")
+    )
+}
+
+/// Offer a safe project (and optional CLI) update at the start of `resuma dev`.
+///
+/// Never edits path dependencies. Only runs `cargo add resuma@X` +
+/// `cargo update -p resuma -p resuma-macros` after an explicit yes.
+/// Failures are returned so `dev` can warn and continue.
+pub fn offer_dev_update(skip: bool) -> Result<()> {
+    if skip || env_skip_update() {
+        return Ok(());
+    }
+
+    let root = std::env::current_dir()?;
+    let cargo_path = root.join("Cargo.toml");
+    if !cargo_path.exists() {
+        return Ok(());
+    }
+    let cargo = std::fs::read_to_string(&cargo_path)?;
+    let dep = match parse_resuma_dependency(&cargo) {
+        Some(d) => d,
+        None => return Ok(()),
+    };
+
+    if matches!(dep, ResumaDependency::Path(_)) {
+        return Ok(());
+    }
+
+    let current = match &dep {
+        ResumaDependency::Version(v) => v.as_str(),
+        ResumaDependency::Path(_) => return Ok(()),
+    };
+
+    let crates_latest = latest_crates_io_version("resuma");
+    let target = crates_latest.as_deref().unwrap_or(CLI_VERSION);
+
+    if version_is_older(current, target) {
+        println!("[resuma] this project uses resuma {current}; {target} is available.");
+        println!(
+            "[resuma] update only bumps `resuma` / `resuma-macros` (cargo add + cargo update)."
+        );
+        println!("[resuma] your app sources and other crates are left alone.");
+        if super::prompt::is_interactive() {
+            if super::prompt::confirm("Update Resuma in this project?", false)? {
+                update_project(false, Some(target))?;
+            } else {
+                println!("[resuma] skipped — run `resuma update` later if you want");
+            }
+        } else {
+            println!("[resuma] non-interactive — run `resuma update` to bump");
+        }
+    }
+
+    maybe_offer_cli_update(crates_latest.as_deref())
+}
+
+fn maybe_offer_cli_update(crates_latest: Option<&str>) -> Result<()> {
+    let Some(latest) = crates_latest else {
+        return Ok(());
+    };
+    if !version_is_older(CLI_VERSION, latest) {
+        return Ok(());
+    }
+    println!("[resuma] this CLI is v{CLI_VERSION}; crates.io has v{latest}.");
+    if !super::prompt::is_interactive() {
+        println!("[resuma] run `resuma update --cli` to reinstall the CLI");
+        return Ok(());
+    }
+    if super::prompt::confirm("Update the global `resuma` CLI?", false)? {
+        update_cli(false, Some(latest))?;
+    }
+    Ok(())
+}
+
 fn installed_cli_version() -> Option<String> {
     Command::new("resuma")
         .arg("--version")
@@ -257,5 +351,13 @@ resuma = { path = "../../crates/resuma" }
             Some(ResumaDependency::Path(p)) => assert!(p.contains("crates/resuma")),
             other => panic!("expected path dep, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn version_is_older_compares_semver_parts() {
+        assert!(version_is_older("1.2.16", "1.3.0"));
+        assert!(version_is_older("1.3", "1.3.1"));
+        assert!(!version_is_older("1.3.0", "1.3"));
+        assert!(!version_is_older("1.3.1", "1.3.0"));
     }
 }

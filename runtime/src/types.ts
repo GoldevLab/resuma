@@ -35,12 +35,16 @@ export interface ResumaGlobal {
   ) => Promise<void>;
   buildUrl: (path: string, query?: Record<string, string | null | undefined>) => string;
   invalidate: (path?: string, query?: Record<string, string | null | undefined>) => Promise<void>;
+  /** Resolve when ClientComponent `id` finished init (`bootClientComponent` / `notifyClientReady`). */
+  waitClient: (id: string, timeoutMs?: number) => Promise<void>;
+  onClientReady: (id: string, cb: () => void) => () => void;
 }
 
 declare global {
   interface Window {
     __resuma?: ResumaGlobal;
     __resumaCoreReady?: Promise<void>;
+    __resumaClientReady?: Record<string, unknown>;
   }
 }
 

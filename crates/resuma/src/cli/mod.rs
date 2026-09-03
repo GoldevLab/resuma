@@ -76,6 +76,9 @@ enum Commands {
         /// Deprecated alias: kill-stale is already off by default.
         #[arg(long = "no-kill-stale", hide = true)]
         no_kill_stale: bool,
+        /// Skip the optional “update Resuma?” prompt at startup.
+        #[arg(long = "no-update")]
+        no_update: bool,
     },
     /// Build a production binary + JS bundles.
     Build {
@@ -102,6 +105,12 @@ enum Commands {
         /// Generate `src/pages/_registry.rs` scaffold.
         #[arg(long)]
         generate: bool,
+    },
+    /// Hidden hook used by `resuma dev` / cargo-watch before each `cargo run`.
+    #[command(hide = true, name = "watch-prepare")]
+    WatchPrepare {
+        #[arg(long, default_value = "src/pages")]
+        pages: PathBuf,
     },
 }
 
@@ -145,10 +154,11 @@ pub fn run() -> Result<()> {
             skip_runtime,
             kill_stale,
             no_kill_stale,
+            no_update,
         } => {
             // `--no-kill-stale` is a no-op (default); keep accepting it for old scripts.
             let _ = no_kill_stale;
-            dev_command(&addr, open, skip_runtime, kill_stale)
+            dev_command(&addr, open, skip_runtime, kill_stale, no_update)
         }
         Commands::Build {
             static_export,
@@ -157,7 +167,12 @@ pub fn run() -> Result<()> {
             base_url,
         } => build_command(static_export, &out, &pages, base_url.as_deref()),
         Commands::Routes { path, generate } => routes_command(&path, generate),
+        Commands::WatchPrepare { pages } => watch_prepare_command(&pages),
     }
+}
+
+fn watch_prepare_command(pages: &Path) -> Result<()> {
+    maybe_regenerate_routes(pages)
 }
 
 fn new_command(name: Option<String>, template: Option<String>) -> Result<()> {
@@ -286,7 +301,16 @@ fn ensure_cargo_watch() -> Result<()> {
     Ok(())
 }
 
-fn dev_command(addr: &str, open: bool, skip_runtime: bool, kill_stale: bool) -> Result<()> {
+fn dev_command(
+    addr: &str,
+    open: bool,
+    skip_runtime: bool,
+    kill_stale: bool,
+    no_update: bool,
+) -> Result<()> {
+    if let Err(err) = update::offer_dev_update(no_update) {
+        eprintln!("[resuma] update check skipped: {err}");
+    }
     ensure_rust_toolchain()?;
     ensure_cargo_watch()?;
     if !skip_runtime {
@@ -335,20 +359,33 @@ fn dev_command(addr: &str, open: bool, skip_runtime: bool, kill_stale: bool) -> 
     }
     std::env::set_var("RESUMA_DEV", "1");
 
+    let exe = std::env::current_exe().context("could not resolve resuma executable")?;
+    let hook = format!(
+        "{} watch-prepare && cargo run",
+        shell_quote(&exe.to_string_lossy())
+    );
+
     let mut watch_args = vec![
         "watch".to_string(),
         "-q".to_string(),
+        "-d".to_string(),
+        "0.3".to_string(),
         "-w".to_string(),
         "src".to_string(),
         "-w".to_string(),
         "public".to_string(),
         "-w".to_string(),
         "Cargo.toml".to_string(),
+        "-i".to_string(),
+        "src/pages/_registry.rs".to_string(),
+        "-i".to_string(),
+        "src/pages/mod.rs".to_string(),
+        "--watch-when-idle".to_string(),
     ];
     #[cfg(windows)]
     watch_args.push("--poll".to_string());
-    watch_args.push("-x".to_string());
-    watch_args.push("run".to_string());
+    watch_args.push("-s".to_string());
+    watch_args.push(hook);
 
     println!("[resuma] hot reload enabled — save a file to rebuild and refresh the browser");
 
@@ -356,6 +393,9 @@ fn dev_command(addr: &str, open: bool, skip_runtime: bool, kill_stale: bool) -> 
         .args(&watch_args)
         .env("RESUMA_ADDR", addr)
         .env("RESUMA_DEV", "1")
+        .env("RESUMA_VIA_CLI", "1")
+        .env("RESUMA_BIND_EXACT", "1")
+        .env("RESUMA_CLI_HINT", "0")
         .env("RUST_LOG", "info,resuma=debug")
         .status()
         .context("failed to spawn cargo watch")?;
@@ -364,6 +404,17 @@ fn dev_command(addr: &str, open: bool, skip_runtime: bool, kill_stale: bool) -> 
         return Err(anyhow!("dev exited with status {:?}", status.code()));
     }
     Ok(())
+}
+
+fn shell_quote(path: &str) -> String {
+    #[cfg(windows)]
+    {
+        format!("\"{}\"", path.replace('"', ""))
+    }
+    #[cfg(not(windows))]
+    {
+        format!("'{}'", path.replace('\'', "'\\''"))
+    }
 }
 
 fn open_browser(url: &str) {
@@ -787,16 +838,30 @@ fn generate_routes(pages: &Path) -> Result<()> {
     let mod_code = generate_pages_mod(&routes);
     let registry_code = generate_pages_registry(&routes);
 
-    std::fs::write(&mod_rs, mod_code)
+    let wrote_mod = write_if_changed(&mod_rs, &mod_code)
         .with_context(|| format!("failed to write {}", mod_rs.display()))?;
-    std::fs::write(&registry, registry_code)
+    let wrote_reg = write_if_changed(&registry, &registry_code)
         .with_context(|| format!("failed to write {}", registry.display()))?;
-    println!(
-        "[resuma] generated {} and {}",
-        mod_rs.display(),
-        registry.display()
-    );
+    if wrote_mod || wrote_reg {
+        println!(
+            "[resuma] generated {} and {}",
+            mod_rs.display(),
+            registry.display()
+        );
+    }
     Ok(())
+}
+
+fn write_if_changed(path: &Path, contents: &str) -> std::io::Result<bool> {
+    if path.exists() {
+        if let Ok(existing) = std::fs::read_to_string(path) {
+            if existing == contents {
+                return Ok(false);
+            }
+        }
+    }
+    std::fs::write(path, contents)?;
+    Ok(true)
 }
 
 use std::collections::BTreeMap;
@@ -979,4 +1044,30 @@ fn generate_pages_registry(routes: &[crate::router::DiscoveredRoute]) -> String 
              }\n",
     );
     code
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn write_if_changed_skips_identical_bytes() {
+        let dir = std::env::temp_dir().join(format!("resuma-write-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("out.rs");
+        assert!(write_if_changed(&path, "hello\n").unwrap());
+        let mtime = std::fs::metadata(&path).unwrap().modified().unwrap();
+        assert!(!write_if_changed(&path, "hello\n").unwrap());
+        let mtime2 = std::fs::metadata(&path).unwrap().modified().unwrap();
+        assert_eq!(mtime, mtime2);
+        assert!(write_if_changed(&path, "world\n").unwrap());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn shell_quote_wraps_path() {
+        let q = shell_quote("/opt/resuma");
+        assert!(q.contains("resuma"));
+        assert!(q.starts_with('\'') || q.starts_with('"'));
+    }
 }

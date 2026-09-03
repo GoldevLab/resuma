@@ -1,6 +1,6 @@
 # Resuma roadmap — production readiness
 
-**Current release: v1.3.0 (Stable)** — see [STABILITY.md](docs/STABILITY.md).
+**Current release: v1.3.1 (Stable)** — see [STABILITY.md](docs/STABILITY.md).
 
 ---
 

@@ -1,6 +1,7 @@
 //! Pluggable rate-limit backends — in-memory (dev) and disk (production).
 
 use std::collections::{HashMap, VecDeque};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -79,6 +80,17 @@ fn memory_check(key: &str, limit_per_minute: u32, window: Duration) -> Result<()
 static BACKEND: Lazy<RwLock<Arc<dyn RateLimitBackend>>> =
     Lazy::new(|| RwLock::new(Arc::new(MemoryBackend)));
 
+static DEFAULT_INSTALLED: AtomicBool = AtomicBool::new(false);
+
+/// Install the env-selected backend once. Tests call [`reset_rate_limits_for_tests`]
+/// afterwards so `install_default_backend` cannot clobber the memory store.
+pub fn ensure_backend() {
+    if DEFAULT_INSTALLED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    install_default_backend();
+}
+
 /// Replace the global rate-limit backend (e.g. custom store in tests).
 pub fn configure_rate_limit_backend(backend: Arc<dyn RateLimitBackend>) {
     *BACKEND.write() = backend;
@@ -124,6 +136,7 @@ pub fn check_rate_limit_key(key: &str, limit_per_minute: u32) -> Result<()> {
 /// Clear in-memory counters and force the memory backend (integration tests).
 #[doc(hidden)]
 pub fn reset_rate_limits_for_tests() {
+    DEFAULT_INSTALLED.store(true, Ordering::SeqCst);
     configure_rate_limit_backend(Arc::new(MemoryBackend));
     let mut state = MEMORY_STATE.write();
     state.buckets.clear();

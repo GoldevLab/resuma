@@ -3,6 +3,7 @@
  * swaps `#resuma-root` + `#resuma-state` without a full document reload.
  */
 
+import { activateClientComponents, resetClientReady } from "./client-ready.js";
 import "./types.js";
 
 const ROOT_ID = "resuma-root";
@@ -309,6 +310,7 @@ async function swapToHtml(
     return;
   }
 
+  resetClientReady();
   root().innerHTML = newRoot.innerHTML;
   const stateScript = document.getElementById(STATE_SCRIPT_ID);
   if (stateScript) stateScript.textContent = newState.textContent;
@@ -321,6 +323,7 @@ async function swapToHtml(
     history.replaceState({ resumaNav: true }, "", historyHref);
   }
   await remountPage();
+  await activateClientComponents(root());
   if (opts.scroll) window.scrollTo(0, 0);
   focusMain();
   document.dispatchEvent(

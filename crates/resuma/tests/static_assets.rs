@@ -20,6 +20,10 @@ fn core_runtime_reads_current_csrf_payload_without_cache() {
         source.contains("navigate") && source.contains("buildUrl"),
         "core.ts must expose SPA helpers on __resuma"
     );
+    assert!(
+        source.contains("waitClient") && source.contains("onClientReady"),
+        "core.ts must expose ClientComponent wait helpers"
+    );
 }
 
 #[tokio::test]
@@ -93,6 +97,54 @@ async fn flow_serves_disk_backed_public_file() {
     match prev_max {
         Some(v) => std::env::set_var("RESUMA_PUBLIC_INLINE_MAX", v),
         None => std::env::remove_var("RESUMA_PUBLIC_INLINE_MAX"),
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn flow_serves_client_asset_from_disk_when_enabled() {
+    let dir = std::env::temp_dir().join(format!("resuma-client-disk-http-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("play.js"), b"window.Legens={mount(){}}").unwrap();
+
+    let prev = std::env::var_os("RESUMA_CLIENT_DISK");
+    std::env::set_var("RESUMA_CLIENT_DISK", "1");
+
+    let app = FlowApp::new()
+        .with_client_dir(&dir)
+        .client_asset_file("pl-play", "play.js", b"/* embedded stale */")
+        .into_router(FlowServeOptions {
+            addr: "127.0.0.1:0".parse().unwrap(),
+            security: SecurityConfig {
+                production: false,
+                ..SecurityConfig::default()
+            },
+        });
+
+    let res = app
+        .oneshot(
+            Request::get("/static/client/pl-play.js")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(
+        res.headers()
+            .get("cache-control")
+            .and_then(|v| v.to_str().ok()),
+        Some("public, max-age=0, must-revalidate")
+    );
+    let body = axum::body::to_bytes(res.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(body.as_ref(), b"window.Legens={mount(){}}");
+
+    match prev {
+        Some(v) => std::env::set_var("RESUMA_CLIENT_DISK", v),
+        None => std::env::remove_var("RESUMA_CLIENT_DISK"),
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
