@@ -51,7 +51,7 @@ Commit updated `benchmark/results.json` and document methodology in `benchmark/R
 
 ## Publishing (maintainers)
 
-See [`docs/PUBLISHING.md`](docs/PUBLISHING.md). CI runs `cargo publish --dry-run` on `main`.
+See [`docs/PUBLISHING.md`](docs/PUBLISHING.md). Publish with the **Publish to crates.io** workflow; dry-run locally before a release (`cargo publish -p resuma-macros --dry-run`).
 
 ## Code of conduct
 
