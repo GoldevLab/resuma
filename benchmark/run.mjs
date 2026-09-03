@@ -3,7 +3,7 @@
  * Counter page benchmark — Resuma vs Qwik, Leptos, Astro, Next.js, SvelteKit,
  * SolidStart, React (Vite), and Go templ + HTMX.
  *
- * Usage: node benchmark/run.mjs [--skip-build]
+ * Usage: node benchmark/run.mjs [--skip-build] [--resuma-only]
  */
 
 import {
