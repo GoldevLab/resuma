@@ -4,7 +4,21 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      rust-patches:
+        update-types:
+          - patch
+    ignore:
+      - dependency-name: syn
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: "/runtime"
     schedule:
       interval: weekly
+    groups:
+      js-patches:
+        update-types:
+          - patch
+    ignore:
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
