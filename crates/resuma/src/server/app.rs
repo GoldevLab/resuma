@@ -342,6 +342,7 @@ impl ResumaApp {
             .route("/_resuma/flow.css", get(serve_flow_css))
             .route("/_resuma/ui.js", get(serve_ui))
             .route("/_resuma/ui.css", get(serve_ui_css))
+            .route("/_resuma/themes.css", get(serve_themes_css))
             .route("/_resuma/runtime.js", get(serve_runtime))
             .route("/_resuma/action/{name}", post(serve_action))
             .route("/_resuma/handler/{chunk}", get(serve_handler_chunk))
@@ -688,6 +689,23 @@ async fn serve_flow_css() -> Response {
             ),
         ],
         FLOW_CSS,
+    )
+        .into_response()
+}
+
+async fn serve_themes_css() -> Response {
+    (
+        [
+            (
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("text/css; charset=utf-8"),
+            ),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("public, max-age=60, must-revalidate"),
+            ),
+        ],
+        crate::OFFICIAL_PALETTE_CSS,
     )
         .into_response()
 }

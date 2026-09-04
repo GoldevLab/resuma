@@ -115,8 +115,8 @@ FlowApp::new()
     .with_seo_kit(kit)       // /robots.txt + /llms.txt + sitemap hint — call once
     .with_sitemap_exclude(["/search"]) // noindex / thin URLs
     .with_html_theme(
-        HtmlTheme::new(["paper", "slate", "midnight"])
-            .dark(["midnight"])
+        HtmlTheme::official() // paper, slate, midnight, ember, aurora, forest
+            // or HtmlTheme::new(["paper", "your-theme"]).dark(["your-theme"])
             // .cookie("my_app_theme")      // default: resuma_theme
             // .storage_key("my-app-theme") // default: resuma-theme
     )
@@ -211,7 +211,8 @@ view! {
 ```
 
 - Selected chip: `[aria-pressed="true"]` / `.r-theme-on`. The boot toggles them. **Do not** bake a selected class from the SSR cookie (it stays after a live swap).
-- Cookie + `localStorage`; HTTPS sets `Secure`. Ids: `[A-Za-z0-9_-]`, max 48. `HtmlTheme::new(["light","dark"])` infers dark `color-scheme` without `.dark()`.
+- Cookie + `localStorage`; HTTPS sets `Secure`. Ids: `[A-Za-z0-9_-]`, max 48. `HtmlTheme::new(["light","dark"])` infers dark `color-scheme` (`dark` / `night` / `midnight` / official dark ids / names containing `dark`). Quote boot-script keys so ids like `2tone` stay valid JS.
+- Copy official palettes: Theme menu **Copy this CSS** / **Copy all palettes** / **Download CSS** (`[data-theme-copy]` in the chrome boot — not a layout `onClick`), `resuma theme [--id] [--out public/themes.css]`, docs `/themes.css`, or `GET /_resuma/themes.css`. Add more `html[data-theme="…"]` blocks as you invent themes.
 - `prefers-color-scheme` listener when nothing is stored.
 - `set_page_theme("slate")` overrides SSR for that response. `provide_theme` / `theme_css_vars` are **one-shot inline snapshots** — they do not follow `html[data-theme]`.
 - SPA NavLink **must not copy** `data-theme` from prefetch HTML (the prefetch can be older than a palette pick). `dir` **is** copied so RTL survives.
@@ -497,6 +498,7 @@ npm run e2e
 | `resuma dev --no-update` | Skip the “update Resuma?” prompt (`RESUMA_SKIP_UPDATE=1` too) |
 | `resuma dev --kill-stale` | Opt-in: free the listen port (`fuser -k`); default is pick the next free port |
 | `resuma routes --generate` | Regenerate page registry |
+| `resuma theme` | Print official `html[data-theme]` CSS (`--id`, `--out`) |
 | `resuma add sqlx` / `turso` / `tailwind` | Integrations |
 | `resuma install skill` | Copy this skill to `~/.cursor/skills/resuma/` |
 | `resuma install skill --force` | Overwrite after a CLI / template upgrade (picks up HtmlTheme, overlays, SEO traps) |

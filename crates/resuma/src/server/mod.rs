@@ -18,6 +18,7 @@
 //! | `GET /_resuma/flow.css` | Flow widget stylesheet (CSP-safe for dynamic panels) |
 //! | `GET /_resuma/ui.js` | Lazy overlay fallbacks (Popup / Modal / GestureView / VirtualFor) |
 //! | `GET /_resuma/ui.css` | Overlay stylesheet (CSS anchor + dialog) |
+//! | `GET /_resuma/themes.css` | Official `html[data-theme]` palettes (copy into your app) |
 //! | `GET /_resuma/runtime.js` | Legacy monolithic runtime |
 //! | `GET /_resuma/handler/:chunk.js` | Lazy handler chunk (`#[component]` boundaries) |
 //! | `GET /_resuma/island-chunk/:chunk.js` | Optional `#[island]` chunk |

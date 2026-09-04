@@ -72,6 +72,9 @@ pub use task::{
     register_debounce_effect, use_debounce, use_task, use_visible_task,
     use_visible_task_with_captures, visible_task_js, VisibleTaskId,
 };
-pub use theme::{provide_theme, theme_css_vars, theme_switch, use_theme, HtmlTheme, Theme};
+pub use theme::{
+    official_palette_css, official_palette_css_for, provide_theme, theme_css_vars, theme_switch,
+    use_theme, HtmlTheme, Theme, OFFICIAL_PALETTE_CSS, OFFICIAL_THEME_DARK, OFFICIAL_THEME_IDS,
+};
 pub use view::{Attr, AttrValue, Child, Element, Fragment, SlotView, View};
 pub use view_transition::with_view_transition;

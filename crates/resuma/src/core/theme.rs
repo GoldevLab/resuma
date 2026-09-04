@@ -58,6 +58,42 @@ pub fn theme_css_vars(theme: &Theme) -> String {
     )
 }
 
+/// Official Resuma palettes (`html[data-theme]`). Same CSS as
+/// [`OFFICIAL_PALETTE_CSS`] / `GET /_resuma/themes.css` / `resuma theme`.
+pub const OFFICIAL_THEME_IDS: &[&str] =
+    &["paper", "slate", "midnight", "ember", "aurora", "forest"];
+
+/// Dark `color-scheme` ids in [`OFFICIAL_THEME_IDS`].
+pub const OFFICIAL_THEME_DARK: &[&str] = &["midnight", "ember", "aurora", "forest"];
+
+/// Copyable official palette stylesheet. Paste into your app and add more
+/// `html[data-theme="…"]` blocks as you invent themes.
+pub const OFFICIAL_PALETTE_CSS: &str = include_str!("../../assets/themes.css");
+
+/// All official palettes (same bytes as [`OFFICIAL_PALETTE_CSS`]).
+pub fn official_palette_css() -> &'static str {
+    OFFICIAL_PALETTE_CSS
+}
+
+/// One `html[data-theme="id"] { … }` block, if that official palette exists.
+pub fn official_palette_css_for(id: &str) -> Option<&'static str> {
+    palette_block(OFFICIAL_PALETTE_CSS, id)
+}
+
+fn palette_block(css: &'static str, id: &str) -> Option<&'static str> {
+    if !is_theme_token(id) {
+        return None;
+    }
+    let needle = format!("html[data-theme=\"{id}\"]");
+    let start = css.find(&needle)?;
+    let rest = &css[start..];
+    let end = rest[needle.len()..]
+        .find("html[data-theme=")
+        .map(|i| needle.len() + i)
+        .unwrap_or(rest.len());
+    Some(rest[..end].trim_end())
+}
+
 /// Live document theme: `<html data-theme>` + cookie + `localStorage`.
 ///
 /// Buttons with `data-r-theme="slate"` (or [`theme_switch`]) restyle the whole
@@ -80,6 +116,11 @@ impl Default for HtmlTheme {
 }
 
 impl HtmlTheme {
+    /// Official docs palettes: paper, slate, midnight, ember, aurora, forest.
+    pub fn official() -> Self {
+        Self::new(OFFICIAL_THEME_IDS.iter().copied()).dark(OFFICIAL_THEME_DARK.iter().copied())
+    }
+
     /// `ids[0]` is the default light palette when nothing is stored.
     pub fn new(ids: impl IntoIterator<Item = impl Into<String>>) -> Self {
         let ids: Vec<String> = ids
@@ -288,7 +329,13 @@ pub fn theme_switch(id: impl Into<String>, children: Vec<Child>) -> View {
 
 fn looks_dark(id: &str) -> bool {
     let l = id.to_ascii_lowercase();
-    l == "dark" || l.contains("night") || l.contains("midnight")
+    l == "dark"
+        || l.contains("dark")
+        || l.contains("night")
+        || l.contains("midnight")
+        || OFFICIAL_THEME_DARK
+            .iter()
+            .any(|d| d.eq_ignore_ascii_case(id))
 }
 
 pub(crate) fn is_theme_token(s: &str) -> bool {
@@ -311,8 +358,9 @@ fn js_id_map(ids: &[String]) -> String {
         if i > 0 {
             out.push(',');
         }
+        out.push('"');
         out.push_str(id);
-        out.push_str(":1");
+        out.push_str("\":1");
     }
     out.push('}');
     out
@@ -333,7 +381,7 @@ mod tests {
         assert!(!html.contains("startViewTransition"), "{html}");
         assert!(!html.contains("pointerdown"), "{html}");
         assert!(html.contains("r-theme-on"), "{html}");
-        assert!(html.contains("paper:1"), "{html}");
+        assert!(html.contains("\"paper\":1"), "{html}");
         assert!(html.contains("addEventListener(\"click\""), "{html}");
     }
 
@@ -344,6 +392,13 @@ mod tests {
         assert_eq!(t.default_dark, "dark");
         let t = HtmlTheme::new(["paper", "slate", "midnight"]);
         assert_eq!(t.dark, vec!["midnight"]);
+        let t = HtmlTheme::new(OFFICIAL_THEME_IDS.iter().copied());
+        assert_eq!(
+            t.dark.iter().map(String::as_str).collect::<Vec<_>>(),
+            OFFICIAL_THEME_DARK
+        );
+        let t = HtmlTheme::new(["paper", "ocean-dark"]);
+        assert_eq!(t.dark, vec!["ocean-dark"]);
     }
 
     #[test]
@@ -359,6 +414,29 @@ mod tests {
         assert!(html.contains("data-r-theme=\"slate\""), "{html}");
         assert!(html.contains("type=\"button\""), "{html}");
         assert!(html.contains("Slate"), "{html}");
+    }
+
+    #[test]
+    fn official_palettes_cover_every_id() {
+        let t = HtmlTheme::official();
+        assert_eq!(
+            t.ids.iter().map(String::as_str).collect::<Vec<_>>(),
+            OFFICIAL_THEME_IDS
+        );
+        assert_eq!(
+            t.dark.iter().map(String::as_str).collect::<Vec<_>>(),
+            OFFICIAL_THEME_DARK
+        );
+        for id in OFFICIAL_THEME_IDS {
+            let block = official_palette_css_for(id).expect(id);
+            assert!(
+                block.contains(&format!("html[data-theme=\"{id}\"]")),
+                "{id}"
+            );
+            assert!(block.contains("--bg:"), "{id}");
+        }
+        assert!(official_palette_css_for("nope").is_none());
+        assert!(official_palette_css().contains("html[data-theme=\"forest\"]"));
     }
 
     #[test]

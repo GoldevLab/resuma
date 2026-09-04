@@ -109,6 +109,15 @@ enum Commands {
         #[arg(long)]
         generate: bool,
     },
+    /// Print official theme CSS (`html[data-theme]` palettes) to copy into your app.
+    Theme {
+        /// One palette id (`paper`, `slate`, `midnight`, `ember`, `aurora`, `forest`).
+        #[arg(long)]
+        id: Option<String>,
+        /// Write CSS to this path instead of stdout.
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
     /// Hidden hook used by `resuma dev` / cargo-watch before each `cargo run`.
     #[command(hide = true, name = "watch-prepare")]
     WatchPrepare {
@@ -170,12 +179,44 @@ pub fn run() -> Result<()> {
             base_url,
         } => build_command(static_export, &out, &pages, base_url.as_deref()),
         Commands::Routes { path, generate } => routes_command(&path, generate),
+        Commands::Theme { id, out } => theme_command(id.as_deref(), out.as_deref()),
         Commands::WatchPrepare { pages } => watch_prepare_command(&pages),
     }
 }
 
 fn watch_prepare_command(pages: &Path) -> Result<()> {
     maybe_regenerate_routes(pages)
+}
+
+fn theme_command(id: Option<&str>, out: Option<&Path>) -> Result<()> {
+    let css = if let Some(id) = id {
+        crate::official_palette_css_for(id)
+            .map(str::to_string)
+            .ok_or_else(|| {
+                anyhow!(
+                    "unknown theme `{id}` — try {}",
+                    crate::OFFICIAL_THEME_IDS.join(", ")
+                )
+            })?
+    } else {
+        crate::official_palette_css().to_string()
+    };
+    if let Some(path) = out {
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("create {}", parent.display()))?;
+            }
+        }
+        std::fs::write(path, &css).with_context(|| format!("write {}", path.display()))?;
+        eprintln!("wrote {} ({} bytes)", path.display(), css.len());
+    } else {
+        print!("{css}");
+        if !css.ends_with('\n') {
+            println!();
+        }
+    }
+    Ok(())
 }
 
 fn new_command(name: Option<String>, template: Option<String>) -> Result<()> {

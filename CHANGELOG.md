@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Official theme palettes you can copy.** `HtmlTheme::official()`,
+  `official_palette_css()` / `official_palette_css_for("midnight")`,
+  `GET /_resuma/themes.css`, and `resuma theme [--id] [--out]` print the same
+  `html[data-theme]` CSS (paper, slate, midnight, ember, aurora, forest). Add
+  more blocks as you invent themes.
+
 ## [1.3.1] - 2026-09-03
 
 ### Added
