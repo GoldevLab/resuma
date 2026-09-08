@@ -156,7 +156,8 @@ pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
                 &opts.og_type
             };
             let image_type = og_image_type(&og_image);
-            let og_image_alt = "Resuma — resumable SSR web framework for Rust";
+            // Social cards describe *this* app's image, never the framework.
+            let og_image_alt = format!("{title} — {}", site_name(opts));
 
             out.push_str(&format!(
                 r#"
@@ -185,7 +186,7 @@ pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
                 canonical = escape_attr(&canonical),
                 og_image = escape_attr(&og_image),
                 image_type = escape_attr(image_type),
-                og_image_alt = escape_attr(og_image_alt),
+                og_image_alt = escape_attr(&og_image_alt),
             ));
         }
     }
@@ -228,6 +229,34 @@ mod tests {
     }
 
     #[test]
+
+    #[test]
+    fn og_image_alt_describes_the_app_not_resuma() {
+        let html = html_at(
+            PageOptions {
+                title: "YouTube transcript | YouTubeForge".into(),
+                site_url: "https://forgeyt.com".into(),
+                og_image: "/og.png".into(),
+                seo_kit: Some(crate::SeoKit::new("YouTubeForge", "https://forgeyt.com")),
+                ..Default::default()
+            },
+            "/",
+        );
+        assert!(!html.contains("resumable SSR web framework"), "{html}");
+        assert!(
+            html.contains(
+                r#"property="og:image:alt" content="YouTube transcript | YouTubeForge — YouTubeForge""#
+            ),
+            "{html}"
+        );
+        assert!(
+            html.contains(
+                r#"name="twitter:image:alt" content="YouTube transcript | YouTubeForge — YouTubeForge""#
+            ),
+            "{html}"
+        );
+    }
+
     fn non_200_stages_noindex_robots() {
         crate::server::page_cache::clear_request_staging();
         crate::server::page_cache::stage_response_status(404);
