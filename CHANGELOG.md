@@ -8,11 +8,27 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Dogfood (GoldevLab microsaas): deferred third-party + `security.txt`.**
+  `deferred_module_loader` / `deferred_external_script` load AdSense/gtag after
+  engagement or idle (forgeyt / under200kb TBT fix). `security_txt` +
+  `FlowApp::with_security_txt` serve RFC 9116 `/.well-known/security.txt`.
+  See [DEPLOY.md](./docs/DEPLOY.md#microsaas-dogfood-seo-scanners--ads).
+- **`CspConfig::frame_src` + `RESUMA_CSP_FRAME_SRC` + `allow_google_adsense()`.**
+  Ad iframes without shipping `RESUMA_CSP=0`. Constant:
+  `GOOGLE_ADSENSE_ORIGINS`.
+- **Hardened production Fly template + default headers.** `pristine`, expanded
+  `Permissions-Policy`, `X-Permitted-Cross-Domain-Policies: none`, and
+  `min_machines_running = 1` (cold starts kill mobile LCP in lab scanners).
 - **Official theme palettes you can copy.** `HtmlTheme::official()`,
   `official_palette_css()` / `official_palette_css_for("midnight")`,
   `GET /_resuma/themes.css`, and `resuma theme [--id] [--out]` print the same
   `html[data-theme]` CSS (paper, slate, midnight, ember, aurora, forest). Add
   more blocks as you invent themes.
+
+### Fixed
+
+- **JSON-LD stays nonce-free** (shipped in `b469015`) — SEO scanners often miss
+  `type="application/ld+json" nonce=…`.
 
 ## [1.3.1] - 2026-09-03
 

@@ -31,11 +31,13 @@ pub mod pwa;
 pub mod seo;
 pub mod seo_kit;
 pub mod stream;
+pub mod third_party;
 
 pub use stream::{
     build_page_stream, render_stream_parts, render_to_stream, stream_head, stream_placeholder,
     stream_tail, StreamChunk,
 };
+pub use third_party::{deferred_external_script, deferred_module_loader, security_txt};
 
 /// PWA install / theming options injected into `<head>`.
 #[derive(Debug, Clone, Default)]

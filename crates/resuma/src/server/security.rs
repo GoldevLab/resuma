@@ -55,7 +55,26 @@ pub struct CspConfig {
     pub font_src: Vec<String>,
     /// `worker-src` allowlist (Web Workers / Worklets). Empty = omit directive.
     pub worker_src: Vec<String>,
+    /// Extra `frame-src` origins (ad iframes, embedded players, payment widgets).
+    /// Empty = omit directive, so `default-src 'self'` keeps blocking third-party
+    /// frames. `'self'` is always included when the directive is emitted.
+    pub frame_src: Vec<String>,
 }
+
+/// Origins Google AdSense loads scripts, images, XHR, and ad frames from.
+pub const GOOGLE_ADSENSE_ORIGINS: &[&str] = &[
+    "https://pagead2.googlesyndication.com",
+    "https://googleads.g.doubleclick.net",
+    "https://tpc.googlesyndication.com",
+    "https://www.google.com",
+    "https://www.gstatic.com",
+    "https://www.googleadservices.com",
+    "https://adservice.google.com",
+    "https://www.googletagservices.com",
+    "https://ep1.adtrafficquality.google",
+    "https://ep2.adtrafficquality.google",
+    "https://fundingchoicesmessages.google.com",
+];
 
 impl Default for CspConfig {
     fn default() -> Self {
@@ -82,7 +101,29 @@ impl CspConfig {
             connect_src: parse_csp_list_env("RESUMA_CSP_CONNECT_SRC"),
             font_src: parse_csp_list_env("RESUMA_CSP_FONT_SRC"),
             worker_src,
+            frame_src: parse_csp_list_env("RESUMA_CSP_FRAME_SRC"),
         }
+    }
+
+    /// Allow Google AdSense (scripts, pixels, XHR, and the cross-origin ad iframes)
+    /// while keeping the rest of the policy enforced. Chain after `from_env()`.
+    ///
+    /// Before `frame-src` existed apps had to ship `RESUMA_CSP=0` to get ads to
+    /// fill; this keeps the header on.
+    pub fn allow_google_adsense(mut self) -> Self {
+        for origin in GOOGLE_ADSENSE_ORIGINS {
+            for list in [
+                &mut self.script_src,
+                &mut self.img_src,
+                &mut self.connect_src,
+                &mut self.frame_src,
+            ] {
+                if !list.iter().any(|s| s == origin) {
+                    list.push((*origin).to_string());
+                }
+            }
+        }
+        self
     }
 
     /// Permissive dev profile: CSP disabled (same idea as Qwik `plugin@csp` when `isDev`).
@@ -756,6 +797,16 @@ pub fn build_content_security_policy(nonce: Option<&str>, https: bool, csp: &Csp
     if !csp.worker_src.is_empty() {
         directives.push(format!("worker-src {}", csp.worker_src.join(" ")));
     }
+    if !csp.frame_src.is_empty() {
+        let mut frame_src = vec!["'self'"];
+        frame_src.extend(
+            csp.frame_src
+                .iter()
+                .map(String::as_str)
+                .filter(|o| *o != "'self'"),
+        );
+        directives.push(format!("frame-src {}", frame_src.join(" ")));
+    }
 
     if https {
         directives.push("upgrade-insecure-requests".into());
@@ -789,7 +840,7 @@ pub fn apply_security_headers(mut response: Response, opts: &SecurityHeaderOptio
     insert_header(
         headers,
         header::HeaderName::from_static("permissions-policy"),
-        "camera=(), microphone=(), geolocation=()",
+        "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()",
     );
     insert_header(
         headers,
@@ -805,6 +856,11 @@ pub fn apply_security_headers(mut response: Response, opts: &SecurityHeaderOptio
         headers,
         header::HeaderName::from_static("x-dns-prefetch-control"),
         "off",
+    );
+    insert_header(
+        headers,
+        header::HeaderName::from_static("x-permitted-cross-domain-policies"),
+        "none",
     );
 
     let sec = config();
@@ -1111,6 +1167,62 @@ mod tests {
             },
         );
         assert!(policy.contains("img-src 'self' data: blob: https://images.pexels.com"));
+    }
+
+    #[test]
+    fn csp_frame_src_omitted_until_configured() {
+        let base = CspConfig {
+            enabled: true,
+            frame_src: Vec::new(),
+            ..CspConfig::from_env()
+        };
+        let policy = build_content_security_policy(Some("n1"), false, &base);
+        assert!(!policy.contains("frame-src"), "{policy}");
+
+        let policy = build_content_security_policy(
+            Some("n1"),
+            false,
+            &CspConfig {
+                frame_src: vec!["'self'".into(), "https://player.vimeo.com".into()],
+                ..base
+            },
+        );
+        assert!(
+            policy.contains("frame-src 'self' https://player.vimeo.com"),
+            "{policy}"
+        );
+        assert_eq!(policy.matches("'self' 'self'").count(), 0, "{policy}");
+    }
+
+    #[test]
+    fn csp_adsense_preset_keeps_policy_enforced_and_allows_frames() {
+        let csp = CspConfig {
+            enabled: true,
+            report_only: false,
+            frame_src: Vec::new(),
+            ..CspConfig::from_env()
+        }
+        .allow_google_adsense()
+        .allow_google_adsense();
+        assert!(csp.enabled && !csp.report_only);
+        assert_eq!(
+            csp.frame_src
+                .iter()
+                .filter(|s| s.as_str() == "https://googleads.g.doubleclick.net")
+                .count(),
+            1
+        );
+        let policy = build_content_security_policy(Some("ad"), true, &csp);
+        for directive in ["script-src", "img-src", "connect-src", "frame-src"] {
+            let line = policy
+                .split("; ")
+                .find(|d| d.starts_with(directive))
+                .unwrap_or_else(|| panic!("missing {directive}: {policy}"));
+            assert!(
+                line.contains("https://pagead2.googlesyndication.com"),
+                "{directive} lacks AdSense origin: {line}"
+            );
+        }
     }
 
     #[test]

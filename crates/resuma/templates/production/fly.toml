@@ -1,4 +1,5 @@
 app = "%NAME%"
+primary_region = "dfw"
 
 [build]
   dockerfile = "Dockerfile"
@@ -10,6 +11,7 @@ app = "%NAME%"
   RESUMA_ADDR = "0.0.0.0:8080"
   RESUMA_DATA_DIR = "/data"
   CARGO_MANIFEST_DIR = "/app"
+  # Canonical origin for SeoKit / Open Graph / sitemap / security.txt
   SITE_URL = "https://%NAME%.fly.dev"
 
 [http_service]
@@ -17,8 +19,29 @@ app = "%NAME%"
   force_https = true
   auto_stop_machines = true
   auto_start_machines = true
-  min_machines_running = 0
+  # Keep one warm machine so mobile FCP/LCP are not tanked by cold starts
+  # (dogfooded on forgeyt / under200kb — monitor.works + PSI).
+  min_machines_running = 1
   processes = ["app"]
+
+  [http_service.http_options.response]
+    # Hide Fly Server / Via fingerprints from scanners.
+    pristine = true
+
+  [http_service.http_options.response.headers]
+    X-Permitted-Cross-Domain-Policies = "none"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    X-XSS-Protection = "0"
+    X-DNS-Prefetch-Control = "off"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()"
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Resource-Policy = "same-origin"
+    # Edge CSP mirrors Resuma defaults; tighten script-src once ads/analytics are deferred.
+    # AdSense apps: also call CspConfig::allow_google_adsense() in code (frame-src).
+    Content-Security-Policy = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data: https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; connect-src 'self' https: wss:; frame-src 'self'"
 
   [[http_service.checks]]
     grace_period = "20s"
@@ -28,4 +51,4 @@ app = "%NAME%"
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "512mb"
+  memory = "256mb"

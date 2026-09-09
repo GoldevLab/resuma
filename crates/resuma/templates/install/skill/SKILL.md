@@ -517,6 +517,9 @@ Canonicals, Open Graph, JSON-LD, sitemap `<loc>`, and `llms.txt` links all follo
 
 Guide: https://resuma-docs.fly.dev/docs/integrations/seo_geo
 
+Microsaas dogfood (forgeyt / under200kb): JSON-LD is never CSP-nonced; use `deferred_module_loader` / `deferred_external_script` for ads/GA; `CspConfig::allow_google_adsense()` instead of `RESUMA_CSP=0`; `FlowApp::with_security_txt`; production `fly.toml` uses `pristine` + `min_machines_running = 1`. Details: `docs/DEPLOY.md` § Microsaas dogfood. Custom domain without mail: SPF `-all`, DMARC `reject`, null MX `0 .`.
+
+
 ```rust
 // Per page (layout or page fn). View is built before the document head, including streaming SSR.
 set_page_title("Workers | My App");

@@ -71,5 +71,5 @@ pub use security::{
     request_is_https, resolve_page_csp_nonce, resolve_page_csrf, try_random_token, validate_config,
     validate_csrf, validate_origin, validate_submit_name, verify_secret, warn_insecure_config,
     CspConfig, CspNonce, SecurityConfig, SecurityHeaderOptions, CSRF_COOKIE, CSRF_FIELD,
-    CSRF_HEADER,
+    CSRF_HEADER, GOOGLE_ADSENSE_ORIGINS,
 };

@@ -105,6 +105,9 @@ pub use crate::server::{
 };
 
 pub use crate::ssr::seo_kit::{AiCrawlerPolicy, MetaTag, SeoKit};
+pub use crate::ssr::third_party::{
+    deferred_external_script, deferred_module_loader, security_txt,
+};
 pub use crate::ssr::{render_to_stream, render_to_string, render_view, PageOptions};
 
 pub use crate::flow::{

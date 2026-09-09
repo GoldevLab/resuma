@@ -153,6 +153,24 @@ impl FlowApp {
         self
     }
 
+    /// Serve RFC 9116 `/.well-known/security.txt` (dogfooded on GoldevLab microsaas).
+    ///
+    /// Leaks the body once at boot for a `'static` slice — call once while
+    /// building the app, not per request.
+    pub fn with_security_txt(
+        self,
+        canonical_origin: impl AsRef<str>,
+        contact_email: Option<&str>,
+    ) -> Self {
+        let body = crate::ssr::third_party::security_txt(canonical_origin.as_ref(), contact_email);
+        let leaked: &'static [u8] = Box::leak(body.into_bytes().into_boxed_slice());
+        self.static_asset(
+            "/.well-known/security.txt",
+            leaked,
+            "text/plain; charset=utf-8",
+        )
+    }
+
     /// Mount an extra axum route (POST handlers, JSON APIs, demo inboxes).
     pub fn route(mut self, path: impl Into<String>, handler: MethodRouter) -> Self {
         self.extra_routes.push((path.into(), handler));

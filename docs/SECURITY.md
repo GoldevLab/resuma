@@ -6,7 +6,7 @@ Resuma ships with **secure defaults** comparable to Express + Helmet + rate limi
 
 | Layer | What it does |
 |-------|----------------|
-| **Security headers** | HSTS (HTTPS only), `X-Frame-Options: DENY`, CSP with per-request nonces, COOP, CORP, `Referrer-Policy`, `Permissions-Policy` |
+| **Security headers** | HSTS (HTTPS only), `X-Frame-Options: DENY`, CSP with per-request nonces (JSON-LD never nonced), COOP, CORP, `Referrer-Policy`, expanded `Permissions-Policy`, `X-Permitted-Cross-Domain-Policies: none`, `X-DNS-Prefetch-Control: off` |
 | **CSRF** | Cryptographically random tokens; double-submit cookie + `X-Resuma-CSRF` header on `POST /_resuma/action/*` and `POST /_resuma/submit/*` |
 | **Origin check** | Rejects cross-origin POST when `Origin` / `Referer` do not match `Host` |
 | **Rate limiting** | Per-IP sliding window on actions and submits |
@@ -69,6 +69,7 @@ Resuma ships with **secure defaults** comparable to Express + Helmet + rate limi
 | `RESUMA_CSP_STYLE_SRC` | — | Extra `style-src` hosts |
 | `RESUMA_CSP_CONNECT_SRC` | — | Extra `connect-src` hosts |
 | `RESUMA_CSP_FONT_SRC` | — | Extra `font-src` hosts |
+| `RESUMA_CSP_FRAME_SRC` | — | `frame-src` allowlist for third-party iframes (ads, players, payments). Omitted when empty. In code: `CspConfig::from_env().allow_google_adsense()` |
 
 ## Content Security Policy (Qwik-style)
 
