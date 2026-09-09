@@ -99,25 +99,23 @@ fn site_name(opts: &PageOptions) -> &str {
         .unwrap_or(opts.title.as_str())
 }
 
-/// JSON-LD `<script>` with an optional CSP nonce.
-pub fn json_ld_script(json_ld: &str, nonce: &str) -> String {
+/// JSON-LD `<script>` without a CSP nonce.
+///
+/// JSON-LD is structured data, not executable script. Emitting `nonce=` breaks
+/// naive crawler regexes that expect `type="application/ld+json">` with no attrs.
+pub fn json_ld_script(json_ld: &str, _nonce: &str) -> String {
     if json_ld.is_empty() {
         return String::new();
     }
     let safe = crate::core::serialize::sanitize_json_for_script(json_ld.trim());
-    let nonce_attr = if nonce.is_empty() {
-        String::new()
-    } else {
-        format!(r#" nonce="{}""#, escape_attr(nonce))
-    };
-    format!("\n<script type=\"application/ld+json\"{nonce_attr}>\n{safe}\n</script>\n")
+    format!("\n<script type=\"application/ld+json\">\n{safe}\n</script>\n")
 }
 
 /// JSON-LD for this document (page override, then [`PageOptions::json_ld`]).
 pub fn document_json_ld(opts: &PageOptions) -> String {
     let raw =
         crate::server::page_cache::page_json_ld_override().unwrap_or_else(|| opts.json_ld.clone());
-    json_ld_script(&raw, &opts.csp_nonce)
+    json_ld_script(&raw, "")
 }
 
 pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
@@ -276,9 +274,13 @@ mod tests {
     }
 
     #[test]
-    fn json_ld_script_includes_csp_nonce() {
+    fn json_ld_script_omits_csp_nonce() {
         let tag = json_ld_script(r#"{"@type":"WebSite"}"#, "abc123");
-        assert!(tag.contains(r#"nonce="abc123""#));
+        assert!(
+            !tag.contains("nonce="),
+            "JSON-LD must stay nonce-free for crawlers: {tag}"
+        );
         assert!(tag.contains(r#"type="application/ld+json""#));
+        assert!(tag.contains(r#"{"@type":"WebSite"}"#));
     }
 }

@@ -239,6 +239,11 @@ fn inject_nonce_on_tag(tag: &str, nonce_attr: &str) -> String {
     if lower.starts_with("<script") && lower.contains("src=") {
         return tag.to_string();
     }
+    // JSON-LD is data, not executable JS. CSP nonces are unnecessary, and many
+    // SEO scanners (monitor.works, etc.) miss `type="application/ld+json" nonce=…`.
+    if lower.starts_with("<script") && lower.contains("application/ld+json") {
+        return tag.to_string();
+    }
     if let Some(gt) = tag.rfind('>') {
         format!("{}{}{}", &tag[..gt], nonce_attr, &tag[gt..])
     } else {
