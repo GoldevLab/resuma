@@ -4,7 +4,7 @@
 
 # Resuma — resumable SSR web framework for Rust
 
-**Instantly-interactive Rust web apps — without hydration.** Not a résumé/CV builder.
+**Build instantly interactive Rust web apps without hydration.**
 
 Ship HTML from the server. The browser **resumes** serialized state and lazy handler chunks — it never re-runs your components. Static pages ship **zero client JS**.
 
@@ -15,7 +15,7 @@ Ship HTML from the server. The browser **resumes** serialized state and lazy han
 [![CI](https://github.com/GoldevLab/resuma/actions/workflows/ci.yml/badge.svg)](https://github.com/GoldevLab/resuma/actions/workflows/ci.yml)
 [![License](https://img.shields.io/crates/l/resuma.svg)](https://github.com/GoldevLab/resuma)
 [![Rust](https://img.shields.io/badge/rust-1.91%2B-orange.svg)](https://rustup.rs)
-[![Initial JS](https://img.shields.io/badge/initial%20JS-1021%20B-712cf9.svg)](benchmark/README.md)
+[![Initial JS](https://img.shields.io/badge/initial%20JS-1006%20B-712cf9.svg)](benchmark/README.md)
 
 **[Get started](https://resuma-docs.fly.dev/docs/getting_started)** · **[Benchmark](https://resuma-docs.fly.dev/docs/benchmark)** · **[Docs](https://resuma-docs.fly.dev/docs)** · **[API](https://docs.rs/resuma)**
 
@@ -29,13 +29,13 @@ cd my-app && resuma dev --open
 
 ---
 
-## Measured: smallest interactive runtime in class
+## Small client runtime, measured in production builds
 
 Same UX everywhere — SSR counter (heading + increment button). Production builds, gzip transfer sizes. [Full methodology →](benchmark/README.md)
 
 | Framework | Initial load | First click | Static page |
 |-----------|-------------:|------------:|------------:|
-| **Resuma** | **1021 B** | **9.90 KiB** | **0 B** |
+| **Resuma** | **1006 B** | **10.30 KiB** | **0 B** |
 | Leptos | 79.02 KiB | 79.02 KiB | — |
 | Next.js (App Router) | 142.43 KiB | 142.43 KiB | — |
 | React (Vite SPA) | 57.99 KiB | 57.99 KiB | — |
@@ -45,7 +45,7 @@ Same UX everywhere — SSR counter (heading + increment button). Production buil
 | SolidStart | 16.75 KiB | 16.75 KiB | — |
 | templ + HTMX | 16.21 KiB | 16.21 KiB | — |
 
-Regenerate locally: `node benchmark/run.mjs` (or `--resuma-only` to refresh just Resuma) · Independent sources in [benchmark/README.md](benchmark/README.md#external-validation)
+Regenerate locally: `node benchmark/run.mjs` (or `--resuma-only` to refresh just Resuma). See [the benchmark methodology and sources](benchmark/README.md).
 
 > If you like [Qwik's resumability](https://qwik.dev/docs/concepts/resumable/) and a Rust-first stack, Resuma is that model with native SSR, server actions, and **no WASM bundle by default**.
 
@@ -69,15 +69,16 @@ Regenerate locally: `node benchmark/run.mjs` (or `--resuma-only` to refresh just
 
 > **Requires:** Rust 1.91+ ([rustup](https://rustup.rs))
 
+Install the CLI, scaffold an app, and start the development server:
+
 ```bash
 cargo install resuma
-resuma new                          # interactive — name + template menu
-resuma new my-app --template todo   # full showcase (signals, server, islands)
+resuma new my-app --template todo
 cd my-app
 resuma dev --open
 ```
 
-**Templates:** `basic` · `todo` · `flow` · `flow-booking` · `flow-fullstack` · `production`
+`resuma new` also opens an interactive project and template picker when run without arguments. Available templates include `basic`, `todo`, `flow`, `flow-booking`, `flow-fullstack`, and `production`.
 
 ### AI assistants (Cursor, Codex, Gemini)
 
@@ -257,7 +258,7 @@ ResumaApp::new()
 
 ---
 
-## What ships in 1.3
+## What's included
 
 - `view!` / `#[component]` — JSX-like templates; resumable by default
 - `#[server]` / `#[submit]` / `#[load]` — server RPC, form mutations, and Flow data loaders
@@ -269,9 +270,17 @@ ResumaApp::new()
 - `resuma::realtime` — WebSocket rooms / peers
 - WebGPU CSP defaults
 - Client asset cache-busting
+- Versioned runtime assets, immutable caching for current URLs, and selective core preloading
+- Minified runtime overlay CSS
 - Per-action rate limits
 - Flow file-based routing (`FlowApp`, `src/pages/`)
 - CLI: `new`, `add`, `dev`, `build`, `routes`, `update`, `doctor`
+
+### Upgrading to 2.0
+
+Version 2.0 changes the resumability payload protocol. Upgrade the server crate
+and its embedded browser runtime together; do not mix 1.x server assets with
+2.x runtime assets. Rebuild applications and deploy the complete release.
 
 ---
 
@@ -284,20 +293,9 @@ Contributions welcome — read [CONTRIBUTING.md](CONTRIBUTING.md) first.
 
 ---
 
-## Why "Resuma"?
+## The name
 
-Spanish for both *resumes* (continues) and *summary* — the framework **resumes** execution from a serialized summary of the server-side render.
-
-> **Looking for a resume/CV app?** This repository is a **Rust full-stack web framework** (SSR, Axum, server actions). Resume-builder projects on GitHub use the same name but are unrelated.
-
-## Find this project (search & links)
-
-| If you searched for… | You want |
-|----------------------|--------|
-| `resuma github` + Rust / SSR / framework | **This repo** — [GoldevLab/resuma](https://github.com/GoldevLab/resuma) |
-| `resuma rust framework` | [Getting started](https://resuma-docs.fly.dev/docs/getting_started) · `cargo install resuma` |
-| `rust web framework no hydration` | [Architecture](https://resuma-docs.fly.dev/docs/architecture) · [Benchmark](https://resuma-docs.fly.dev/docs/benchmark) |
-| `qwik rust` / resumability | [Flow guide](https://resuma-docs.fly.dev/docs/flow) · Qwik-style lazy handlers in Rust |
+Resuma takes its name from the idea of a *summary*: the server renders a page once, then the browser resumes it from the serialized state and handlers.
 
 **Topics:** Rust · SSR · resumability · Axum · server actions · islands · zero hydration · `resuma` on [crates.io](https://crates.io/crates/resuma).
 

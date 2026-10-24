@@ -11,6 +11,8 @@ resuma build
 
 The CLI builds the JS runtime, runs `cargo build --release`, and auto-regenerates Flow routes when `src/pages/` changed.
 
+Resuma's runtime scripts use versioned URLs, and overlay/Flow stylesheets use content-digest URLs. In production, those exact current-version URLs are cached as immutable; unversioned or stale URLs retain short revalidation, and development assets are not cached. Keep `runtime/package.json` and the Rust workspace versions aligned when releasing.
+
 ## Environment
 
 | Variable | Production value |
@@ -55,7 +57,7 @@ If your app depends on Resuma via a **local path** (`resuma = { path = "../resum
 
 1. Prefer **git tags** (or crates.io) for CI/deploy:
    ```toml
-   resuma = { git = "https://github.com/GoldevLab/resuma", tag = "v1.3.1" }
+   resuma = { git = "https://github.com/GoldevLab/resuma", tag = "v2.0.0" }
    ```
    Keep a `[patch]`/`path` override only for local hacking.
 2. If you must stage a sibling checkout (Docker context with `resuma/` + `app/`):

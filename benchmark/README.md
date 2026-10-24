@@ -22,7 +22,7 @@ First Leptos run compiles ~200 crates and can take several minutes. Subsequent r
 
 | Framework | Initial load | First interaction | Static page |
 |-----------|-------------:|--------------------:|------------:|
-| **Resuma** | 1021 B | 9.90 KiB | **0 B** |
+| **Resuma** | 1006 B | 10.30 KiB | **0 B** |
 | **Leptos** | 79.02 KiB | 79.02 KiB | — |
 | **Next.js** (App Router) | 142.43 KiB | 142.43 KiB | — |
 | **React** (Vite SPA) | 57.99 KiB | 57.99 KiB | — |
@@ -32,7 +32,7 @@ First Leptos run compiles ~200 crates and can take several minutes. Subsequent r
 | **SolidStart** | 16.75 KiB | 16.75 KiB | — |
 | **templ + HTMX** | 16.21 KiB | 16.21 KiB | — |
 
-Measured from production build artifacts in `benchmark/`. Resuma row refreshed for **1.3.1** (`node benchmark/run.mjs --resuma-only`); other frameworks retained from the May 2026 multi-framework run.
+Measured from production build artifacts in `benchmark/`. Resuma row refreshed for **2.0.0** (`node benchmark/run.mjs --resuma-only`); other frameworks retained from the May 2026 multi-framework run.
 
 ### Reading the table
 
@@ -93,7 +93,7 @@ cd benchmark/react-counter && npm run build
 
 ## Takeaways
 
-- **Resuma** keeps the initial payload under 1 KiB gzip; full interactivity is 9.90 KiB gzip (loader + core + handler) with no WASM.
+- **Resuma** keeps the initial payload under 1 KiB gzip; full interactivity is 10.30 KiB gzip (loader + core + handler) with no WASM.
 - **Qwik** preloader is small (~2 KiB gzip) but the core chunk adds ~20 KiB gzip on first interaction.
 - **templ + HTMX** ships ~16 KiB gzip (HTMX only); clicks round-trip to the server instead of hydrating client-side.
 - **SolidStart / SvelteKit** hydrate on load (~17–28 KiB gzip for a minimal counter).

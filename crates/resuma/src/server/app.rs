@@ -662,27 +662,27 @@ struct BundleSize {
     brotli: usize,
 }
 
-async fn serve_loader(headers: HeaderMap) -> Response {
-    serve_js(&headers, loader_asset(), LOADER_JS)
+async fn serve_loader(headers: HeaderMap, uri: Uri) -> Response {
+    serve_js(&headers, &uri, loader_asset(), LOADER_JS)
 }
 
-async fn serve_core(headers: HeaderMap) -> Response {
-    serve_js(&headers, core_asset(), CORE_JS)
+async fn serve_core(headers: HeaderMap, uri: Uri) -> Response {
+    serve_js(&headers, &uri, core_asset(), CORE_JS)
 }
 
-async fn serve_lifecycle(headers: HeaderMap) -> Response {
-    serve_js(&headers, lifecycle_asset(), LIFECYCLE_JS)
+async fn serve_lifecycle(headers: HeaderMap, uri: Uri) -> Response {
+    serve_js(&headers, &uri, lifecycle_asset(), LIFECYCLE_JS)
 }
 
-async fn serve_flow(headers: HeaderMap) -> Response {
-    serve_js(&headers, flow_asset(), FLOW_JS)
+async fn serve_flow(headers: HeaderMap, uri: Uri) -> Response {
+    serve_js(&headers, &uri, flow_asset(), FLOW_JS)
 }
 
-async fn serve_ui(headers: HeaderMap) -> Response {
-    serve_js(&headers, ui_asset(), UI_JS)
+async fn serve_ui(headers: HeaderMap, uri: Uri) -> Response {
+    serve_js(&headers, &uri, ui_asset(), UI_JS)
 }
 
-async fn serve_flow_css() -> Response {
+async fn serve_flow_css(uri: Uri) -> Response {
     (
         [
             (
@@ -691,8 +691,10 @@ async fn serve_flow_css() -> Response {
             ),
             (
                 header::CACHE_CONTROL,
-                // Fixed path — never immutable (same rule as /_resuma/*.js).
-                HeaderValue::from_static("public, max-age=60, must-revalidate"),
+                HeaderValue::from_static(super::static_assets::versioned_cache_control(
+                    &uri,
+                    super::runtime_asset::flow_css_digest(),
+                )),
             ),
         ],
         FLOW_CSS,
@@ -717,7 +719,7 @@ async fn serve_themes_css() -> Response {
         .into_response()
 }
 
-async fn serve_ui_css() -> Response {
+async fn serve_ui_css(uri: Uri) -> Response {
     (
         [
             (
@@ -726,7 +728,10 @@ async fn serve_ui_css() -> Response {
             ),
             (
                 header::CACHE_CONTROL,
-                HeaderValue::from_static("public, max-age=60, must-revalidate"),
+                HeaderValue::from_static(super::static_assets::versioned_cache_control(
+                    &uri,
+                    super::runtime_asset::ui_css_digest(),
+                )),
             ),
         ],
         UI_CSS,
@@ -734,8 +739,8 @@ async fn serve_ui_css() -> Response {
         .into_response()
 }
 
-async fn serve_runtime(headers: HeaderMap) -> Response {
-    serve_js(&headers, runtime_asset(), RUNTIME_JS)
+async fn serve_runtime(headers: HeaderMap, uri: Uri) -> Response {
+    serve_js(&headers, &uri, runtime_asset(), RUNTIME_JS)
 }
 
 #[derive(Debug, Deserialize)]

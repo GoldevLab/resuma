@@ -20,12 +20,9 @@ async fn serves_page_and_runtime_assets() {
     let body = axum::body::to_bytes(page.into_body(), usize::MAX)
         .await
         .unwrap();
-    assert!(
-        body.windows(b"<main".len()).any(|w| w == b"<main")
-            || body
-                .windows(b"resuma-root".len())
-                .any(|w| w == b"resuma-root")
-    );
+    let html = String::from_utf8_lossy(&body);
+    assert!(html.contains("<main") || html.contains("resuma-root"));
+    assert!(!html.contains(r#"rel="modulepreload" href="/_resuma/core.js"#));
 
     let loader = app
         .clone()
@@ -95,7 +92,7 @@ async fn flow_serves_component_page_without_render_path_syntax() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn flow_nav_only_pages_ship_client_loader() {
-    use resuma::server::{CspConfig, SecurityConfig, configure_security};
+    use resuma::server::{configure_security, CspConfig, SecurityConfig};
 
     configure_security(SecurityConfig {
         csp: CspConfig {
@@ -132,9 +129,20 @@ async fn flow_nav_only_pages_ship_client_loader() {
         html.contains(r#"id="resuma-state" nonce=""#),
         "state payload script needs a CSP nonce when CSP is enabled"
     );
+    let expected_loader = format!(
+        r#"src="/_resuma/loader.js?v={}" nonce=""#,
+        env!("CARGO_PKG_VERSION")
+    );
     assert!(
-        html.contains(r#"src="/_resuma/loader.js" nonce=""#),
-        "loader script must carry the same CSP nonce as strict-dynamic requires"
+        html.contains(&expected_loader),
+        "loader script must carry a version and the same CSP nonce as strict-dynamic requires"
+    );
+    assert!(
+        html.contains(&format!(
+            r#"rel="modulepreload" href="/_resuma/core.js?v={}"#,
+            env!("CARGO_PKG_VERSION")
+        )),
+        "interactive pages should preload the runtime core"
     );
     assert!(
         !html.contains(r#"nonce="""#),
@@ -196,8 +204,8 @@ async fn flow_component_state_and_handlers_are_registered_during_render() {
 
 #[tokio::test]
 async fn island_refresh_returns_cached_html() {
+    use resuma::core::context::{with_context, RenderContext, RenderMode};
     use resuma::core::View;
-    use resuma::core::context::{RenderContext, RenderMode, with_context};
     use resuma::server::island_cache;
 
     // The island refresh endpoint (`/_resuma/island/{instance}`) is a dev-only
@@ -284,7 +292,7 @@ async fn flow_middleware_redirect_returns_bare_302_with_location() {
     #[component]
     fn Gate() {
         use resuma::core::ResumaError;
-        use resuma::flow::errors::{FlowError, error_page};
+        use resuma::flow::errors::{error_page, FlowError};
         error_page(&FlowError::from_resuma(ResumaError::Redirect(
             "/login".into(),
         )))

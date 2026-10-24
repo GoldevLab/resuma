@@ -1,7 +1,7 @@
 //! Negotiated gzip / brotli responses for embedded static JS assets.
 
 use axum::body::Body;
-use axum::http::{header, HeaderMap, HeaderValue, Response, StatusCode};
+use axum::http::{header, HeaderMap, HeaderValue, Response, StatusCode, Uri};
 use once_cell::sync::Lazy;
 
 pub(crate) struct EncodedAsset {
@@ -40,13 +40,15 @@ fn brotli_raw(input: &[u8]) -> Vec<u8> {
 
 static LOADER: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::LOADER_JS));
 static CORE: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::CORE_JS));
-static LIFECYCLE: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::LIFECYCLE_JS));
+static LIFECYCLE: Lazy<EncodedAsset> =
+    Lazy::new(|| encode_asset(super::runtime_asset::LIFECYCLE_JS));
 static FLOW: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::FLOW_JS));
 static UI: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::UI_JS));
 static RUNTIME: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::RUNTIME_JS));
 
 pub(crate) fn serve_js(
     headers: &HeaderMap,
+    uri: &Uri,
     asset: &'static EncodedAsset,
     raw: &'static str,
 ) -> Response<Body> {
@@ -76,9 +78,10 @@ pub(crate) fn serve_js(
     }
     h.insert(
         header::CACHE_CONTROL,
-        // Fixed paths (/_resuma/flow.js etc.) change across releases — never mark
-        // them immutable or browsers keep stale bundles for a year.
-        HeaderValue::from_static("public, max-age=60, must-revalidate"),
+        HeaderValue::from_static(super::static_assets::versioned_cache_control(
+            uri,
+            env!("CARGO_PKG_VERSION"),
+        )),
     );
     res
 }

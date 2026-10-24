@@ -1,6 +1,8 @@
 //! Static bytes served by [`FlowApp::static_asset`](crate::flow::FlowApp::static_asset).
 
-use axum::http::{header, HeaderValue};
+use axum::http::{header, HeaderValue, Uri};
+
+const STATIC_SOFT_CACHE: &str = "public, max-age=60, must-revalidate";
 
 /// Cache-Control for content-addressed / versioned bundles in production.
 pub const STATIC_IMMUTABLE_CACHE: &str = "public, max-age=31536000, immutable";
@@ -14,6 +16,27 @@ pub fn static_cache_control() -> &'static str {
         STATIC_DEV_CACHE
     } else {
         STATIC_IMMUTABLE_CACHE
+    }
+}
+
+/// Cache an embedded asset immutably only when its URL carries its current version.
+pub fn versioned_cache_control(uri: &Uri, version: &str) -> &'static str {
+    versioned_cache_control_for(uri, version, crate::server::dev::dev_mode_enabled())
+}
+
+fn versioned_cache_control_for(uri: &Uri, version: &str, is_dev: bool) -> &'static str {
+    if is_dev {
+        return STATIC_DEV_CACHE;
+    }
+    let has_current_version = uri.query().is_some_and(|query| {
+        query
+            .split('&')
+            .any(|param| param.strip_prefix("v=") == Some(version))
+    });
+    if has_current_version {
+        STATIC_IMMUTABLE_CACHE
+    } else {
+        STATIC_SOFT_CACHE
     }
 }
 
@@ -59,5 +82,29 @@ mod tests {
             Some(v) => std::env::set_var("RESUMA_DEV", v),
             None => std::env::remove_var("RESUMA_DEV"),
         }
+    }
+
+    #[test]
+    fn versioned_assets_are_immutable_only_for_the_current_version() {
+        let current: Uri = "/_resuma/core.js?v=1.2.3".parse().unwrap();
+        let stale: Uri = "/_resuma/core.js?v=1.2.2".parse().unwrap();
+        let unversioned: Uri = "/_resuma/core.js".parse().unwrap();
+
+        assert_eq!(
+            versioned_cache_control_for(&current, "1.2.3", false),
+            STATIC_IMMUTABLE_CACHE
+        );
+        assert_eq!(
+            versioned_cache_control_for(&stale, "1.2.3", false),
+            STATIC_SOFT_CACHE
+        );
+        assert_eq!(
+            versioned_cache_control_for(&unversioned, "1.2.3", false),
+            STATIC_SOFT_CACHE
+        );
+        assert_eq!(
+            versioned_cache_control_for(&current, "1.2.3", true),
+            STATIC_DEV_CACHE
+        );
     }
 }

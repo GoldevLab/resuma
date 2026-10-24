@@ -1,6 +1,6 @@
 # Publishing to crates.io
 
-**Next release:** resuma / resuma-macros / resuma-flow **1.3.1** · [docs.rs/resuma](https://docs.rs/resuma)
+**Release:** resuma / resuma-macros / resuma-flow **2.0.0** · [docs.rs/resuma](https://docs.rs/resuma)
 
 Resuma ships as **three crates** (Rust requires proc-macros in a separate crate; Flow UI widgets are optional):
 
@@ -15,13 +15,13 @@ Users install only:
 ```bash
 cargo install resuma
 # or
-resuma = "1.3.1"
+resuma = "2.0"
 ```
 
 Optional Flow widgets:
 
 ```toml
-resuma-flow = "1.3.1"
+resuma-flow = "2.0"
 ```
 
 ## Before publish: rebuild embedded JS
@@ -60,7 +60,7 @@ Or:
 ## Prerequisites
 
 1. [crates.io](https://crates.io) account + verified email + API token
-2. Clean git tree (tag recommended, e.g. `v1.3.1`)
+2. Clean git tree (tag recommended, e.g. `v2.0.0`)
 3. `cargo login`
 
 ## Internal layout (not published separately)

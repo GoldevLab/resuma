@@ -45,7 +45,7 @@ jobs:
       - name: Workspace versions aligned
         run: |
           python3 - <<'PY'
-          import pathlib, re, sys
+          import json, pathlib, re, sys
           root = pathlib.Path("Cargo.toml").read_text()
           block = re.search(r"\[workspace\.package\](.*?)\n\[", root, re.S)
           if not block:
@@ -55,6 +55,9 @@ jobs:
               sys.exit("workspace version not found")
           ver = m.group(1)
           bad = []
+          runtime_version = json.loads(pathlib.Path("runtime/package.json").read_text()).get("version")
+          if runtime_version != ver:
+              bad.append(f"runtime/package.json version {runtime_version} != {ver}")
           for name, v in re.findall(
               r"(resuma(?:-macros|-flow)?)\s*=\s*\{[^}]*version\s*=\s*\"([^\"]+)\"",
               root,
@@ -69,7 +72,7 @@ jobs:
           if bad:
               print("\n".join(bad))
               sys.exit(1)
-          print(f"workspace version {ver} ok")
+          print(f"workspace/runtime version {ver} ok")
           PY
 
       - name: Clippy

@@ -17,7 +17,7 @@ use std::fmt::Write;
 use std::rc::Rc;
 
 use crate::core::{
-    context::{RenderContext, RenderMode, ResumePayload, page_needs_client},
+    context::{page_needs_client, RenderContext, RenderMode, ResumePayload},
     handler::HandlerRef,
     serialize::encode_payload,
     view::{Attr, AttrValue, Child, Element, Fragment, Island, ShowView, View},
@@ -34,8 +34,8 @@ pub mod stream;
 pub mod third_party;
 
 pub use stream::{
-    StreamChunk, build_page_stream, render_stream_parts, render_to_stream, stream_head,
-    stream_placeholder, stream_tail,
+    build_page_stream, render_stream_parts, render_to_stream, stream_head, stream_placeholder,
+    stream_tail, StreamChunk,
 };
 pub use third_party::{deferred_external_script, deferred_module_loader, security_txt};
 
@@ -48,6 +48,23 @@ pub struct PwaOptions {
     pub description: String,
     pub theme_color: String,
     pub background_color: String,
+}
+
+pub(crate) fn core_preload_head_tag(
+    opts: &PageOptions,
+    body_html: &str,
+    payload: &ResumePayload,
+) -> String {
+    if !opts.loader_src.is_empty()
+        || !opts.runtime_src.is_empty()
+        || !page_needs_client(payload, body_html)
+    {
+        return String::new();
+    }
+    format!(
+        r#"<link rel="modulepreload" href="{}" />"#,
+        escape_attr(crate::server::runtime_asset::core_js_url())
+    )
 }
 
 /// Configuration for full-page rendering.
@@ -72,7 +89,7 @@ pub struct PageOptions {
     pub canonical: Option<String>,
     /// Progressive Web App options (`manifest`, service worker registration).
     pub pwa: Option<PwaOptions>,
-    /// Client bootstrap script. Defaults to `/_resuma/loader.js`.
+    /// Client bootstrap script. Defaults to a versioned `/_resuma/loader.js` URL.
     pub loader_src: String,
     /// Legacy alias for `loader_src` when set explicitly.
     pub runtime_src: String,
@@ -140,7 +157,7 @@ fn loader_src(opts: &PageOptions) -> &str {
     } else if !opts.loader_src.is_empty() {
         &opts.loader_src
     } else {
-        "/_resuma/loader.js"
+        concat!("/_resuma/loader.js?v=", env!("CARGO_PKG_VERSION"))
     }
 }
 
@@ -277,6 +294,7 @@ fn wrap_document(
         .map(|s| format!(r#"<link rel="stylesheet" href="{}" />"#, escape_attr(s)))
         .unwrap_or_default();
     let ui_css = ui_head_tags(body_html);
+    let core_preload = core_preload_head_tag(opts, body_html, payload);
     let scripts = client_scripts(opts, body_html, payload);
     let live = live_region_html(body_html, payload);
     let dev_script = crate::server::dev::dev_reload_script(&opts.csp_nonce);
@@ -293,6 +311,7 @@ fn wrap_document(
 {json_ld}{seo_tags}
 {stylesheet}
 {ui_css}
+{core_preload}
 {head}
 </head>
 <body>
@@ -313,6 +332,7 @@ fn wrap_document(
         head = head,
         stylesheet = stylesheet,
         ui_css = ui_css,
+        core_preload = core_preload,
         live = live,
         body = body_html,
         scripts = scripts,
@@ -542,7 +562,11 @@ fn sanitize_url_attr<'a>(name: &str, value: &'a str) -> &'a str {
             .get(..scheme.len())
             .is_some_and(|prefix| prefix.eq_ignore_ascii_case(scheme))
     });
-    if dangerous_scheme { "" } else { value }
+    if dangerous_scheme {
+        ""
+    } else {
+        value
+    }
 }
 
 /// A DOM event name safe to embed in an attribute name (`data-r-prevent:<ev>`).
@@ -948,6 +972,10 @@ mod document_escape_tests {
             },
         );
         assert!(html.contains("/_resuma/ui.css"), "{html}");
+        assert!(
+            html.contains(r#"<link rel="modulepreload" href="/_resuma/core.js?v="#),
+            "{html}"
+        );
         assert!(html.contains("id=\"r-live\""), "{html}");
         assert!(html.contains("loader.js"), "{html}");
     }

@@ -6,12 +6,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-24
+
 ### Breaking
 
 - **Resumability payload protocol:** handler, effect, and visible-task source is
   no longer serialized into HTML; the runtime imports same-origin ESM chunks.
-  Server and runtime assets must be upgraded together. This protocol change must
-  ship in `2.0.0`, not as a `1.3.x` patch.
+  Server and runtime assets must be upgraded together. Do not mix 2.x server
+  assets with 1.x runtime assets.
+
+### Performance
+
+- Preload the runtime core from the document head on interactive pages while
+  keeping static pages free of runtime requests.
+- Cache versioned runtime bundles and digest-versioned UI/Flow stylesheets as
+  immutable in production; retain short revalidation for unversioned and stale
+  URLs.
+- Minify the embedded overlay stylesheet.
 
 ### Security
 
