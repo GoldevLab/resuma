@@ -62,7 +62,7 @@ fn visible_tasks_are_bound_to_their_component_instances() {
 
 #[tokio::test]
 async fn page_handlers_are_always_served_as_chunks() {
-    use resuma::core::context::{RenderContext, RenderMode, with_context};
+    use resuma::core::context::{with_context, RenderContext, RenderMode};
 
     let ctx = RenderContext::new(RenderMode::Ssr);
     let full = with_context(ctx.clone(), || {
@@ -81,7 +81,7 @@ async fn page_handlers_are_always_served_as_chunks() {
 
 #[test]
 fn lifecycle_sources_are_externalized_from_client_payload() {
-    use resuma::core::context::{ClientEffectSpec, RenderContext, RenderMode, with_context};
+    use resuma::core::context::{with_context, ClientEffectSpec, RenderContext, RenderMode};
     use std::collections::BTreeMap;
 
     let ctx = RenderContext::new(RenderMode::Ssr);
@@ -104,18 +104,14 @@ fn lifecycle_sources_are_externalized_from_client_payload() {
     });
     let client = full.for_client();
     let json = serde_json::to_string(&client).unwrap();
-    assert!(
-        client
-            .lazy_chunks
-            .iter()
-            .any(|chunk| chunk == "__effects__")
-    );
-    assert!(
-        client
-            .lazy_chunks
-            .iter()
-            .any(|chunk| chunk == "__visible_tasks__")
-    );
+    assert!(client
+        .lazy_chunks
+        .iter()
+        .any(|chunk| chunk == "__effects__"));
+    assert!(client
+        .lazy_chunks
+        .iter()
+        .any(|chunk| chunk == "__visible_tasks__"));
     assert!(json.contains("task_"));
     assert!(json.contains("effect_test"));
     assert!(!json.contains("state.count.set"));

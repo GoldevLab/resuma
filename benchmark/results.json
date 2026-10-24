@@ -1,16 +1,16 @@
 {
-  "generatedAt": "2026-10-24T20:59:45.598Z",
+  "generatedAt": "2026-10-24T22:18:03.361Z",
   "methodology": "SSR counter page (heading + increment button). Gzip/brotli from minified artifacts or framework build output.",
   "frameworks": [
     {
       "framework": "Resuma",
-      "version": "2.0.0",
+      "version": "2.0.1",
       "initial": {
         "path": "/workspaces/resuma/runtime/dist/loader.js",
         "name": "loader.js",
         "raw": 2097,
         "gzip": 1006,
-        "brotli": 839
+        "brotli": 840
       },
       "firstInteraction": {
         "raw": 29687,
@@ -29,14 +29,14 @@
           "name": "loader.js",
           "raw": 2097,
           "gzip": 1006,
-          "brotli": 839
+          "brotli": 840
         },
         "core": {
           "path": "/workspaces/resuma/runtime/dist/core.js",
           "name": "core.js",
           "raw": 27457,
           "gzip": 9411,
-          "brotli": 8470
+          "brotli": 8469
         },
         "handler": {
           "path": "/workspaces/resuma/benchmark/.resuma-counter-handler.js",
@@ -51,10 +51,10 @@
         "label": "Initial load",
         "raw": 2097,
         "gzip": 1006,
-        "brotli": 839,
+        "brotli": 840,
         "rawFmt": "2.05 KiB",
         "gzipFmt": "1006 B",
-        "brotliFmt": "839 B"
+        "brotliFmt": "840 B"
       },
       "firstRow": {
         "label": "First interaction",

@@ -105,9 +105,7 @@ pub use crate::server::{
 };
 
 pub use crate::ssr::seo_kit::{AiCrawlerPolicy, MetaTag, SeoKit};
-pub use crate::ssr::third_party::{
-    deferred_external_script, deferred_module_loader, security_txt,
-};
+pub use crate::ssr::third_party::{deferred_external_script, deferred_module_loader, security_txt};
 pub use crate::ssr::{render_to_stream, render_to_string, render_view, PageOptions};
 
 pub use crate::flow::{
@@ -411,7 +409,7 @@ pub mod __private {
                     .as_ref()
                     .is_some_and(|ctx| ctx.boundary_has_visible_tasks(boundary_id));
                 (inner, boundary_id, has_visible_tasks)
-        });
+            });
         View::Island(IslandView {
             chunk_id: name.to_string(),
             instance_id: format!("{}-{}", name, instance),

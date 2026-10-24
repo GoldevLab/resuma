@@ -57,7 +57,7 @@ If your app depends on Resuma via a **local path** (`resuma = { path = "../resum
 
 1. Prefer **git tags** (or crates.io) for CI/deploy:
    ```toml
-   resuma = { git = "https://github.com/GoldevLab/resuma", tag = "v2.0.0" }
+   resuma = { git = "https://github.com/GoldevLab/resuma", tag = "v2.0.1" }
    ```
    Keep a `[patch]`/`path` override only for local hacking.
 2. If you must stage a sibling checkout (Docker context with `resuma/` + `app/`):

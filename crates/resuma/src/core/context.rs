@@ -132,10 +132,7 @@ impl RenderContext {
     }
 
     pub fn current_boundary_id(&self) -> Option<u32> {
-        self.handler_chunk_stack
-            .borrow()
-            .last()
-            .map(|(_, id)| *id)
+        self.handler_chunk_stack.borrow().last().map(|(_, id)| *id)
     }
 
     pub fn boundary_has_visible_tasks(&self, boundary_id: u32) -> bool {

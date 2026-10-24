@@ -14,7 +14,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use serde::Serialize;
 
-use super::context::{ClientEffectSpec, client_module_symbol, current_context};
+use super::context::{client_module_symbol, current_context, ClientEffectSpec};
 use super::signal::{Signal, SignalId};
 
 fn merge_capture_deps(deps: &mut Vec<SignalId>, captures: &BTreeMap<String, SignalId>) {

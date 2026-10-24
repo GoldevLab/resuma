@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use crate::core::Result;
 use crate::core::ResumaError;
-use axum::http::{HeaderMap, HeaderValue, Request, header};
+use axum::http::{header, HeaderMap, HeaderValue, Request};
 use axum::response::Response;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
