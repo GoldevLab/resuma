@@ -17,7 +17,7 @@ use std::fmt::Write;
 use std::rc::Rc;
 
 use crate::core::{
-    context::{page_needs_client, RenderContext, RenderMode, ResumePayload},
+    context::{RenderContext, RenderMode, ResumePayload, page_needs_client},
     handler::HandlerRef,
     serialize::encode_payload,
     view::{Attr, AttrValue, Child, Element, Fragment, Island, ShowView, View},
@@ -34,8 +34,8 @@ pub mod stream;
 pub mod third_party;
 
 pub use stream::{
-    build_page_stream, render_stream_parts, render_to_stream, stream_head, stream_placeholder,
-    stream_tail, StreamChunk,
+    StreamChunk, build_page_stream, render_stream_parts, render_to_stream, stream_head,
+    stream_placeholder, stream_tail,
 };
 pub use third_party::{deferred_external_script, deferred_module_loader, security_txt};
 
@@ -427,6 +427,12 @@ fn write_child(buf: &mut String, child: &Child) {
 }
 
 fn write_element(buf: &mut String, el: &Element) {
+    if !is_safe_tag_name(&el.tag) {
+        for child in &el.children {
+            write_child(buf, child);
+        }
+        return;
+    }
     let _ = write!(buf, "<{}", el.tag);
 
     if let Some(id) = &el.dom_id {
@@ -501,6 +507,44 @@ fn is_safe_attr_name(name: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | ':' | '.'))
 }
 
+fn is_inline_event_attr(name: &str) -> bool {
+    name.get(..2)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("on"))
+}
+
+fn is_safe_tag_name(tag: &str) -> bool {
+    let mut chars = tag.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | ':'))
+}
+
+fn sanitize_url_attr<'a>(name: &str, value: &'a str) -> &'a str {
+    let is_url_attr = [
+        "href",
+        "src",
+        "action",
+        "formaction",
+        "xlink:href",
+        "poster",
+        "background",
+        "ping",
+        "data",
+    ]
+    .iter()
+    .any(|attr| name.eq_ignore_ascii_case(attr));
+    if !is_url_attr {
+        return value;
+    }
+
+    let normalized: String = value.chars().filter(|c| *c > '\u{20}').collect();
+    let dangerous_scheme = ["javascript:", "vbscript:", "data:"].iter().any(|scheme| {
+        normalized
+            .get(..scheme.len())
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(scheme))
+    });
+    if dangerous_scheme { "" } else { value }
+}
+
 /// A DOM event name safe to embed in an attribute name (`data-r-prevent:<ev>`).
 fn is_safe_event_name(ev: &str) -> bool {
     !ev.is_empty()
@@ -511,12 +555,19 @@ fn is_safe_event_name(ev: &str) -> bool {
 
 fn write_attr(buf: &mut String, attr: &Attr) {
     let name = &attr.name;
-    if !is_safe_attr_name(name) {
+    if !is_safe_attr_name(name)
+        || (!matches!(attr.value, AttrValue::Handler(_)) && is_inline_event_attr(name))
+    {
         return;
     }
     match &attr.value {
         AttrValue::Static(s) => {
-            let _ = write!(buf, r#" {}="{}""#, name, escape_attr(s));
+            let _ = write!(
+                buf,
+                r#" {}="{}""#,
+                name,
+                escape_attr(sanitize_url_attr(name, s))
+            );
         }
         AttrValue::Bool(true) => {
             let _ = write!(buf, " {}", name);
@@ -551,7 +602,10 @@ fn write_attr(buf: &mut String, attr: &Attr) {
 }
 
 fn write_handler_attr(buf: &mut String, h: &HandlerRef) {
-    let ev = escape_attr(&h.event);
+    if !is_safe_event_name(&h.event) {
+        return;
+    }
+    let ev = &h.event;
     let chunk = escape_attr(&h.chunk);
     let sym = escape_attr(&h.symbol);
     let _ = write!(buf, r#" data-r-on:{ev}="{chunk}#{sym}""#,);
@@ -572,8 +626,7 @@ fn write_handler_attr(buf: &mut String, h: &HandlerRef) {
         let _ = write!(buf, r#" data-r-cap:{ev}="{cap}""#, cap = captures);
     }
 
-    // Handler source lives only in the resumability JSON payload — not duplicated
-    // in `data-r-inline:*` attributes. The runtime lazy-compiles on first interaction.
+    // Handler source stays in a server-served ESM chunk, never in HTML attributes.
 }
 
 fn write_island(buf: &mut String, island: &Island) {
@@ -602,9 +655,13 @@ fn write_island(buf: &mut String, island: &Island) {
     let load = escape_attr(load);
     let _ = write!(
         buf,
-        r#"<resuma-island data-r-chunk="{chunk}" data-r-instance="{inst}" data-r-signals="{signals}" data-r-props="{props}" data-r-load="{load}">"#,
+        r#"<resuma-island data-r-chunk="{chunk}" data-r-instance="{inst}" data-r-boundary-id="{boundary}" data-r-signals="{signals}" data-r-props="{props}" data-r-load="{load}">"#,
         props = escape_attr(&props),
+        boundary = island.boundary_id,
     );
+    if island.has_visible_tasks {
+        write_boundary_anchor(buf);
+    }
     buf.push_str(&inner);
     let _ = write!(buf, "</resuma-island>");
 }
@@ -733,10 +790,21 @@ fn write_match(buf: &mut String, m: &crate::core::view::MatchView) {
 fn write_boundary(buf: &mut String, boundary: &crate::core::view::Boundary) {
     let _ = write!(
         buf,
-        r#"<resuma-boundary data-r-chunk="{chunk}" hidden aria-hidden="true"></resuma-boundary>"#,
+        r#"<resuma-boundary data-r-chunk="{chunk}" data-r-boundary-id="{instance}" aria-hidden="true">"#,
         chunk = escape_attr(&boundary.chunk_id),
+        instance = boundary.instance_id,
     );
+    if boundary.has_visible_tasks {
+        write_boundary_anchor(buf);
+    }
+    buf.push_str("</resuma-boundary>");
     write_view(buf, &boundary.view);
+}
+
+fn write_boundary_anchor(buf: &mut String) {
+    buf.push_str(
+        r#"<span data-r-boundary-anchor style="display:inline-block;width:1px;height:1px;vertical-align:top;opacity:0;pointer-events:none" aria-hidden="true"></span>"#,
+    );
 }
 
 fn is_void_element(tag: &str) -> bool {
@@ -882,6 +950,70 @@ mod document_escape_tests {
         assert!(html.contains("/_resuma/ui.css"), "{html}");
         assert!(html.contains("id=\"r-live\""), "{html}");
         assert!(html.contains("loader.js"), "{html}");
+    }
+}
+
+#[cfg(test)]
+mod url_attribute_tests {
+    use super::*;
+
+    fn render_attr(name: &str, value: &str) -> String {
+        render_view(
+            &View::element("a")
+                .attr(name, AttrValue::Static(value.into()))
+                .build(),
+        )
+    }
+
+    #[test]
+    fn blocks_obfuscated_executable_url_schemes_in_ssr() {
+        for value in [
+            "javascript:alert(1)",
+            "JaVa\nScRiPt:alert(1)",
+            "data:text/html,evil",
+        ] {
+            assert_eq!(render_attr("href", value), "<a href=\"\"></a>");
+        }
+    }
+
+    #[test]
+    fn preserves_safe_urls_and_non_url_attributes() {
+        assert_eq!(
+            render_attr("href", "https://example.com"),
+            "<a href=\"https://example.com\"></a>"
+        );
+        assert_eq!(
+            render_attr("title", "javascript: is text"),
+            "<a title=\"javascript: is text\"></a>"
+        );
+    }
+
+    #[test]
+    fn drops_static_inline_event_attributes() {
+        assert_eq!(render_attr("onclick", "alert(1)"), "<a></a>");
+        assert_eq!(render_attr("ONERROR", "alert(1)"), "<a></a>");
+    }
+
+    #[test]
+    fn drops_malformed_tags_and_event_names() {
+        let invalid_tag = View::element("a><script>alert(1)</script>")
+            .child("safe")
+            .build();
+        assert_eq!(render_view(&invalid_tag), "safe");
+
+        let invalid_event = View::element("button")
+            .attr(
+                "onClick",
+                AttrValue::Handler(HandlerRef {
+                    event: "click onerror=alert(1)".into(),
+                    chunk: "__page__".into(),
+                    symbol: "h_test".into(),
+                    captures: vec![],
+                    inline: None,
+                }),
+            )
+            .build();
+        assert_eq!(render_view(&invalid_event), "<button></button>");
     }
 }
 

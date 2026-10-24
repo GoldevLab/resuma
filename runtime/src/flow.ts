@@ -432,7 +432,6 @@ function subscribeGraphEvents(
   graphId: string,
   token: string,
   onEvent: (ev: WorkerEvent) => void,
-  opts?: { closeOnError?: boolean },
 ): () => void {
   if (!graphId || typeof EventSource === "undefined") return () => {};
   if (completedGraphIds.has(graphId)) return () => {};

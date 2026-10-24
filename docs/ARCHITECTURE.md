@@ -39,7 +39,7 @@ The `view!` macro tokenizes the JSX-ish input and walks it. When it sees `onClic
 3. Receives back a `{ js: String, captures: BTreeSet<String>, ... }` translation.
 4. Generates Rust code that registers the chunk + symbol with the active `RenderContext` (component boundary or `__page__`), returning an `AttrValue::Handler(HandlerRef { … })`.
 
-Handler JS for component boundaries is **not** embedded in the HTML payload — the client lazy-imports `/_resuma/handler/{Component}.js`. Only tiny `__page__` handlers (≤256 bytes) stay inline.
+Handler JS is **never** embedded in the HTML. Every handler, including `__page__` handlers, is exported from `/_resuma/handler/{Component}.js` and imported only when needed.
 
 ```rust
 View::element("button")
@@ -70,11 +70,11 @@ Each `#[component]` wraps its output in `<resuma-boundary data-r-chunk="Counter"
 <resuma-boundary data-r-chunk="Counter" hidden aria-hidden="true"></resuma-boundary>
 ```
 
-The resumability payload carries signals and **lazy chunk refs** — not full handler sources for components:
+The resumability payload carries signals and **lazy chunk refs** — never handler/effect/task source. Page handlers, component handlers, effects, and visible tasks are served from same-origin ESM modules; visible tasks load only when their marker enters the viewport:
 
 ```html
 <script type="resuma/state" id="resuma-state">
-{"signals":[{"id":{"0":1},"value":0}],"handlers":{},"lazy_chunks":["Counter"],"islands":[],"actions":[]}
+{"signals":[{"id":{"0":1},"value":0}],"lazy_chunks":["Counter","__page__"],"islands":[],"actions":[]}
 </script>
 <script type="module" src="/_resuma/loader.js"></script>
 ```
@@ -85,11 +85,11 @@ When the user clicks the button:
 
 1. The runtime's document-level click delegator finds the closest ancestor with `data-r-on:click`.
    `event.currentTarget` is retargeted to that node (native `currentTarget` would be `document`).
-2. It loads the inline JS source from `data-r-inline:click` and compiles it once via `new Function(...)`.
-3. It calls the function with `(event, state, __resuma)` where `state` exposes `state.count` as a `SignalCell`.
+2. It dynamically imports the referenced handler module and resolves the exported symbol.
+3. It calls the export with `(event, state, __resuma)` where `state` exposes `state.count` as a `SignalCell`.
 4. `state.count.update((c) => c + 1)` triggers any subscribers, including the reactive `<resuma-dyn>` text node bound to `count`, which updates the visible count.
 
-Total round-trip on first interaction: zero network requests for the inline path, **one** dynamic `import()` for non-inline chunks. Every subsequent interaction is essentially free.
+The first use may trigger one dynamic `import()` for its chunk (or none when a component-boundary prefetch already loaded it). Subsequent calls reuse the cached module.
 
 ## 3. Server actions
 

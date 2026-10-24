@@ -32,7 +32,7 @@ Rebuild the TypeScript runtime and copy bundles into the crate assets (required 
 cd runtime
 npm install
 npm run build
-cp dist/loader.js dist/core.js dist/flow.js dist/runtime.js dist/ui.js dist/ui.css ../crates/resuma/assets/
+cp dist/loader.js dist/core.js dist/lifecycle.js dist/flow.js dist/runtime.js dist/ui.js dist/ui.css ../crates/resuma/assets/
 ```
 
 ## Publish order

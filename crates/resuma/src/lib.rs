@@ -283,20 +283,12 @@ pub mod __private {
             })
             .collect();
 
-        let inline = if chunk == "__page__"
-            && js_source.len() <= crate::core::context::INLINE_HANDLER_MAX_BYTES
-        {
-            Some(js_source.to_string())
-        } else {
-            None
-        };
-
         AttrValue::Handler(HandlerRef {
             event: event.to_string(),
             chunk,
             symbol: symbol.to_string(),
             captures: signal_captures,
-            inline,
+            inline: None,
         })
     }
 
@@ -407,10 +399,24 @@ pub mod __private {
             "visible" | "Visible" => view_mod::IslandLoad::Visible,
             _ => view_mod::IslandLoad::Eager,
         };
-        let inner = crate::core::context::with_handler_chunk(name, build);
+        let (inner, boundary_id, has_visible_tasks) =
+            crate::core::context::with_handler_chunk(name, || {
+                let context = current_context();
+                let boundary_id = context
+                    .as_ref()
+                    .and_then(|ctx| ctx.current_boundary_id())
+                    .unwrap_or_default();
+                let inner = build();
+                let has_visible_tasks = context
+                    .as_ref()
+                    .is_some_and(|ctx| ctx.boundary_has_visible_tasks(boundary_id));
+                (inner, boundary_id, has_visible_tasks)
+        });
         View::Island(IslandView {
             chunk_id: name.to_string(),
             instance_id: format!("{}-{}", name, instance),
+            boundary_id,
+            has_visible_tasks,
             signal_ids: Vec::new(),
             view: Box::new(inner),
             props: serde_json::Value::Null,

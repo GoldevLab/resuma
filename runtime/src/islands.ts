@@ -64,10 +64,10 @@ async function hydrateIsland(
   el: HTMLElement,
   signals: Map<string, SignalCell<unknown>>,
 ): Promise<void> {
-  if (el.dataset.rHydrated === "true") return;
+  if (!el.isConnected || el.dataset.rHydrated === "true") return;
   try {
     const mod = await loadIslandModule(chunk);
-    if (typeof mod.resume === "function") {
+    if (el.isConnected && el.dataset.rHydrated !== "true" && typeof mod.resume === "function") {
       mod.resume(props, signals, el);
       el.dataset.rHydrated = "true";
     }

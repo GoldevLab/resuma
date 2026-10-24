@@ -18,10 +18,9 @@ const CORE_URL = `/_resuma/core.js?v=${__RESUMA_VERSION__}`;
 
 interface ResumePayload {
   signals: unknown[];
-  handlers: Record<string, Record<string, string>>;
   islands: string[];
   effects?: unknown[];
-  visible_tasks?: Record<string, string>;
+  visible_tasks?: Record<string, unknown>;
   lazy_chunks?: string[];
 }
 
@@ -56,12 +55,12 @@ const KNOWN_EVENTS = [
 function readPayload(): ResumePayload {
   const node = document.getElementById(STATE_SCRIPT_ID);
   if (!node || !node.textContent) {
-    return { signals: [], handlers: {}, islands: [] };
+    return { signals: [], islands: [] };
   }
   try {
     return JSON.parse(node.textContent) as ResumePayload;
   } catch {
-    return { signals: [], handlers: {}, islands: [] };
+    return { signals: [], islands: [] };
   }
 }
 
@@ -69,18 +68,10 @@ function pageRoot(): HTMLElement {
   return document.getElementById(ROOT_ID) ?? document.body;
 }
 
-function payloadHasHandlers(handlers: ResumePayload["handlers"]): boolean {
-  for (const symbols of Object.values(handlers)) {
-    if (Object.keys(symbols).length) return true;
-  }
-  return false;
-}
-
 function needsCoreNow(payload: ResumePayload, scope: HTMLElement): boolean {
   if (payload.signals.length) return true;
   if (payload.islands.length) return true;
   if (payload.effects?.length) return true;
-  if (payloadHasHandlers(payload.handlers)) return true;
   if (payload.visible_tasks && Object.keys(payload.visible_tasks).length) return true;
   if (payload.lazy_chunks?.length) return true;
   const handlerSelectors = KNOWN_EVENTS.map((ev) => `[data-r-on\\:${ev}]`).join(", ");

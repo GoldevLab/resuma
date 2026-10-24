@@ -13,12 +13,10 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use serde::Serialize;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 use super::effect::EffectId;
 use super::signal::SignalId;
-
-/// Max handler JS source bytes kept inline in the HTML payload (`__page__` only).
-pub const INLINE_HANDLER_MAX_BYTES: usize = 256;
 
 tokio::task_local! {
     /// Active render-context handles for this async task (innermost last).
@@ -32,6 +30,19 @@ thread_local! {
 }
 
 static NEXT_RENDER_HANDLE: AtomicU32 = AtomicU32::new(1);
+
+#[deprecated(note = "handlers are always served as ESM chunks")]
+pub const INLINE_HANDLER_MAX_BYTES: usize = 256;
+
+pub(crate) fn client_module_symbol(kind: &str, source: &str) -> String {
+    let digest = Sha256::digest(source.as_bytes());
+    let suffix: String = digest
+        .iter()
+        .take(16)
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    format!("{kind}_{suffix}")
+}
 
 /// What we are rendering for. Mostly used to tweak hydration markers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,6 +68,7 @@ pub struct RenderContext {
     pub mode: RenderMode,
     next_signal: AtomicU32,
     next_effect: AtomicU32,
+    next_boundary: AtomicU32,
     state: RefCell<BTreeMap<SignalId, Value>>,
     #[allow(clippy::type_complexity)]
     effects: RefCell<BTreeMap<u32, Rc<RefCell<Box<dyn FnMut()>>>>>,
@@ -83,7 +95,7 @@ pub struct RenderContext {
     /// Client-replayable effects (computed, debounce, side effects with JS).
     client_effects: RefCell<Vec<ClientEffectSpec>>,
     /// Active component/island boundary stack for handler chunk ids.
-    handler_chunk_stack: RefCell<Vec<String>>,
+    handler_chunk_stack: RefCell<Vec<(String, u32)>>,
 }
 
 impl RenderContext {
@@ -92,6 +104,7 @@ impl RenderContext {
             mode,
             next_signal: AtomicU32::new(1),
             next_effect: AtomicU32::new(1),
+            next_boundary: AtomicU32::new(1),
             state: RefCell::new(BTreeMap::new()),
             effects: RefCell::new(BTreeMap::new()),
             running_effects: RefCell::new(BTreeSet::new()),
@@ -114,12 +127,29 @@ impl RenderContext {
         self.handler_chunk_stack
             .borrow()
             .last()
-            .cloned()
+            .map(|(chunk, _)| chunk.clone())
             .unwrap_or_else(|| "__page__".to_string())
     }
 
+    pub fn current_boundary_id(&self) -> Option<u32> {
+        self.handler_chunk_stack
+            .borrow()
+            .last()
+            .map(|(_, id)| *id)
+    }
+
+    pub fn boundary_has_visible_tasks(&self, boundary_id: u32) -> bool {
+        self.visible_tasks
+            .borrow()
+            .values()
+            .any(|task| task.boundary_id == Some(boundary_id))
+    }
+
     pub fn push_handler_chunk(&self, chunk: impl Into<String>) {
-        self.handler_chunk_stack.borrow_mut().push(chunk.into());
+        let id = self.next_boundary.fetch_add(1, Ordering::Relaxed);
+        self.handler_chunk_stack
+            .borrow_mut()
+            .push((chunk.into(), id));
     }
 
     pub fn pop_handler_chunk(&self) {
@@ -243,11 +273,14 @@ impl RenderContext {
         captures: BTreeMap<String, super::signal::SignalId>,
     ) -> u32 {
         let id = self.next_visible_task.fetch_add(1, Ordering::Relaxed);
+        let body = source.to_string();
         self.visible_tasks.borrow_mut().insert(
             id,
             VisibleTaskSpec {
-                body: source.to_string(),
+                symbol: client_module_symbol("task", &body),
+                body,
                 captures,
+                boundary_id: self.current_boundary_id(),
             },
         );
         id
@@ -311,6 +344,7 @@ impl RenderContext {
             }
             if !spec.body.is_empty() {
                 existing.body = spec.body;
+                existing.symbol = client_module_symbol("effect", &existing.body);
             }
             if !spec.kind.is_empty() {
                 existing.kind = spec.kind;
@@ -337,6 +371,19 @@ impl RenderContext {
     }
 
     fn snapshot_internal(&self) -> ResumePayload {
+        let mut lazy_chunks: Vec<String> = self
+            .handler_chunks
+            .borrow()
+            .keys()
+            .filter(|k| *k != "__page__")
+            .cloned()
+            .collect();
+        if !self.client_effects.borrow().is_empty() {
+            lazy_chunks.push("__effects__".into());
+        }
+        if !self.visible_tasks.borrow().is_empty() {
+            lazy_chunks.push("__visible_tasks__".into());
+        }
         ResumePayload {
             signals: self
                 .state
@@ -353,13 +400,7 @@ impl RenderContext {
             contexts: self.contexts.borrow().clone(),
             visible_tasks: self.visible_tasks.borrow().clone(),
             effects: self.client_effects.borrow().clone(),
-            lazy_chunks: self
-                .handler_chunks
-                .borrow()
-                .keys()
-                .filter(|k| *k != "__page__")
-                .cloned()
-                .collect(),
+            lazy_chunks,
             chunk_digests: BTreeMap::new(),
             csrf_token: None,
             serialization_error: None,
@@ -370,28 +411,20 @@ impl RenderContext {
 impl ResumePayload {
     /// Strip external handler JS from the payload sent to the browser.
     ///
-    /// Keeps only `__page__` handlers under [`INLINE_HANDLER_MAX_BYTES`].
-    /// All other chunk sources are served from `/_resuma/handler/:chunk.js`.
+    /// Handler and lifecycle module sources stay server-side and load from
+    /// `/_resuma/handler/:chunk.js`.
     pub fn for_client(&self) -> Self {
         let mut client = self.clone();
-        let mut inline_page = BTreeMap::new();
         let mut lazy = self.lazy_chunks.clone();
-
-        if let Some(page) = self.handlers.get("__page__") {
-            for (sym, src) in page {
-                if src.len() <= INLINE_HANDLER_MAX_BYTES {
-                    inline_page.insert(sym.clone(), src.clone());
-                } else {
-                    lazy.push("__page__".to_string());
-                }
-            }
+        if self
+            .handlers
+            .get("__page__")
+            .is_some_and(|page| !page.is_empty())
+        {
+            lazy.push("__page__".to_string());
         }
 
         client.handlers = BTreeMap::new();
-        if !inline_page.is_empty() {
-            client.handlers.insert("__page__".into(), inline_page);
-        }
-
         lazy.sort();
         lazy.dedup();
         client.lazy_chunks = lazy;
@@ -407,6 +440,8 @@ pub struct ClientEffectSpec {
     #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
     pub captures: BTreeMap<String, SignalId>,
     pub kind: String,
+    pub symbol: String,
+    #[serde(skip_serializing)]
     pub body: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target: Option<SignalId>,
@@ -417,7 +452,11 @@ pub struct ClientEffectSpec {
 /// Client-only task registered during SSR (`use_visible_task` / `visible_task!`).
 #[derive(Debug, Clone, Serialize)]
 pub struct VisibleTaskSpec {
+    pub symbol: String,
+    #[serde(skip_serializing)]
     pub body: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub boundary_id: Option<u32>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
     pub captures: BTreeMap<String, super::signal::SignalId>,
 }
@@ -431,7 +470,7 @@ pub struct VisibleTaskSpec {
 /// # Fields
 ///
 /// * `signals` — serialized [`SignalSnapshot`] values
-/// * `handlers` — inline handler JS (typically small `__page__` handlers only)
+/// * `handlers` — external handler chunk references (sources stay server-side)
 /// * `lazy_chunks` — component/island chunk ids prefetched or fetched on demand
 /// * `effects` — client-replay specs from `computed!` / `effect!` / `debounce!`
 /// * `islands` — optional `#[island]` instances on the page
@@ -439,6 +478,7 @@ pub struct VisibleTaskSpec {
 #[derive(Debug, Clone, Serialize)]
 pub struct ResumePayload {
     pub signals: Vec<SignalSnapshot>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub handlers: BTreeMap<String, BTreeMap<String, String>>,
     pub islands: Vec<String>,
     pub actions: Vec<String>,
@@ -556,11 +596,20 @@ pub fn with_context<R>(ctx: Rc<RenderContext>, f: impl FnOnce() -> R) -> R {
 pub fn with_handler_chunk<R>(chunk: impl Into<String>, f: impl FnOnce() -> R) -> R {
     if let Some(ctx) = current_context() {
         ctx.push_handler_chunk(chunk);
-        let out = f();
-        ctx.pop_handler_chunk();
-        out
+        let _guard = HandlerChunkRestore { context: ctx };
+        f()
     } else {
         f()
+    }
+}
+
+struct HandlerChunkRestore {
+    context: Rc<RenderContext>,
+}
+
+impl Drop for HandlerChunkRestore {
+    fn drop(&mut self) {
+        self.context.pop_handler_chunk();
     }
 }
 

@@ -6,6 +6,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Breaking
+
+- **Resumability payload protocol:** handler, effect, and visible-task source is
+  no longer serialized into HTML; the runtime imports same-origin ESM chunks.
+  Server and runtime assets must be upgraded together. This protocol change must
+  ship in `2.0.0`, not as a `1.3.x` patch.
+
+### Security
+
+- Runtime no longer uses dynamic code evaluation; CSP omits `'unsafe-eval'` by
+  default. SSR rejects inline event attributes, malformed tag/event names, and
+  executable URL schemes.
+
+### Fixed
+
+- Prevented late handler/effect/task/island imports from acting on a stale SPA
+  mount, and removed visible-task markers during mount cleanup.
+- Prefetches handler chunks from actual interactive elements near the viewport.
+
 ### Added
 
 - **Dogfood (GoldevLab microsaas): deferred third-party + `security.txt`.**

@@ -14,12 +14,11 @@ const dist = join(__dirname, "..", "dist");
 
 // Keep in sync with `crates/resuma/src/cli/doctor.rs` and `docs/STABILITY.md`.
 const LOADER_GZIP_BUDGET = 1100;
-// Post-1.0 reactive For/Match/Show + SPA nav; visible tasks + view transitions;
-// mount cleanup registry; safeAction + field_errors; exclusive nav (1.3.x);
-// waitClient / onClientReady; announce/measure/storage + lazy ui.js hook (1.3.x).
+// Reactive bindings, navigation and core interactions; effects/tasks live in lifecycle.js.
 const CORE_GZIP_BUDGET = 10000;
+const LIFECYCLE_GZIP_BUDGET = 2048;
 
-const defaults = ["loader.js", "core.js", "flow.js", "ui.js", "runtime.js"].map((f) => join(dist, f));
+const defaults = ["loader.js", "core.js", "lifecycle.js", "flow.js", "ui.js", "runtime.js"].map((f) => join(dist, f));
 
 function fmt(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -50,10 +49,15 @@ const rows = files.map(measure).filter(Boolean);
 if (rows.length >= 2) {
   const loader = rows.find((r) => r.name === "loader.js");
   const core = rows.find((r) => r.name === "core.js");
+  const lifecycle = rows.find((r) => r.name === "lifecycle.js");
   if (loader && core) {
     console.log("\nSplit total (loader + core, first interaction):");
     console.log(`  raw:  ${fmt(loader.raw + core.raw)}`);
     console.log(`  gzip: ${fmt(loader.gzip + core.gzip)}`);
+  }
+  if (loader && core && lifecycle) {
+    console.log("\nInteractive page + lifecycle module:");
+    console.log(`  gzip: ${fmt(loader.gzip + core.gzip + lifecycle.gzip)}`);
   }
   let failed = false;
   if (loader && loader.gzip > LOADER_GZIP_BUDGET) {
@@ -62,6 +66,10 @@ if (rows.length >= 2) {
   }
   if (core && core.gzip > CORE_GZIP_BUDGET) {
     console.error(`\nERROR: core.js gzip ${core.gzip} B exceeds budget ${CORE_GZIP_BUDGET} B`);
+    failed = true;
+  }
+  if (lifecycle && lifecycle.gzip > LIFECYCLE_GZIP_BUDGET) {
+    console.error(`\nERROR: lifecycle.js gzip ${lifecycle.gzip} B exceeds budget ${LIFECYCLE_GZIP_BUDGET} B`);
     failed = true;
   }
   if (failed) process.exit(1);

@@ -90,7 +90,7 @@ jobs:
 
       - name: Assets match runtime dist
         run: |
-          for f in loader.js core.js flow.js runtime.js ui.js ui.css; do
+          for f in loader.js core.js lifecycle.js flow.js runtime.js ui.js ui.css; do
             cmp -s "runtime/dist/$f" "crates/resuma/assets/$f" \
               || { echo "Mismatch: $f — run npm run build in runtime/ and copy dist → crates/resuma/assets/"; exit 1; }
           done

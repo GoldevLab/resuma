@@ -3,6 +3,7 @@
  */
 
 import { signalId, type SignalCell, type RawSignalId } from "./signals.js";
+import type { LoadHandlerChunk, RegisterMountCleanup } from "./lifecycle.js";
 import type { ResumaGlobal } from "./types.js";
 
 export interface ClientEffectSpec {
@@ -10,7 +11,7 @@ export interface ClientEffectSpec {
   deps: RawSignalId[];
   captures?: Record<string, RawSignalId>;
   kind: string;
-  body: string;
+  symbol: string;
   target?: RawSignalId;
   debounce_ms?: number;
 }
@@ -29,44 +30,40 @@ function buildEffectState(
   return local;
 }
 
-// Per-mount cleanups (signal unsubscribes + pending debounce timers). SPA
-// navigation re-runs initEffects against fresh signal cells, so the previous
-// mount's subscriptions and timers must be torn down or they leak and fire
-// against orphaned cells (mirrors the `flowCleanups` pattern in flow.ts).
-const effectCleanups: Array<() => void> = [];
-
-export function flushEffectCleanups(): void {
-  while (effectCleanups.length) {
-    const fn = effectCleanups.pop();
-    try {
-      fn?.();
-    } catch {
-      /* ignore cleanup errors */
-    }
-  }
-}
-
-export function initEffects(
+export async function initEffects(
   effects: ClientEffectSpec[],
   signals: Map<string, SignalCell<unknown>>,
   global: ResumaGlobal,
-): void {
+  loadModule: LoadHandlerChunk,
+  registerCleanup: RegisterMountCleanup,
+): Promise<void> {
+  if (!effects.length) return;
+  let active = true;
+  registerCleanup(() => { active = false; });
+  let module: Record<string, Function>;
+  try {
+    module = await loadModule("__effects__");
+  } catch (err) {
+    if (active) console.error("[r] effect module", err);
+    return;
+  }
+  if (!active) return;
+
   for (const eff of effects) {
     try {
       const state = buildEffectState(eff.captures, signals, global);
-      // rs2js emits the body as an arrow expression `(state, __resuma) => { … }`.
-      // Build it once, then invoke on each dependency change.
-      const run = new Function(`return (${eff.body});`)() as (
+      const run = module[eff.symbol] as (
         state: Record<string, SignalCell<unknown>>,
         resuma: ResumaGlobal,
       ) => unknown;
+      if (typeof run !== "function") throw new Error(`effect ${eff.id} missing from module`);
 
       const isDebounce = eff.kind === "debounce";
 
       if (isDebounce) {
         const teardown = run(state, global);
         if (typeof teardown === "function") {
-          effectCleanups.push(teardown as () => void);
+          registerCleanup(teardown as () => void);
         }
       } else {
         const targetCell =
@@ -94,7 +91,7 @@ export function initEffects(
 
         schedule();
 
-        effectCleanups.push(() => {
+        registerCleanup(() => {
           if (debounceTimer !== undefined) clearTimeout(debounceTimer);
         });
 
@@ -111,7 +108,7 @@ export function initEffects(
         for (const depKey of depKeys) {
           const cell = signals.get(depKey);
           const unsubscribe = cell?.subscribe(() => schedule());
-          if (unsubscribe) effectCleanups.push(unsubscribe);
+          if (unsubscribe) registerCleanup(unsubscribe);
         }
       }
     } catch (err) {

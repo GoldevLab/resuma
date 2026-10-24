@@ -103,7 +103,6 @@ function pathsMatch(href: string, current: string, exact = false): boolean {
 
 function applyNavLinkActive(
   a: HTMLAnchorElement,
-  path: string,
   activeClass: string,
   isActive: boolean,
 ): void {
@@ -154,7 +153,7 @@ export function updateNavActiveClasses(path: string): void {
     for (const a of group) {
       const activeClass = a.getAttribute("data-r-active-class");
       if (!activeClass) continue;
-      applyNavLinkActive(a, path, activeClass, a === best);
+      applyNavLinkActive(a, activeClass, a === best);
       handled.add(a);
     }
   }
@@ -166,7 +165,7 @@ export function updateNavActiveClasses(path: string): void {
     const activeClass = a.getAttribute("data-r-active-class");
     if (!activeClass) continue;
     const exact = a.hasAttribute("data-r-nav-exact");
-    applyNavLinkActive(a, path, activeClass, pathsMatch(href, path, exact));
+    applyNavLinkActive(a, activeClass, pathsMatch(href, path, exact));
   }
 }
 

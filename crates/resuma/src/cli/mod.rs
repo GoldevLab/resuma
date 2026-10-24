@@ -695,6 +695,7 @@ fn ensure_runtime_built() -> Result<()> {
                 ("runtime.js", runtime_dir.join("dist/runtime.js")),
                 ("loader.js", runtime_dir.join("dist/loader.js")),
                 ("core.js", runtime_dir.join("dist/core.js")),
+                ("lifecycle.js", runtime_dir.join("dist/lifecycle.js")),
                 ("flow.js", runtime_dir.join("dist/flow.js")),
                 ("ui.js", runtime_dir.join("dist/ui.js")),
                 ("ui.css", runtime_dir.join("dist/ui.css")),

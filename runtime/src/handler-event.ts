@@ -18,6 +18,16 @@ export function withHandlerCurrentTarget(ev: Event, handlerEl: EventTarget): Eve
   });
 }
 
+export function isHandlerMountCurrent(
+  expected: object,
+  current: object | undefined,
+  handlerEl?: EventTarget | null,
+): boolean {
+  return expected === current &&
+    (!handlerEl || !("isConnected" in handlerEl) ||
+      (handlerEl as EventTarget & { isConnected: boolean }).isConnected);
+}
+
 /** Walk from `event.target` to the node that declared this event's handler. */
 export function inferHandlerElement(ev: Event): EventTarget | null {
   let target: Element | null =

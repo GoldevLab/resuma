@@ -4,6 +4,7 @@ use once_cell::sync::Lazy;
 
 pub const LOADER_JS: &str = include_str!("../../assets/loader.js");
 pub const CORE_JS: &str = include_str!("../../assets/core.js");
+pub const LIFECYCLE_JS: &str = include_str!("../../assets/lifecycle.js");
 pub const FLOW_JS: &str = include_str!("../../assets/flow.js");
 pub const FLOW_CSS: &str = include_str!("../../assets/flow.css");
 pub const UI_JS: &str = include_str!("../../assets/ui.js");

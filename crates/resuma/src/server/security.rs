@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use crate::core::Result;
 use crate::core::ResumaError;
-use axum::http::{header, HeaderMap, HeaderValue, Request};
+use axum::http::{HeaderMap, HeaderValue, Request, header};
 use axum::response::Response;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
@@ -41,7 +41,7 @@ pub struct CspConfig {
     pub report_only: bool,
     /// Add `'strict-dynamic'` to `script-src` when a nonce is present (modern browsers).
     pub strict_dynamic: bool,
-    /// Allow `eval` / `new Function` for the resumability runtime. Keep `true` unless you replace the client.
+    /// Allow `eval` / `new Function` for custom client code. Disabled by default.
     pub unsafe_eval: bool,
     /// Extra `img-src` origins (e.g. `https://images.pexels.com`).
     pub img_src: Vec<String>,
@@ -94,7 +94,7 @@ impl CspConfig {
             enabled,
             report_only: env_flag_on("RESUMA_CSP_REPORT_ONLY"),
             strict_dynamic: !env_flag_off("RESUMA_CSP_STRICT_DYNAMIC"),
-            unsafe_eval: !env_flag_off("RESUMA_CSP_UNSAFE_EVAL"),
+            unsafe_eval: env_flag_on("RESUMA_CSP_UNSAFE_EVAL"),
             img_src: parse_csp_list_env("RESUMA_CSP_IMG_SRC"),
             script_src: parse_csp_list_env("RESUMA_CSP_SCRIPT_SRC"),
             style_src: parse_csp_list_env("RESUMA_CSP_STYLE_SRC"),
@@ -1117,7 +1117,7 @@ mod tests {
     }
 
     #[test]
-    fn csp_allows_runtime_compiled_handlers() {
+    fn csp_allows_explicit_unsafe_eval_opt_in() {
         let csp = build_content_security_policy(
             Some("abc123"),
             false,
@@ -1136,6 +1136,21 @@ mod tests {
         assert!(csp.contains("style-src-elem 'self' 'nonce-abc123' 'unsafe-inline'"));
         assert!(csp.contains("style-src-attr 'unsafe-inline'"));
         assert!(csp.contains("img-src 'self' data: blob:"));
+    }
+
+    #[test]
+    fn csp_omits_unsafe_eval_when_disabled() {
+        let csp = build_content_security_policy(
+            Some("abc123"),
+            false,
+            &CspConfig {
+                enabled: true,
+                strict_dynamic: true,
+                unsafe_eval: false,
+                ..CspConfig::from_env()
+            },
+        );
+        assert!(!csp.contains("'unsafe-eval'"));
     }
 
     #[test]

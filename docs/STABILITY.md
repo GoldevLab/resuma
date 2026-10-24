@@ -47,6 +47,7 @@ Documented in `runtime/scripts/measure.mjs` and enforced in CI:
 |-------|-------------|
 | `loader.js` | ≤ 1100 B |
 | `core.js` | ≤ 10000 B |
+| `lifecycle.js` | ≤ 2048 B (loaded only when effects/tasks exist) |
 | `flow.js` | lazy (exec/Flow widgets only) |
 | `ui.js` | lazy (Popup / Modal / GestureView / VirtualFor fallbacks) |
 

@@ -28,6 +28,7 @@ async fn serves_page_and_runtime_assets() {
     );
 
     let loader = app
+        .clone()
         .oneshot(
             Request::get("/_resuma/loader.js")
                 .body(Body::empty())
@@ -36,6 +37,16 @@ async fn serves_page_and_runtime_assets() {
         .await
         .unwrap();
     assert_eq!(loader.status(), StatusCode::OK);
+
+    let lifecycle = app
+        .oneshot(
+            Request::get("/_resuma/lifecycle.js")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(lifecycle.status(), StatusCode::OK);
 }
 
 #[tokio::test]
@@ -84,7 +95,7 @@ async fn flow_serves_component_page_without_render_path_syntax() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn flow_nav_only_pages_ship_client_loader() {
-    use resuma::server::{configure_security, CspConfig, SecurityConfig};
+    use resuma::server::{CspConfig, SecurityConfig, configure_security};
 
     configure_security(SecurityConfig {
         csp: CspConfig {
@@ -159,6 +170,7 @@ async fn flow_component_state_and_handlers_are_registered_during_render() {
     let html = String::from_utf8_lossy(&body);
     assert!(html.contains(r#""signals":[{"id":1,"value":0}]"#));
     assert!(html.contains(r#"data-r-on:click="Counter#"#));
+    assert!(!html.contains("data-r-inline:click"));
     assert!(
         html.contains(r#"data-r-cap:click="count:s1"#),
         "handler captures must use SignalId display form (s1)"
@@ -184,8 +196,8 @@ async fn flow_component_state_and_handlers_are_registered_during_render() {
 
 #[tokio::test]
 async fn island_refresh_returns_cached_html() {
-    use resuma::core::context::{with_context, RenderContext, RenderMode};
     use resuma::core::View;
+    use resuma::core::context::{RenderContext, RenderMode, with_context};
     use resuma::server::island_cache;
 
     // The island refresh endpoint (`/_resuma/island/{instance}`) is a dev-only
@@ -272,7 +284,7 @@ async fn flow_middleware_redirect_returns_bare_302_with_location() {
     #[component]
     fn Gate() {
         use resuma::core::ResumaError;
-        use resuma::flow::errors::{error_page, FlowError};
+        use resuma::flow::errors::{FlowError, error_page};
         error_page(&FlowError::from_resuma(ResumaError::Redirect(
             "/login".into(),
         )))

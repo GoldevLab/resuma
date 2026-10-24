@@ -44,7 +44,7 @@ client-sdk/                     ← Resuma Client (copy into app client/ dir)
 1. **“Resuma” alone** = core resumability (components, signals, runtime). Not “Resuma Core” in user-facing copy unless contrasting with Flow.
 2. **“Resuma Flow”** = full-stack layer. Always two words when referring to the product. Code: `FlowApp`, `resuma::flow`; optional widgets crate: `resuma-flow`.
 3. **“Resuma Macros”** = the macro crate. Code: `resuma-macros`. Never shorten to “macros crate” in docs titles.
-4. **“Resuma Runtime”** = browser loader/core bundles. Paths: `/_resuma/loader.js`, `/_resuma/core.js`.
+4. **“Resuma Runtime”** = browser loader/core plus optional lifecycle bundle. Paths: `/_resuma/loader.js`, `/_resuma/core.js`, `/_resuma/lifecycle.js`.
 5. **“Resuma Client”** = optional TypeScript widgets (`ClientComponent`, `bootClientComponent`). Not the same as Runtime.
 6. **Avoid** mixing “Flow” without “Resuma” in headings (e.g. prefer “Resuma Flow routing” over “Flow routing” alone).
 

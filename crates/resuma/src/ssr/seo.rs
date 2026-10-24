@@ -227,8 +227,6 @@ mod tests {
     }
 
     #[test]
-
-    #[test]
     fn og_image_alt_describes_the_app_not_resuma() {
         let html = html_at(
             PageOptions {
@@ -255,6 +253,7 @@ mod tests {
         );
     }
 
+    #[test]
     fn non_200_stages_noindex_robots() {
         crate::server::page_cache::clear_request_staging();
         crate::server::page_cache::stage_response_status(404);

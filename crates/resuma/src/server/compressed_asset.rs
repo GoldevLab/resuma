@@ -40,6 +40,7 @@ fn brotli_raw(input: &[u8]) -> Vec<u8> {
 
 static LOADER: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::LOADER_JS));
 static CORE: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::CORE_JS));
+static LIFECYCLE: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::LIFECYCLE_JS));
 static FLOW: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::FLOW_JS));
 static UI: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::UI_JS));
 static RUNTIME: Lazy<EncodedAsset> = Lazy::new(|| encode_asset(super::runtime_asset::RUNTIME_JS));
@@ -90,6 +91,10 @@ pub(crate) fn core_asset() -> &'static EncodedAsset {
     &CORE
 }
 
+pub(crate) fn lifecycle_asset() -> &'static EncodedAsset {
+    &LIFECYCLE
+}
+
 pub(crate) fn flow_asset() -> &'static EncodedAsset {
     &FLOW
 }
@@ -103,7 +108,7 @@ pub(crate) fn runtime_asset() -> &'static EncodedAsset {
 }
 
 /// Report bundle sizes for diagnostics / benchmark pages.
-pub fn asset_sizes() -> [(&'static str, usize, usize, usize); 3] {
+pub fn asset_sizes() -> [(&'static str, usize, usize, usize); 4] {
     [
         (
             "loader.js",
@@ -112,6 +117,12 @@ pub fn asset_sizes() -> [(&'static str, usize, usize, usize); 3] {
             LOADER.brotli.len(),
         ),
         ("core.js", CORE.raw_len, CORE.gzip.len(), CORE.brotli.len()),
+        (
+            "lifecycle.js",
+            LIFECYCLE.raw_len,
+            LIFECYCLE.gzip.len(),
+            LIFECYCLE.brotli.len(),
+        ),
         (
             "runtime.js (legacy)",
             RUNTIME.raw_len,

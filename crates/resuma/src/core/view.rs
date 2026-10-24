@@ -121,6 +121,10 @@ pub struct Island {
     pub chunk_id: String,
     /// Per-instance id (each `<Counter />` on the page gets its own).
     pub instance_id: String,
+    #[serde(default)]
+    pub boundary_id: u32,
+    #[serde(default)]
+    pub has_visible_tasks: bool,
     /// Signal ids belonging to this island. Used by the runtime to wire
     /// reactivity locally.
     pub signal_ids: Vec<SignalId>,
@@ -136,6 +140,10 @@ pub struct Island {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Boundary {
     pub chunk_id: String,
+    #[serde(default)]
+    pub instance_id: u32,
+    #[serde(default)]
+    pub has_visible_tasks: bool,
     pub view: Box<View>,
 }
 
@@ -289,8 +297,18 @@ impl View {
 
     /// Wrap a component view in a resumable boundary (lazy handler chunk).
     pub fn boundary(chunk_id: impl Into<String>, view: View) -> Self {
+        let context = super::context::current_context();
+        let instance_id = context
+            .as_ref()
+            .and_then(|ctx| ctx.current_boundary_id())
+            .unwrap_or_default();
+        let has_visible_tasks = context
+            .as_ref()
+            .is_some_and(|ctx| ctx.boundary_has_visible_tasks(instance_id));
         View::Boundary(Boundary {
             chunk_id: chunk_id.into(),
+            instance_id,
+            has_visible_tasks,
             view: Box::new(view),
         })
     }

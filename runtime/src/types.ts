@@ -7,7 +7,6 @@ import type { SignalCell } from "./signals.js";
 export interface ResumaGlobal {
   state: Record<string, SignalCell<unknown>>;
   signals: Map<string, SignalCell<unknown>>;
-  handlers: Record<string, Record<string, string>>;
   contexts: Record<string, unknown>;
   action: (name: string, args: unknown[]) => Promise<unknown>;
   safeAction: (

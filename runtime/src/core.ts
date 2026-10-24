@@ -5,13 +5,13 @@
 
 import { initSignals, signalId, type SignalCell, bindReactiveText, bindReactiveAttrs, bindShows, bindFor, bindMatch, type RawSignalId } from "./signals.js";
 import { initIslands } from "./islands.js";
-import { initEffects, flushEffectCleanups, type ClientEffectSpec } from "./effects.js";
+import type { ClientEffectSpec } from "./effects.js";
 import { prefetchLazyChunks } from "./boundaries.js";
-import { invalidateLazyChunks, warmHandlerChunks, warmIslandChunks, clearInlineHandlerCache } from "./handler-loader.js";
-import { resolveHandler, type Handler } from "./handler-loader.js";
-import { retargetHandlerEvent } from "./handler-event.js";
+import { invalidateLazyChunks } from "./handler-loader.js";
+import { loadHandlerChunk, resolveHandler, type Handler } from "./handler-loader.js";
+import { isHandlerMountCurrent, retargetHandlerEvent } from "./handler-event.js";
 import { initNavLinks, followRedirect, navigate, buildUrl, invalidate, setPageMounter, updateNavActiveClasses, requestFocus, cancelFocus } from "./navigation.js";
-import { runVisibleTasks, type VisibleTaskEntry } from "./visible-tasks.js";
+import type { VisibleTaskEntry } from "./visible-tasks.js";
 import { flushMountCleanups, registerMountCleanup } from "./mount-cleanups.js";
 import { beginPortalMount, mountStaticPortals } from "./portals.js";
 import { onClientReady, waitClient } from "./client-ready.js";
@@ -88,7 +88,6 @@ export function mountFlowWidgets(scope: ParentNode = document): void {
 
 interface ResumePayload {
   signals: Array<{ id: RawSignalId; value: unknown }>;
-  handlers: Record<string, Record<string, string>>;
   islands: string[];
   actions: string[];
   contexts?: Record<string, unknown>;
@@ -126,7 +125,7 @@ const root = (): HTMLElement => document.getElementById(ROOT_ID) ?? document.bod
 function readPayload(): ResumePayload {
   const node = document.getElementById(STATE_SCRIPT_ID);
   if (!node || !node.textContent) {
-    return { signals: [], handlers: {}, islands: [], actions: [] };
+    return { signals: [], islands: [], actions: [] };
   }
   try {
     const payload = JSON.parse(node.textContent) as ResumePayload;
@@ -138,7 +137,7 @@ function readPayload(): ResumePayload {
     return payload;
   } catch (e) {
     console.error("[r] state", e);
-    return { signals: [], handlers: {}, islands: [], actions: [] };
+    return { signals: [], islands: [], actions: [] };
   }
 }
 
@@ -157,7 +156,6 @@ export function mountPage(): void {
   // Tear down the previous mount's effect subscriptions, debounce timers, and
   // viewport observers before re-initializing against fresh signal cells.
   cancelFocus();
-  flushEffectCleanups();
   flushMountCleanups();
   beginPortalMount();
 
@@ -215,12 +213,9 @@ export function mountPage(): void {
       islandLoaded,
     );
   }
-  clearInlineHandlerCache();
-
   const __resuma: ResumaGlobal = {
     state,
     signals,
-    handlers: payload.handlers,
     contexts: payload.contexts ?? {},
     loaded,
     islandLoaded,
@@ -294,9 +289,6 @@ export function mountPage(): void {
     runHandler,
   };
   window.__resuma = __resuma;
-  if (handlerChunks.size) warmHandlerChunks(handlerChunks);
-  if (islandChunks.size) warmIslandChunks(islandChunks);
-
   bindReactiveText(scope, signals);
   bindReactiveAttrs(scope, signals);
   bindShows(scope, signals);
@@ -308,9 +300,35 @@ export function mountPage(): void {
   initViewTransitions(scope);
   void maybeInitFlowWidgets(scope);
   void maybeInitUi(scope);
-  runVisibleTasks(payload.visible_tasks ?? {}, signals, state, root);
-  initEffects(payload.effects ?? [], signals, __resuma);
+  void mountLifecycle(payload, signals, state, root, __resuma);
   prefetchLazyChunks(payload.lazy_chunks ?? [], scope);
+}
+
+async function mountLifecycle(
+  payload: ResumePayload,
+  signals: Map<string, SignalCell<unknown>>,
+  state: Record<string, SignalCell<unknown>>,
+  rootEl: () => HTMLElement,
+  global: ResumaGlobal,
+): Promise<void> {
+  const tasks = payload.visible_tasks ?? {};
+  const effects = payload.effects ?? [];
+  if (!effects.length && !Object.keys(tasks).length) return;
+  try {
+    const url: string = `/_resuma/lifecycle.js?v=${__RESUMA_VERSION__}`;
+    const lifecycle = (await import(url)) as typeof import("./lifecycle.js");
+    if (window.__resuma !== global) return;
+    const loadHandler = loadHandlerChunk;
+    const registerCleanup = registerMountCleanup;
+    if (Object.keys(tasks).length) {
+      lifecycle.runVisibleTasks(tasks, signals, state, rootEl, global, loadHandler, registerCleanup);
+    }
+    if (effects.length) {
+      await lifecycle.initEffects(effects, signals, global, loadHandler, registerCleanup);
+    }
+  } catch (err) {
+    if (window.__resuma === global) console.error("[r] lifecycle load", err);
+  }
 }
 
 /** Initialize signals, DOM bindings, and progressive enhancements. */
@@ -330,8 +348,10 @@ export async function bootstrap(): Promise<void> {
   connectDevBridge();
 }
 
-export function buildLocalState(captures: string[]): Record<string, SignalCell<unknown>> {
-  const r = window.__resuma!;
+export function buildLocalState(
+  captures: string[],
+  r: ResumaGlobal = window.__resuma!,
+): Record<string, SignalCell<unknown>> {
   if (!captures.length) return r.state;
   const local: Record<string, SignalCell<unknown>> = {};
   for (const pair of captures) {
@@ -353,10 +373,13 @@ export async function runHandler(
   captures: string[],
   handlerEl?: EventTarget | null,
 ): Promise<void> {
+  const runtime = window.__resuma;
+  if (!runtime) return;
   const fn: Handler = await resolveHandler(ref, inline);
-  const localState = buildLocalState(captures);
+  if (!isHandlerMountCurrent(runtime, window.__resuma, handlerEl)) return;
+  const localState = buildLocalState(captures, runtime);
   const event = retargetHandlerEvent(ev, handlerEl);
-  await fn(event, localState, window.__resuma!);
+  await fn(event, localState, runtime);
 }
 
 function setFormPending(form: HTMLFormElement, pending: boolean): void {

@@ -16,13 +16,11 @@ export type Handler = (
 
 export type ChunkKind = "handler" | "island";
 
-const inlineCache = new Map<string, Handler>();
 const inFlight = new Map<string, Promise<Record<string, Function>>>();
 /** Bumped on SPA navigation so stale in-flight imports cannot repopulate caches. */
 let loadGeneration = 0;
 
 type ResumaChunkState = {
-  handlers: Record<string, Record<string, string>>;
   loaded: Map<string, Record<string, Function>>;
   islandLoaded: Map<string, Record<string, Function>>;
   chunkDigests: Record<string, string>;
@@ -34,11 +32,6 @@ function resumaChunks(): ResumaChunkState {
 
 function moduleKey(kind: ChunkKind, chunk: string): string {
   return `${kind}:${chunk}`;
-}
-
-function loadedMap(kind: ChunkKind): Map<string, Record<string, Function>> {
-  const r = resumaChunks();
-  return kind === "handler" ? r.loaded : r.islandLoaded;
 }
 
 function chunkUrl(kind: ChunkKind, chunk: string, rev?: string): string {
@@ -107,7 +100,11 @@ async function loadChunkModule(
       Record<string, Function>
     >;
     inFlight.set(flightKey, pending);
-    void pending.finally(() => inFlight.delete(flightKey));
+    const request = pending;
+    const clearRequest = () => {
+      if (inFlight.get(flightKey) === request) inFlight.delete(flightKey);
+    };
+    void request.then(clearRequest, clearRequest);
   }
   const mod = await pending;
   if (generation !== loadGeneration) {
@@ -130,52 +127,18 @@ export function prefetchHandlerChunk(chunk: string): void {
   });
 }
 
-/** Cache-bust handler chunks after SPA navigation (merged symbols on the server). */
-export function warmHandlerChunks(chunks: Iterable<string>): void {
-  for (const chunk of chunks) {
-    if (!chunk) continue;
-    void loadChunkModule("handler", chunk, true).catch(() => {
-      /* first click will retry */
-    });
-  }
-}
-
-export function warmIslandChunks(chunks: Iterable<string>): void {
-  for (const chunk of chunks) {
-    if (!chunk) continue;
-    void loadChunkModule("island", chunk, true).catch(() => {
-      /* resume may load on first visibility instead */
-    });
-  }
-}
-
-export function clearInlineHandlerCache(): void {
-  inlineCache.clear();
-}
-
 export async function loadIslandModule(chunk: string): Promise<Record<string, Function>> {
   return loadChunkModule("island", chunk);
 }
 
-export async function resolveHandler(ref: string, inline: string | null): Promise<Handler> {
-  if (inline) {
-    let h = inlineCache.get(inline);
-    if (!h) {
-      h = compileInline(inline);
-      inlineCache.set(inline, h);
-    }
-    return h;
-  }
+export async function loadHandlerChunk(chunk: string): Promise<Record<string, Function>> {
+  return loadChunkModule("handler", chunk);
+}
 
+export async function resolveHandler(ref: string, _inline: string | null): Promise<Handler> {
   const hash = ref.indexOf("#");
   const chunk = hash === -1 ? ref : ref.slice(0, hash);
   const symbol = hash === -1 ? ref : ref.slice(hash + 1);
-  const r = resumaChunks();
-
-  if (chunk === "__page__") {
-    const src = r.handlers[chunk]?.[symbol];
-    if (src) return compileInline(src);
-  }
 
   let mod = await loadChunkModule("handler", chunk);
   let fn = mod[symbol] as Handler | undefined;
@@ -184,19 +147,6 @@ export async function resolveHandler(ref: string, inline: string | null): Promis
     mod = await loadChunkModule("handler", chunk, true);
     fn = mod[symbol] as Handler | undefined;
   }
-  if (!fn) throw new Error(`handler ${symbol} missing in ${chunk}`);
+  if (typeof fn !== "function") throw new Error(`handler ${symbol} missing in ${chunk}`);
   return fn;
-}
-
-function compileInline(src: string): Handler {
-  const trimmed = src.trim();
-  const looksLikeFn =
-    trimmed.startsWith("(") || trimmed.startsWith("function") || trimmed.startsWith("async");
-  const body = looksLikeFn
-    ? `return (${src});`
-    : `return (async (event, state, __resuma) => { ${src} });`;
-
-  const factory = new Function(body);
-  const fn = factory();
-  return fn as Handler;
 }

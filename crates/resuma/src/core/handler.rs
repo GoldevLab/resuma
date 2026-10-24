@@ -29,9 +29,8 @@ pub struct HandlerRef {
     /// Signals captured by the handler. The runtime turns these into a
     /// `state` proxy keyed by the Rust identifier.
     pub captures: Vec<HandlerCapture>,
-    /// Inline JS source (pre-built). When present the runtime may evaluate
-    /// the handler immediately without a network round-trip — used for tiny
-    /// handlers like `count.update(|c| c + 1)`.
+    /// Deprecated compatibility field. Resuma never emits or evaluates inline
+    /// handler source; handlers load from same-origin ESM chunks.
     pub inline: Option<String>,
 }
 

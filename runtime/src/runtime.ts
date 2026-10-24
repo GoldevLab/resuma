@@ -21,12 +21,12 @@
 
 import { initSignals, signalId, type SignalCell, bindReactiveText, bindReactiveAttrs, bindShows, bindFor, bindMatch, type RawSignalId } from "./signals.js";
 import { initIslands } from "./islands.js";
-import { initEffects, flushEffectCleanups, type ClientEffectSpec } from "./effects.js";
-import { resolveHandler } from "./handler-loader.js";
-import { withHandlerCurrentTarget } from "./handler-event.js";
+import { initEffects, type ClientEffectSpec } from "./effects.js";
+import { loadHandlerChunk, resolveHandler } from "./handler-loader.js";
+import { isHandlerMountCurrent, retargetHandlerEvent } from "./handler-event.js";
 import { followRedirect, initNavLinks, setPageMounter, navigate, buildUrl, invalidate } from "./navigation.js";
 import { runVisibleTasks, type VisibleTaskEntry } from "./visible-tasks.js";
-import { flushMountCleanups } from "./mount-cleanups.js";
+import { flushMountCleanups, registerMountCleanup } from "./mount-cleanups.js";
 import { beginPortalMount, mountStaticPortals } from "./portals.js";
 import { onClientReady, waitClient } from "./client-ready.js";
 import type { ResumaGlobal } from "./types.js";
@@ -34,7 +34,6 @@ import "./types.js";
 
 interface ResumePayload {
   signals: Array<{ id: RawSignalId; value: unknown }>;
-  handlers: Record<string, Record<string, string>>;
   islands: string[];
   actions: string[];
   contexts?: Record<string, unknown>;
@@ -49,12 +48,21 @@ const ROOT_ID = "resuma-root";
 const HANDLER_PREFIX = "data-r-on:";
 const CAPTURES_PREFIX = "data-r-cap:";
 const INLINE_PREFIX = "data-r-inline:";
+type LegacyUiModule = {
+  showPopup(id: string): boolean;
+  hidePopup(id: string): void;
+  showModal(id: string): boolean;
+  hideModal(id: string): void;
+  dismissAll(): void;
+};
+const legacyUiUrl: string = "/_resuma/ui.js";
+const loadLegacyUi = () => import(legacyUiUrl) as Promise<LegacyUiModule>;
 
 const root = (): HTMLElement => document.getElementById(ROOT_ID) ?? document.body;
 
 function readPayload(): ResumePayload {
   const node = document.getElementById(STATE_SCRIPT_ID);
-  if (!node || !node.textContent) return { signals: [], handlers: {}, islands: [], actions: [] };
+  if (!node || !node.textContent) return { signals: [], islands: [], actions: [] };
   try {
     const payload = JSON.parse(node.textContent) as ResumePayload;
     if (payload.serialization_error) {
@@ -65,7 +73,7 @@ function readPayload(): ResumePayload {
     return payload;
   } catch (e) {
     console.error("[resuma] failed to parse state payload", e);
-    return { signals: [], handlers: {}, islands: [], actions: [] };
+    return { signals: [], islands: [], actions: [] };
   }
 }
 
@@ -90,7 +98,6 @@ function bootstrap(): void {
 }
 
 function mountCurrentPage(): void {
-  flushEffectCleanups();
   flushMountCleanups();
   beginPortalMount();
   const payload = readPayload();
@@ -103,7 +110,6 @@ function mountCurrentPage(): void {
   const __resuma: ResumaGlobal = {
     state,
     signals,
-    handlers: payload.handlers,
     contexts: payload.contexts ?? {},
     loaded: prev?.loaded ?? new Map(),
     islandLoaded: prev?.islandLoaded ?? new Map(),
@@ -117,6 +123,49 @@ function mountCurrentPage(): void {
     invalidate,
     waitClient,
     onClientReady,
+    announce: (message) => {
+      const node = document.getElementById("r-live");
+      if (node) node.textContent = message;
+    },
+    measure: (target) => {
+      const el = typeof target === "string" ? document.querySelector(target) : target;
+      if (!(el instanceof Element)) return null;
+      const rect = el.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    },
+    storage: {
+      get: (key) => {
+        try { return localStorage.getItem(key); } catch { return null; }
+      },
+      set: (key, value) => {
+        try { localStorage.setItem(key, value); } catch { /* private mode */ }
+      },
+      remove: (key) => {
+        try { localStorage.removeItem(key); } catch { /* private mode */ }
+      },
+    },
+    online: () => navigator.onLine,
+    presence: () => ({ idle: document.hidden, hidden: document.hidden }),
+    isNavigatingWithKeyboard: () => document.documentElement.dataset.rNav === "keyboard",
+    contentSizeMultiplier: () => parseFloat(getComputedStyle(document.documentElement).fontSize) / 16 || 1,
+    focus: (target) => {
+      const el = typeof target === "function" ? target() : target;
+      if (el instanceof HTMLElement) el.focus();
+    },
+    onCleanup: registerMountCleanup,
+    showPopup: async (id) => (await loadLegacyUi()).showPopup(id),
+    hidePopup: (id) => { void loadLegacyUi().then((ui) => ui.hidePopup(id)); },
+    showModal: async (id) => (await loadLegacyUi()).showModal(id),
+    hideModal: (id) => { void loadLegacyUi().then((ui) => ui.hideModal(id)); },
+    dismissAll: () => { void loadLegacyUi().then((ui) => ui.dismissAll()); },
+    runHandler: async (ref, inline, event, captures, handlerEl) => {
+      const fn = await resolveHandler(ref, inline);
+      await fn(
+        retargetHandlerEvent(event, handlerEl),
+        buildLocalState(captures),
+        window.__resuma!,
+      );
+    },
   };
   window.__resuma = __resuma;
 
@@ -129,8 +178,18 @@ function mountCurrentPage(): void {
   applyStreamSlots(root());
   mountStaticPortals(root());
   initViewTransitions(root());
-  if (payload.effects?.length) initEffects(payload.effects, signals, __resuma);
-  runVisibleTasks(payload.visible_tasks ?? {}, signals, state, root);
+  runVisibleTasks(
+    payload.visible_tasks ?? {},
+    signals,
+    state,
+    root,
+    __resuma,
+    loadHandlerChunk,
+    registerMountCleanup,
+  );
+  if (payload.effects?.length) {
+    void initEffects(payload.effects, signals, __resuma, loadHandlerChunk, registerMountCleanup);
+  }
 }
 
 /* ------------------------------------------------------------------- */
@@ -173,6 +232,8 @@ async function dispatchEvent(ev: Event): Promise<void> {
 
     const ref = target.getAttribute(attr);
     if (ref) {
+      const actions = window.__resuma;
+      if (!actions) return;
       const captures = (target.getAttribute(capAttr) ?? "")
         .split(",")
         .map((s) => s.trim())
@@ -180,9 +241,9 @@ async function dispatchEvent(ev: Event): Promise<void> {
       const inline = target.getAttribute(inlineAttr);
       try {
         const fn = await resolveHandler(ref, inline);
-        const localState = buildLocalState(captures);
-        const actions = window.__resuma!;
-        await fn(withHandlerCurrentTarget(ev, target), localState, actions);
+        if (!isHandlerMountCurrent(actions, window.__resuma, target)) return;
+        const localState = buildLocalState(captures, actions);
+        await fn(retargetHandlerEvent(ev, target), localState, actions);
       } catch (err) {
         console.error("[resuma] handler error", err);
       }
@@ -192,10 +253,12 @@ async function dispatchEvent(ev: Event): Promise<void> {
   }
 }
 
-function buildLocalState(captures: string[]): Record<string, SignalCell<unknown>> {
+function buildLocalState(
+  captures: string[],
+  r: ResumaGlobal = window.__resuma!,
+): Record<string, SignalCell<unknown>> {
   // Each capture is a `name:id` pair — name is the Rust identifier, id is
   // the stable signal id allocated by the SSR pass.
-  const r = window.__resuma!;
   if (!captures.length) return r.state;
   const local: Record<string, SignalCell<unknown>> = {};
   for (const pair of captures) {

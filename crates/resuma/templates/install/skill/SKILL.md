@@ -457,7 +457,7 @@ RESUMA_ENV=development
 ```bash
 cargo test --workspace
 cargo clippy --workspace -- -D warnings   # if CI expects it
-cd runtime && npm run build && cp dist/loader.js dist/core.js dist/flow.js dist/runtime.js dist/ui.js dist/ui.css ../crates/resuma/assets/
+cd runtime && npm run build && cp dist/loader.js dist/core.js dist/lifecycle.js dist/flow.js dist/runtime.js dist/ui.js dist/ui.css ../crates/resuma/assets/
 npm run e2e
 ```
 
@@ -507,7 +507,7 @@ npm run e2e
 | `resuma install skill --target all` | Cursor global + agents |
 | `resuma doctor` | Toolchain health |
 
-Build runtime assets: `cd runtime && npm run build` then copy `loader.js`, `core.js`, `flow.js`, `runtime.js`, `ui.js`, `ui.css` into `crates/resuma/assets/`.
+Build runtime assets: `cd runtime && npm run build` then copy `loader.js`, `core.js`, `lifecycle.js`, `flow.js`, `runtime.js`, `ui.js`, `ui.css` into `crates/resuma/assets/`.
 
 ---
 

@@ -24,15 +24,54 @@ pub fn island_chunk_module(symbols: &BTreeMap<String, String>) -> String {
     out
 }
 
+pub fn effect_chunk_module(payload: &ResumePayload) -> String {
+    let mut out = String::new();
+    for effect in &payload.effects {
+        append_lifecycle_export(&mut out, &effect.symbol, &effect.body);
+    }
+    out
+}
+
+pub fn visible_task_chunk_module(payload: &ResumePayload) -> String {
+    let mut out = String::new();
+    for task in payload.visible_tasks.values() {
+        append_lifecycle_export(&mut out, &task.symbol, &task.body);
+    }
+    out
+}
+
 const ISLAND_STUB: &str = "export function resume(_props, _signals, _root) {}\n";
 
 fn handler_export(symbol: &str, source: &str) -> String {
+    source_export(symbol, source, "event, state, __resuma")
+}
+
+fn lifecycle_export(symbol: &str, source: &str) -> String {
+    source_export(symbol, source, "state, __resuma")
+}
+
+fn source_export(symbol: &str, source: &str, params: &str) -> String {
+    if !is_valid_export_name(symbol) {
+        return String::new();
+    }
     let body = source.trim();
     if is_function_expression(body) {
         format!("export const {symbol} = {body};\n")
     } else {
-        format!("export function {symbol}(event, state, __resuma) {{ {body} }}\n")
+        format!("export function {symbol}({params}) {{ {body} }}\n")
     }
+}
+
+fn append_lifecycle_export(module: &mut String, symbol: &str, source: &str) {
+    if !module_has_symbol(module, symbol) {
+        module.push_str(&lifecycle_export(symbol, source));
+    }
+}
+
+fn is_valid_export_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    matches!(chars.next(), Some(c) if c == '_' || c == '$' || c.is_ascii_alphabetic())
+        && chars.all(|c| c == '_' || c == '$' || c.is_ascii_alphanumeric())
 }
 
 fn is_function_expression(source: &str) -> bool {
@@ -84,6 +123,27 @@ pub fn merge_payload_handlers(
         }
     }
 
+    if payload
+        .lazy_chunks
+        .iter()
+        .any(|chunk| chunk == "__effects__")
+    {
+        let module = handlers.entry("__effects__".into()).or_default();
+        for effect in &payload.effects {
+            append_lifecycle_export(module, &effect.symbol, &effect.body);
+        }
+    }
+    if payload
+        .lazy_chunks
+        .iter()
+        .any(|chunk| chunk == "__visible_tasks__")
+    {
+        let module = handlers.entry("__visible_tasks__".into()).or_default();
+        for task in payload.visible_tasks.values() {
+            append_lifecycle_export(module, &task.symbol, &task.body);
+        }
+    }
+
     let mut islands = island_chunks.write();
     for island in &payload.islands {
         if islands.contains_key(island) {
@@ -95,5 +155,17 @@ pub fn merge_payload_handlers(
             .map(island_chunk_module)
             .unwrap_or_else(|| ISLAND_STUB.to_string());
         islands.insert(island.clone(), module);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::handler_chunk_module;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn rejects_export_names_that_could_escape_module_syntax() {
+        let symbols = BTreeMap::from([("bad;alert(1)".into(), "return;".into())]);
+        assert!(handler_chunk_module(&symbols).is_empty());
     }
 }

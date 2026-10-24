@@ -13,14 +13,15 @@
   "scripts": {
     "build:loader": "esbuild src/loader.ts --bundle --format=esm --target=es2020 --minify --define:__RESUMA_VERSION__=\\\"$npm_package_version\\\" --outfile=dist/loader.js",
     "build:core": "esbuild src/core.ts --bundle --format=esm --target=es2020 --minify --external:/_resuma/* --define:__RESUMA_VERSION__=\\\"$npm_package_version\\\" --outfile=dist/core.js",
+    "build:lifecycle": "esbuild src/lifecycle.ts --bundle --format=esm --target=es2020 --minify --outfile=dist/lifecycle.js",
     "build:flow": "esbuild src/flow.ts --bundle --format=esm --target=es2020 --minify --outfile=dist/flow.js",
     "build:ui": "esbuild src/ui.ts --bundle --format=esm --target=es2020 --minify --external:/_resuma/* --define:__RESUMA_VERSION__=\\\"$npm_package_version\\\" --outfile=dist/ui.js && cp src/ui.css dist/ui.css",
     "build:legacy": "esbuild src/runtime.ts --bundle --format=esm --target=es2020 --minify --sourcemap --external:/_resuma/* --define:__RESUMA_VERSION__=\\\"$npm_package_version\\\" --outfile=dist/runtime.js",
-    "build": "npm run build:loader && npm run build:core && npm run build:flow && npm run build:ui && npm run build:legacy",
+    "build": "npm run build:loader && npm run build:core && npm run build:lifecycle && npm run build:flow && npm run build:ui && npm run build:legacy",
     "build:dev": "esbuild src/loader.ts --bundle --format=esm --target=es2020 --sourcemap --define:__RESUMA_VERSION__=\\\"$npm_package_version\\\" --outfile=dist/loader.dev.js",
     "watch": "esbuild src/loader.ts --bundle --format=esm --target=es2020 --sourcemap --define:__RESUMA_VERSION__=\\\"$npm_package_version\\\" --watch --outfile=dist/loader.dev.js",
     "size": "node scripts/measure.mjs",
-    "test": "node --experimental-strip-types scripts/test-handler-event.ts"
+    "test": "node scripts/test-runtime.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

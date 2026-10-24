@@ -62,6 +62,7 @@ Resuma ships with **secure defaults** comparable to Express + Helmet + rate limi
 | `RESUMA_CSP_DEV` | off | With `RESUMA_DEV=1`, CSP is off unless you set this to `1` (Qwik-style dev skip) |
 | `RESUMA_CSP_REPORT_ONLY` | off | Emit `Content-Security-Policy-Report-Only` |
 | `RESUMA_CSP_STRICT_DYNAMIC` | on | `'strict-dynamic'` on `script-src` when a nonce is present |
+| `RESUMA_CSP_UNSAFE_EVAL` | off | Opt in to `'unsafe-eval'` only for custom client code that requires it |
 | `RESUMA_CSP_WEBGPU` | off | Add `worker-src 'self' blob:` for WebGPU widgets |
 | `RESUMA_CSP_WORKER_SRC` | — | Explicit `worker-src` allowlist |
 | `RESUMA_CSP_IMG_SRC` | — | Space/comma-separated extra `img-src` hosts |
@@ -75,7 +76,7 @@ Resuma ships with **secure defaults** comparable to Express + Helmet + rate limi
 
 Each HTML response gets a **cryptographic nonce** (stronger than Qwik’s time-based example). Inline `<style>` / `<script>` in `with_head()` receive the nonce at SSR. Production policy uses:
 
-- `script-src 'self' 'nonce-…' 'strict-dynamic' 'unsafe-eval'` — resumability needs `'unsafe-eval'`; no blanket `'unsafe-inline'` on scripts
+- `script-src 'self' 'nonce-…' 'strict-dynamic'` — resumability loads same-origin ESM chunks; no `'unsafe-eval'` or blanket `'unsafe-inline'` on scripts
 - `style-src` with nonce + `'unsafe-inline'` for `style=""` attributes
 - `img-src 'self' data: blob:` plus `RESUMA_CSP_IMG_SRC`
 

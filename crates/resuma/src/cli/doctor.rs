@@ -13,6 +13,7 @@ use super::update::{
 // Keep in sync with `runtime/scripts/measure.mjs` and `docs/STABILITY.md`.
 const LOADER_GZIP_BUDGET: usize = 1100;
 const CORE_GZIP_BUDGET: usize = 10000;
+const LIFECYCLE_GZIP_BUDGET: usize = 2048;
 
 pub fn doctor_command() -> Result<()> {
     println!("[resuma] doctor\n");
@@ -190,18 +191,20 @@ fn check_runtime_bundle_sizes() {
     let dist = runtime_dist_dir();
     let loader = dist.join("loader.js");
     let core = dist.join("core.js");
+    let lifecycle = dist.join("lifecycle.js");
 
-    if !loader.exists() || !core.exists() {
+    if !loader.exists() || !core.exists() || !lifecycle.exists() {
         println!(
             "  runtime bundles: not built — run `npm run build` in runtime/ (or `resuma dev`)"
         );
         return;
     }
 
-    match (gzip_len(&loader), gzip_len(&core)) {
-        (Ok(loader_gz), Ok(core_gz)) => {
+    match (gzip_len(&loader), gzip_len(&core), gzip_len(&lifecycle)) {
+        (Ok(loader_gz), Ok(core_gz), Ok(lifecycle_gz)) => {
             let loader_ok = loader_gz <= LOADER_GZIP_BUDGET;
             let core_ok = core_gz <= CORE_GZIP_BUDGET;
+            let lifecycle_ok = lifecycle_gz <= LIFECYCLE_GZIP_BUDGET;
             println!(
                 "  runtime loader.js: {} gzip (budget {} B){}",
                 fmt_bytes(loader_gz),
@@ -213,6 +216,12 @@ fn check_runtime_bundle_sizes() {
                 fmt_bytes(core_gz),
                 CORE_GZIP_BUDGET,
                 if core_ok { "" } else { " — OVER BUDGET" }
+            );
+            println!(
+                "  runtime lifecycle.js: {} gzip (budget {} B){}",
+                fmt_bytes(lifecycle_gz),
+                LIFECYCLE_GZIP_BUDGET,
+                if lifecycle_ok { "" } else { " — OVER BUDGET" }
             );
         }
         _ => println!("  runtime bundles: could not measure gzip sizes"),

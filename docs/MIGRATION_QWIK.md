@@ -14,7 +14,7 @@ Qwik and Resuma share the same goal: **serialize server state and resume interac
 | `routeAction$` | `#[submit]` or `#[server]` |
 | Qwik City pages | Flow `src/pages/` + `FlowApp` |
 | `useLocation` | `current_request()` / `current_location_href()` |
-| Resumability core | `/_resuma/loader.js` + `core.js` |
+| Resumability runtime | `/_resuma/loader.js` + `core.js`; optional `lifecycle.js` for effects and visible tasks |
 
 ## Templates
 

@@ -29,11 +29,13 @@ use tracing::info;
 
 use super::actions::dispatch as dispatch_action;
 use super::compressed_asset::{
-    self, core_asset, flow_asset, loader_asset, runtime_asset, serve_js, ui_asset,
+    self, core_asset, flow_asset, lifecycle_asset, loader_asset, runtime_asset, serve_js, ui_asset,
 };
 use super::deferred_stream::try_deferred_stream;
 use super::page_cache::take_response_cache_control;
-use super::runtime_asset::{CORE_JS, FLOW_CSS, FLOW_JS, LOADER_JS, RUNTIME_JS, UI_CSS, UI_JS};
+use super::runtime_asset::{
+    CORE_JS, FLOW_CSS, FLOW_JS, LIFECYCLE_JS, LOADER_JS, RUNTIME_JS, UI_CSS, UI_JS,
+};
 use super::security::{
     self, client_ip_from_parts, csrf_set_cookie, guard_mutation, http_status, request_is_https,
     resolve_page_csp_nonce, resolve_page_csrf, validate_config, CspNonce, SecurityConfig,
@@ -338,6 +340,7 @@ impl ResumaApp {
         let mut router = router
             .route("/_resuma/loader.js", get(serve_loader))
             .route("/_resuma/core.js", get(serve_core))
+            .route("/_resuma/lifecycle.js", get(serve_lifecycle))
             .route("/_resuma/flow.js", get(serve_flow))
             .route("/_resuma/flow.css", get(serve_flow_css))
             .route("/_resuma/ui.js", get(serve_ui))
@@ -665,6 +668,10 @@ async fn serve_loader(headers: HeaderMap) -> Response {
 
 async fn serve_core(headers: HeaderMap) -> Response {
     serve_js(&headers, core_asset(), CORE_JS)
+}
+
+async fn serve_lifecycle(headers: HeaderMap) -> Response {
+    serve_js(&headers, lifecycle_asset(), LIFECYCLE_JS)
 }
 
 async fn serve_flow(headers: HeaderMap) -> Response {

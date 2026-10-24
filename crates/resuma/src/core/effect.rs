@@ -14,7 +14,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use serde::Serialize;
 
-use super::context::{current_context, ClientEffectSpec};
+use super::context::{ClientEffectSpec, client_module_symbol, current_context};
 use super::signal::{Signal, SignalId};
 
 fn merge_capture_deps(deps: &mut Vec<SignalId>, captures: &BTreeMap<String, SignalId>) {
@@ -93,6 +93,7 @@ pub fn attach_client_effect(
     debounce_ms: Option<u64>,
 ) {
     if let Some(ctx) = current_context() {
+        let body = body.into();
         let mut deps = ctx.take_effect_deps(effect.id.0);
         merge_capture_deps(&mut deps, &captures);
         ctx.register_client_effect(ClientEffectSpec {
@@ -100,7 +101,8 @@ pub fn attach_client_effect(
             deps,
             captures,
             kind: kind.to_string(),
-            body: body.into(),
+            symbol: client_module_symbol("effect", &body),
+            body,
             target,
             debounce_ms,
         });
@@ -120,6 +122,7 @@ pub fn register_client_effect(
         .unwrap_or_else(fallback_effect_id);
 
     if let Some(ctx) = current_context() {
+        let body = body.into();
         let mut deps = ctx.take_effect_deps(id.0);
         merge_capture_deps(&mut deps, &captures);
         ctx.register_client_effect(ClientEffectSpec {
@@ -127,7 +130,8 @@ pub fn register_client_effect(
             deps,
             captures,
             kind: kind.to_string(),
-            body: body.into(),
+            symbol: client_module_symbol("effect", &body),
+            body,
             target,
             debounce_ms,
         });
@@ -262,6 +266,7 @@ where
             deps,
             captures,
             kind: "computed".into(),
+            symbol: client_module_symbol("effect", &body),
             body,
             target: Some(target),
             debounce_ms: None,
