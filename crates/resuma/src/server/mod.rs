@@ -56,9 +56,11 @@ pub use ops::{
 };
 pub use page_cache::{
     page_canonical_override, page_csp_nonce, page_csrf, page_description_override,
-    page_dir_override, page_json_ld_override, page_robots_override, page_theme_override,
-    page_title_override, sanitize_cache_for_session, set_page_canonical, set_page_description,
-    set_page_dir, set_page_json_ld, set_page_robots, set_page_theme, set_page_title,
+    page_dir_override, page_head_extra, page_json_ld_override, page_lang_override,
+    page_robots_override, page_theme_override, page_title_override, response_robots_header,
+    sanitize_cache_for_session, set_page_canonical, set_page_description, set_page_dir,
+    set_page_head_extra, set_page_json_ld, set_page_lang, set_page_robots, set_page_theme,
+    set_page_title,
     stage_page_csp_nonce, stage_page_csrf, stage_response_cache_control, stage_response_redirect,
     stage_response_status, take_response_cache_control,
 };

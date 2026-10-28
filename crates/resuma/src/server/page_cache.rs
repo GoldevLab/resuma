@@ -25,6 +25,8 @@ struct PageStaging {
     json_ld: Option<String>,
     dir: Option<String>,
     theme: Option<String>,
+    lang: Option<String>,
+    head_extra: Option<String>,
 }
 
 tokio::task_local! {
@@ -194,6 +196,64 @@ pub fn page_theme_override() -> Option<String> {
     with_staging(|s| s.theme.clone())
 }
 
+/// Override `<html lang>` for this SSR response (BCP 47, e.g. `es`).
+pub fn set_page_lang(lang: impl Into<String>) {
+    let lang = lang.into();
+    with_staging(|s| s.lang = Some(lang));
+}
+
+/// Staged document language, if the page set one.
+pub fn page_lang_override() -> Option<String> {
+    with_staging(|s| s.lang.clone())
+}
+
+/// Append trusted HTML inside `<head>` for this response (hreflang, etc.).
+///
+/// Drops the value if it looks like a script or a head breakout.
+pub fn set_page_head_extra(html: impl Into<String>) {
+    let html = html.into();
+    let lower = html.to_ascii_lowercase();
+    if html.len() > 2000
+        || lower.contains("<script")
+        || lower.contains("</head")
+        || lower.contains("<iframe")
+        || lower.contains("<style")
+    {
+        return;
+    }
+    with_staging(|s| s.head_extra = Some(html));
+}
+
+/// Staged extra head HTML, if the page set one.
+pub fn page_head_extra() -> Option<String> {
+    with_staging(|s| s.head_extra.clone())
+}
+
+/// `X-Robots-Tag` value. Matches the HTML robots meta, including `noindex` on 200s.
+pub fn response_robots_header(status_is_ok: bool) -> String {
+    let staged = page_robots_override().filter(|s| !s.is_empty());
+    let raw = if status_is_ok {
+        staged.unwrap_or_else(|| "index, follow, max-image-preview:large".to_string())
+    } else {
+        "noindex".to_string()
+    };
+    if robots_header_safe(&raw) {
+        raw
+    } else if raw.to_ascii_lowercase().contains("noindex") {
+        "noindex, follow".to_string()
+    } else {
+        "noindex".to_string()
+    }
+}
+
+fn robots_header_safe(raw: &str) -> bool {
+    !raw.is_empty()
+        && raw.len() <= 120
+        && raw.bytes().all(|b| {
+            b.is_ascii_alphanumeric() || matches!(b, b',' | b' ' | b':' | b'-' | b'_')
+        })
+}
+
 /// Stage the CSRF token for forms rendered during this page pass.
 pub fn stage_page_csrf(token: impl Into<String>) {
     let token = token.into();
@@ -235,6 +295,45 @@ mod tests {
         // Consumed — a second take (e.g. a following request reusing the
         // same fallback thread-local slot) must not see a stale redirect.
         assert_eq!(take_response_redirect(), None);
+    }
+
+    #[test]
+    fn robots_header_matches_noindex_on_an_ok_page() {
+        clear_request_staging();
+        set_page_robots("noindex, follow");
+        assert_eq!(response_robots_header(true), "noindex, follow");
+        clear_request_staging();
+    }
+
+    #[test]
+    fn robots_header_forces_noindex_when_status_is_not_ok() {
+        clear_request_staging();
+        set_page_robots("index, follow");
+        assert_eq!(response_robots_header(false), "noindex");
+        clear_request_staging();
+    }
+
+    #[test]
+    fn robots_header_default_allows_large_image_preview() {
+        clear_request_staging();
+        assert_eq!(
+            response_robots_header(true),
+            "index, follow, max-image-preview:large"
+        );
+        clear_request_staging();
+    }
+
+    #[test]
+    fn robots_header_matches_page_noindex_on_200() {
+        clear_request_staging();
+        assert_eq!(
+            response_robots_header(true),
+            "index, follow, max-image-preview:large"
+        );
+        set_page_robots("noindex, follow");
+        assert_eq!(response_robots_header(true), "noindex, follow");
+        assert_eq!(response_robots_header(false), "noindex");
+        clear_request_staging();
     }
 
     #[test]

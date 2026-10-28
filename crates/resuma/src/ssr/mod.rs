@@ -276,11 +276,8 @@ fn wrap_document(
     payload: &ResumePayload,
     path: &str,
 ) -> String {
-    let lang = if opts.lang.is_empty() {
-        "en"
-    } else {
-        &opts.lang
-    };
+    let lang = document_lang(opts);
+    let head_extra = crate::server::page_cache::page_head_extra().unwrap_or_default();
     let dir_attr = document_dir_attr(opts);
     let theme_attr = document_theme_attr(opts);
     let theme_boot = html_theme_boot(opts);
@@ -309,6 +306,7 @@ fn wrap_document(
 {theme_boot}<meta name="description" content="{description}" />
 <title>{title}</title>
 {json_ld}{seo_tags}
+{head_extra}
 {stylesheet}
 {ui_css}
 {core_preload}
@@ -321,7 +319,8 @@ fn wrap_document(
 {dev_script}
 </body>
 </html>"#,
-        lang = escape_attr(lang),
+        lang = escape_attr(&lang),
+        head_extra = head_extra,
         dir_attr = dir_attr,
         theme_attr = theme_attr,
         theme_boot = theme_boot,
@@ -338,6 +337,17 @@ fn wrap_document(
         scripts = scripts,
         dev_script = dev_script,
     )
+}
+
+pub(crate) fn document_lang(opts: &PageOptions) -> String {
+    let lang = crate::server::page_cache::page_lang_override()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| opts.lang.clone());
+    if lang.is_empty() {
+        "en".into()
+    } else {
+        lang
+    }
 }
 
 pub(crate) fn document_dir_attr(opts: &PageOptions) -> String {
@@ -876,6 +886,23 @@ mod document_escape_tests {
             html.contains("&quot;"),
             "description must be attribute-escaped: {html}"
         );
+        crate::server::page_cache::clear_request_staging();
+    }
+
+    #[test]
+    fn page_lang_override_sets_html_lang() {
+        crate::server::page_cache::clear_request_staging();
+        crate::server::page_cache::set_page_lang("es");
+        let html = render_to_string(
+            &PageOptions {
+                title: "App".into(),
+                lang: "en".into(),
+                ..Default::default()
+            },
+            || View::text("ok"),
+        );
+        assert!(html.contains(r#"<html lang="es""#), "{html}");
+        assert!(!html.contains(r#"<html lang="en""#), "{html}");
         crate::server::page_cache::clear_request_staging();
     }
 

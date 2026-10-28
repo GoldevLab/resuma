@@ -70,6 +70,25 @@ fn robots_content() -> String {
         .unwrap_or_else(|| "index, follow, max-image-preview:large".into())
 }
 
+fn og_locale(opts: &PageOptions) -> String {
+    let lang = crate::server::page_cache::page_lang_override()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| opts.lang.clone());
+    let primary = lang
+        .split(['-', '_'])
+        .next()
+        .unwrap_or("en")
+        .to_ascii_lowercase();
+    match primary.as_str() {
+        "es" => "es_ES".into(),
+        "en" | "" => "en_US".into(),
+        other if other.len() == 2 && other.bytes().all(|b| b.is_ascii_alphabetic()) => {
+            format!("{other}_{}", other.to_ascii_uppercase())
+        }
+        _ => "en_US".into(),
+    }
+}
+
 fn robots_noindex(robots: &str) -> bool {
     robots
         .split(',')
@@ -156,6 +175,7 @@ pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
             let image_type = og_image_type(&og_image);
             // Social cards describe *this* app's image, never the framework.
             let og_image_alt = format!("{title} — {}", site_name(opts));
+            let locale = og_locale(opts);
 
             out.push_str(&format!(
                 r#"
@@ -163,7 +183,7 @@ pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
 <link rel="apple-touch-icon" href="/favicon.svg" />
 <meta property="og:type" content="{og_type}" />
 <meta property="og:site_name" content="{site}" />
-<meta property="og:locale" content="en_US" />
+<meta property="og:locale" content="{locale}" />
 <meta property="og:title" content="{title}" />
 <meta property="og:description" content="{description}" />
 <meta property="og:url" content="{canonical}" />
@@ -178,6 +198,7 @@ pub fn seo_head_tags(opts: &PageOptions, path: &str) -> String {
 <meta name="twitter:image" content="{og_image}" />
 <meta name="twitter:image:alt" content="{og_image_alt}" />"#,
                 og_type = escape_attr(og_type),
+                locale = escape_attr(&locale),
                 site = escape_attr(site_name(opts)),
                 title = escape_attr(&title),
                 description = escape_attr(&description),

@@ -501,12 +501,11 @@ fn render_page_response(
             .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
         return attach_page_security(res, &opts, https, set_csrf_cookie);
     }
-    // Error / non-200 pages must not be advertised as indexable.
-    let robots_tag = if status_code == StatusCode::OK {
-        "index, follow"
-    } else {
-        "noindex"
-    };
+    // Match the HTML robots meta. A 200 with `noindex` must not also send
+    // `X-Robots-Tag: index, follow`.
+    let robots_tag = super::page_cache::response_robots_header(status_code == StatusCode::OK);
+    let robots_header = HeaderValue::from_str(&robots_tag)
+        .unwrap_or_else(|_| HeaderValue::from_static("noindex"));
     if state.streaming {
         use axum::body::Body;
         use futures_util::StreamExt;
@@ -545,7 +544,7 @@ fn render_page_response(
             builder = builder.header(header::CACHE_CONTROL, cache.as_str());
         }
         let res = match builder
-            .header("x-robots-tag", robots_tag)
+            .header("x-robots-tag", robots_header.clone())
             .body(Body::from_stream(stream))
         {
             Ok(res) => res,
@@ -575,7 +574,7 @@ fn render_page_response(
         }
         res.headers_mut().insert(
             header::HeaderName::from_static("x-robots-tag"),
-            HeaderValue::from_static(robots_tag),
+            robots_header,
         );
         attach_page_security(res, &opts, https, set_csrf_cookie)
     }

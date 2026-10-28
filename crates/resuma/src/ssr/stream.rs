@@ -13,11 +13,8 @@ use crate::{render_view, PageOptions};
 
 /// Head + open body sent before streamed content.
 pub fn stream_head(opts: &PageOptions, path: &str) -> String {
-    let lang = if opts.lang.is_empty() {
-        "en"
-    } else {
-        &opts.lang
-    };
+    let lang = super::document_lang(opts);
+    let head_extra = crate::server::page_cache::page_head_extra().unwrap_or_default();
     let dir_attr = super::document_dir_attr(opts);
     let theme_attr = super::document_theme_attr(opts);
     let theme_boot = super::html_theme_boot(opts);
@@ -42,13 +39,15 @@ pub fn stream_head(opts: &PageOptions, path: &str) -> String {
 {theme_boot}<meta name="description" content="{description}" />
 <title>{title}</title>
 {json_ld}{seo_tags}
+{head_extra}
 {stylesheet}
 <link rel="stylesheet" href="{ui_css}" />
 {head}
 </head>
 <body>
 <div id="resuma-root">"#,
-        lang = escape_attr(lang),
+        lang = escape_attr(&lang),
+        head_extra = head_extra,
         dir_attr = dir_attr,
         theme_attr = theme_attr,
         theme_boot = theme_boot,

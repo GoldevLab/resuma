@@ -99,7 +99,8 @@ pub use crate::core::{
 pub use crate::server::{
     build_content_security_policy, configure_security, register_server_action,
     set_action_middleware, set_page_canonical, set_page_description, set_page_dir,
-    set_page_json_ld, set_page_robots, set_page_theme, set_page_title, stage_response_redirect,
+    set_page_head_extra, set_page_json_ld, set_page_lang, set_page_robots, set_page_theme,
+    set_page_title, stage_response_redirect,
     stage_response_status, CspConfig, ResumaApp, SecurityConfig, ServeOptions, CSRF_FIELD,
     CSRF_HEADER,
 };
@@ -175,7 +176,8 @@ pub mod prelude {
         popup, popup_anchor, portal, provide_context, provide_theme, push_slots, query_nav_link,
         redirect, redirect_with_flash, render_to_string, render_view, resolve_slot, server,
         set_action_middleware, set_cookie, set_page_canonical, set_page_description, set_page_dir,
-        set_page_json_ld, set_page_robots, set_page_theme, set_page_title, show, signal,
+        set_page_head_extra, set_page_json_ld, set_page_lang, set_page_robots, set_page_theme,
+        set_page_title, show, signal,
         stage_response_redirect, stage_response_status, stream_slot, submit, theme_css_vars,
         theme_switch, try_use_context, try_use_load, try_use_load_value, upload, use_computed,
         use_computed_with_js, use_context, use_debounce, use_effect, use_load, use_signal,
