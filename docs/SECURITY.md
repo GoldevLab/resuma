@@ -24,7 +24,7 @@ Resuma ships with **secure defaults** comparable to Express + Helmet + rate limi
 | `RESUMA_ADDR` | `127.0.0.1:3000` | Bind address (`host:port`) |
 | `HOST` / `PORT` | `127.0.0.1` / `3000` | Used when `RESUMA_ADDR` is unset |
 | `RESUMA_ENV=production` | off | Sanitized errors, hide benchmark endpoint |
-| `RESUMA_TRUST_PROXY=1` | off | Trust Fly/nginx `X-Forwarded-*` for HTTPS + client IP (only behind a proxy that overwrites forwarding headers) |
+| `RESUMA_TRUST_PROXY=1` | off | Trust `Fly-Client-IP`, then `X-Forwarded-For` / `X-Real-IP`, only when the TCP peer is inside `RESUMA_TRUSTED_PROXY_CIDRS`. Fly appends to `X-Forwarded-For`; `Fly-Client-IP` is the hop a client cannot spoof. |
 | `RESUMA_CSRF=0` | on | Disable CSRF (not recommended) |
 | `RESUMA_ORIGIN_CHECK=0` | on | Disable Origin/Referer validation |
 | `RESUMA_BODY_LIMIT` | `10485760` (10 MiB) | Max POST body bytes (actions + multipart) |

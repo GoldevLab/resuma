@@ -466,38 +466,62 @@ pub fn request_is_https<B>(req: &Request<B>) -> bool {
 
 /// Best-effort client IP for rate limiting.
 ///
-/// When `RESUMA_TRUST_PROXY=1`, the first `X-Forwarded-For` hop is trusted.
-/// Only enable this behind a reverse proxy that **overwrites** (not appends to)
-/// forwarding headers, or clients can spoof IPs to evade rate limits.
+/// When `RESUMA_TRUST_PROXY=1` and the TCP peer is inside
+/// `RESUMA_TRUSTED_PROXY_CIDRS`, forwarding headers are trusted in this order:
+///
+/// 1. `Fly-Client-IP`, which Fly's edge overwrites. A client cannot spoof it
+///    on the way through Fly. Fly **appends** to `X-Forwarded-For`, so the
+///    first hop is the one a client can invent.
+/// 2. The first `X-Forwarded-For` hop, for proxies that overwrite that header.
+/// 3. `X-Real-IP`.
+///
+/// Headers from a peer outside the trusted CIDRs are ignored.
 pub fn client_ip<B>(req: &Request<B>) -> String {
     client_ip_from_parts(req.headers(), connect_addr(req))
 }
 
 pub fn client_ip_from_parts(headers: &HeaderMap, connect: Option<SocketAddr>) -> String {
     let cfg = config();
-    // Trusting forwarding headers is only safe when the direct peer is a proxy
-    // we control (one that overwrites, not appends to, X-Forwarded-For). When
-    // `RESUMA_TRUSTED_PROXY_CIDRS` is set (comma/space-separated CIDRs, e.g.
-    // "10.0.0.0/8, fdaa::/16"), forwarding headers are only honored if the
-    // connecting socket address falls inside one of those ranges.
-    if cfg.trust_proxy && peer_is_trusted_proxy(connect) {
+    client_ip_with_trust(
+        headers,
+        connect,
+        cfg.trust_proxy,
+        TRUSTED_PROXY_CIDRS.as_slice(),
+    )
+}
+
+fn client_ip_with_trust(
+    headers: &HeaderMap,
+    connect: Option<SocketAddr>,
+    trust_proxy: bool,
+    trusted: &[(IpAddr, u8)],
+) -> String {
+    if trust_proxy && peer_in_cidrs(connect, trusted) {
+        if let Some(fly) = header_ip(headers, "fly-client-ip") {
+            return fly;
+        }
         if let Some(xff) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
             if let Some(first) = xff.split(',').next() {
                 let ip = first.trim();
-                if !ip.is_empty() {
+                if ip.parse::<IpAddr>().is_ok() {
                     return ip.to_string();
                 }
             }
         }
-        if let Some(xri) = headers.get("x-real-ip").and_then(|v| v.to_str().ok()) {
-            if !xri.is_empty() {
-                return xri.to_string();
-            }
+        if let Some(xri) = header_ip(headers, "x-real-ip") {
+            return xri;
         }
     }
     connect
         .map(|a| a.ip().to_string())
         .unwrap_or_else(|| "unknown".to_string())
+}
+
+/// A header value that is exactly one IP address. Garbage and comma-lists are rejected.
+fn header_ip(headers: &HeaderMap, name: &str) -> Option<String> {
+    let raw = headers.get(name)?.to_str().ok()?.trim();
+    raw.parse::<IpAddr>().ok()?;
+    Some(raw.to_string())
 }
 
 fn connect_addr<B>(req: &Request<B>) -> Option<SocketAddr> {
@@ -564,16 +588,16 @@ fn ip_in_cidr(ip: IpAddr, network: IpAddr, prefix: u8) -> bool {
     }
 }
 
-/// Only honor `X-Forwarded-For` when the direct TCP peer is a trusted proxy.
-fn peer_is_trusted_proxy(connect: Option<SocketAddr>) -> bool {
+/// Only honor forwarding headers when the direct TCP peer is a trusted proxy.
+fn peer_in_cidrs(connect: Option<SocketAddr>, trusted: &[(IpAddr, u8)]) -> bool {
     let Some(addr) = connect else {
         return false;
     };
-    let ip = addr.ip();
-    if TRUSTED_PROXY_CIDRS.is_empty() {
+    if trusted.is_empty() {
         return false;
     }
-    TRUSTED_PROXY_CIDRS
+    let ip = addr.ip();
+    trusted
         .iter()
         .any(|(net, prefix)| ip_in_cidr(ip, *net, *prefix))
 }
@@ -1238,6 +1262,45 @@ mod tests {
                 "{directive} lacks AdSense origin: {line}"
             );
         }
+    }
+
+    #[test]
+    fn fly_client_ip_wins_over_spoofed_forwarded_for() {
+        let trusted = vec![("fdaa::".parse().unwrap(), 16)];
+        let peer: SocketAddr = "[fdaa:0:0:0:1::2]:443".parse().unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert("fly-client-ip", "203.0.113.9".parse().unwrap());
+        headers.insert("x-forwarded-for", "1.2.3.4".parse().unwrap());
+        assert_eq!(
+            client_ip_with_trust(&headers, Some(peer), true, &trusted),
+            "203.0.113.9"
+        );
+    }
+
+    #[test]
+    fn garbage_fly_client_ip_falls_through_to_forwarded_for() {
+        let trusted = vec![("fdaa::".parse().unwrap(), 16)];
+        let peer: SocketAddr = "[fdaa:0:0:0:1::2]:443".parse().unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert("fly-client-ip", "not-an-ip".parse().unwrap());
+        headers.insert("x-forwarded-for", "203.0.113.8, 10.0.0.1".parse().unwrap());
+        assert_eq!(
+            client_ip_with_trust(&headers, Some(peer), true, &trusted),
+            "203.0.113.8"
+        );
+    }
+
+    #[test]
+    fn untrusted_peer_cannot_supply_fly_client_ip() {
+        let trusted = vec![("fdaa::".parse().unwrap(), 16)];
+        let peer: SocketAddr = "203.0.113.50:50000".parse().unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert("fly-client-ip", "198.51.100.7".parse().unwrap());
+        headers.insert("x-forwarded-for", "198.51.100.8".parse().unwrap());
+        assert_eq!(
+            client_ip_with_trust(&headers, Some(peer), true, &trusted),
+            "203.0.113.50"
+        );
     }
 
     #[test]
