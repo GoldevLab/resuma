@@ -6,6 +6,31 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-26
+
+### Added
+
+- **i18n for Flow apps:** `resuma::flow::i18n` (`I18n`, `LocaleScope`, `Messages`). Resolves the
+  locale from the URL prefix (`/en/...`), `?lang=`, or `Accept-Language`; looks up message
+  catalogs with `{name}` placeholders and default-locale fallback; builds localized paths and
+  `hreflang` alternates (with `x-default`). `LocaleScope::apply_page_meta` sets `<html lang>`
+  and the alternates for the response.
+- **Per-page document language:** `set_page_lang("es")` sets `<html lang>` for one response
+  (previously only the app-wide `SeoKit` locale).
+- **Per-page head markup:** `set_page_head_extra(html)` appends trusted markup to `<head>` for
+  one response, used for `hreflang` alternates. Rejects scripts, styles, iframes and head
+  breakouts.
+
+### Fixed
+
+- The `X-Robots-Tag` header follows each page's `set_page_robots` value, so `noindex` pages no
+  longer send `index`.
+
+### Security
+
+- Client IP resolution prefers `Fly-Client-IP` when the connection comes from a trusted proxy.
+  Fly appends to `X-Forwarded-For`, so the first hop could be spoofed.
+
 ## [2.0.1] - 2026-10-24
 
 ### Security

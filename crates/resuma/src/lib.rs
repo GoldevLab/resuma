@@ -118,7 +118,8 @@ pub use crate::flow::{
     register_layout, register_loader, register_loader_cache, register_middleware,
     register_stream_chunk, register_stream_loader, register_submit, set_cookie,
     set_current_request, theme_into_pwa, try_use_load, try_use_load_value, use_load, with_request,
-    CookieOptions, DiscoveredPage, FlowApp, FlowError, FlowExtensions, FlowPageRegistry,
+    CookieOptions, DiscoveredPage, FlowApp, FlowError, FlowExtensions, FlowPageRegistry, I18n,
+    LocaleScope, Messages,
     FlowPwaConfig, FlowServeOptions, FromFlowRequest, LoadValue, LoaderError, Path, PublicAsset,
     PwaShortcut, Query, Redirect, SameSite, SubmitError, SubmitValue,
 };
@@ -165,6 +166,7 @@ pub mod prelude {
     //!
     //! For low-level types ([`RenderContext`](crate::RenderContext), [`ResumePayload`](crate::ResumePayload)),
     //! import from [`crate::core`].
+    pub use crate::flow::{I18n, LocaleScope};
     pub use super::{
         build_query_href, clear_cookie, client_component, client_script_url, combine_js, component,
         computed, configure_security, cookie_value, current_request, data, debounce, effect,
