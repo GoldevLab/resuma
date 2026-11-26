@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-11-26
+
+### Fixed
+
+- The sitemap no longer lists `/` when it is in `with_sitemap_exclude`. Previously the root was
+  always added back, which put redirect-only roots (such as a language redirect) in the sitemap.
+
 ## [2.1.0] - 2026-11-26
 
 ### Added

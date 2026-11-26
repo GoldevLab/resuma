@@ -311,7 +311,10 @@ fn sitemap_xml(seo: &FlowSeoConfig) -> String {
         })
         .cloned()
         .collect();
-    if !paths.iter().any(|p| p == "/") {
+    // The root is listed by default, but an explicit exclusion must win
+    // (e.g. a `/` that only redirects to a localized home).
+    let root_excluded = seo.sitemap_exclude.iter().any(|skip| skip == "/");
+    if !root_excluded && !paths.iter().any(|p| p == "/") {
         paths.push("/".into());
     }
     paths.sort();
@@ -410,6 +413,18 @@ mod tests {
         assert!(xml.contains("https://example.com/docs</loc>"));
         assert!(!xml.contains("/docs/search"));
         assert!(!xml.contains("/docs/:slug"));
+    }
+
+    #[test]
+    fn sitemap_respects_root_exclusion() {
+        let xml = sitemap_xml(&FlowSeoConfig {
+            site_url: "https://example.com".into(),
+            paths: vec!["/".into(), "/es".into()],
+            sitemap_exclude: vec!["/".into()],
+            ..Default::default()
+        });
+        assert!(!xml.contains("https://example.com/</loc>"));
+        assert!(xml.contains("https://example.com/es</loc>"));
     }
 
     #[test]

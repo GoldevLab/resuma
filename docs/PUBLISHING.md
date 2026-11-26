@@ -1,6 +1,6 @@
 # Publishing to crates.io
 
-**Current release:** resuma / resuma-macros / resuma-flow **2.1.0** · [docs.rs/resuma](https://docs.rs/resuma)
+**Current release:** resuma / resuma-macros / resuma-flow **2.1.1** · [docs.rs/resuma](https://docs.rs/resuma)
 
 Resuma ships as **three crates** (Rust requires proc-macros in a separate crate; Flow UI widgets are optional):
 

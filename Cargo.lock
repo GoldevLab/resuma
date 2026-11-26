@@ -554,7 +554,7 @@ dependencies = [
 
 [[package]]
 name = "example-counter"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "resuma",
  "tokio",
@@ -562,7 +562,7 @@ dependencies = [
 
 [[package]]
 name = "example-e2e"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "resuma",
  "resuma-flow",
@@ -573,7 +573,7 @@ dependencies = [
 
 [[package]]
 name = "example-flow-demo"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "resuma",
  "serde",
@@ -582,7 +582,7 @@ dependencies = [
 
 [[package]]
 name = "example-flow-pages"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "resuma",
  "serde",
@@ -591,7 +591,7 @@ dependencies = [
 
 [[package]]
 name = "example-resuma-audit"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "anyhow",
  "resuma",
@@ -603,7 +603,7 @@ dependencies = [
 
 [[package]]
 name = "example-todo"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "once_cell",
  "parking_lot",
@@ -1538,7 +1538,7 @@ dependencies = [
 
 [[package]]
 name = "resuma"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1573,7 +1573,7 @@ dependencies = [
 
 [[package]]
 name = "resuma-flow"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "resuma",
  "serde",
@@ -1582,7 +1582,7 @@ dependencies = [
 
 [[package]]
 name = "resuma-macros"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "proc-macro2",
  "quote",
