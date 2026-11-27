@@ -100,12 +100,13 @@ pub use crate::server::{
     build_content_security_policy, configure_security, register_server_action,
     set_action_middleware, set_page_canonical, set_page_description, set_page_dir,
     set_page_head_extra, set_page_json_ld, set_page_lang, set_page_robots, set_page_theme,
-    set_page_title, stage_response_redirect,
-    stage_response_status, CspConfig, ResumaApp, SecurityConfig, ServeOptions, CSRF_FIELD,
-    CSRF_HEADER,
+    set_page_title, stage_response_redirect, stage_response_status, CspConfig, ResumaApp,
+    SecurityConfig, ServeOptions, CSRF_FIELD, CSRF_HEADER,
 };
 
-pub use crate::ssr::seo_kit::{AiCrawlerPolicy, MetaTag, SeoKit};
+pub use crate::ssr::seo_kit::{
+    AiCrawlerPolicy, MetaTag, SeoKit, AI_SEARCH_AGENTS, AI_TRAINING_AGENTS,
+};
 pub use crate::ssr::third_party::{deferred_external_script, deferred_module_loader, security_txt};
 pub use crate::ssr::{render_to_stream, render_to_string, render_view, PageOptions};
 
@@ -118,10 +119,9 @@ pub use crate::flow::{
     register_layout, register_loader, register_loader_cache, register_middleware,
     register_stream_chunk, register_stream_loader, register_submit, set_cookie,
     set_current_request, theme_into_pwa, try_use_load, try_use_load_value, use_load, with_request,
-    CookieOptions, DiscoveredPage, FlowApp, FlowError, FlowExtensions, FlowPageRegistry, I18n,
-    LocaleScope, Messages,
-    FlowPwaConfig, FlowServeOptions, FromFlowRequest, LoadValue, LoaderError, Path, PublicAsset,
-    PwaShortcut, Query, Redirect, SameSite, SubmitError, SubmitValue,
+    CookieOptions, DiscoveredPage, FlowApp, FlowError, FlowExtensions, FlowPageRegistry,
+    FlowPwaConfig, FlowServeOptions, FromFlowRequest, I18n, LoadValue, LoaderError, LocaleScope,
+    Messages, Path, PublicAsset, PwaShortcut, Query, Redirect, SameSite, SubmitError, SubmitValue,
 };
 
 pub use crate::realtime::{
@@ -166,7 +166,6 @@ pub mod prelude {
     //!
     //! For low-level types ([`RenderContext`](crate::RenderContext), [`ResumePayload`](crate::ResumePayload)),
     //! import from [`crate::core`].
-    pub use crate::flow::{I18n, LocaleScope};
     pub use super::{
         build_query_href, clear_cookie, client_component, client_script_url, combine_js, component,
         computed, configure_security, cookie_value, current_request, data, debounce, effect,
@@ -179,20 +178,20 @@ pub mod prelude {
         redirect, redirect_with_flash, render_to_string, render_view, resolve_slot, server,
         set_action_middleware, set_cookie, set_page_canonical, set_page_description, set_page_dir,
         set_page_head_extra, set_page_json_ld, set_page_lang, set_page_robots, set_page_theme,
-        set_page_title, show, signal,
-        stage_response_redirect, stage_response_status, stream_slot, submit, theme_css_vars,
-        theme_switch, try_use_context, try_use_load, try_use_load_value, upload, use_computed,
-        use_computed_with_js, use_context, use_debounce, use_effect, use_load, use_signal,
-        use_store, use_task, use_theme, use_visible_task, use_visible_task_with_captures, view,
-        visible_task, with_view_transition, worker, AttrValue, Child, ClientComponent, Component,
-        Computed, CookieOptions, CspConfig, Effect, FlowApp, FlowError, FlowPageRegistry,
-        FlowPwaConfig, FlowRequest, FlowServeOptions, FromFlowRequest, GestureOpts, HtmlTheme,
-        IntoView, LoadValue, LoaderError, ModalOpts, PageOptions, Path, PopupOpts, PublicAsset,
-        PwaShortcut, Query, ReadSignal, Redirect, Result, ResumaApp, ResumaError, SameSite,
-        SecurityConfig, SeoKit, ServeOptions, Signal, SlottedChild, Store, SubmitError, Theme,
-        View, WriteSignal, CLIENT_SCRIPT_PREFIX, CSRF_FIELD, CSRF_HEADER, OFFICIAL_PALETTE_CSS,
-        OFFICIAL_THEME_DARK, OFFICIAL_THEME_IDS,
+        set_page_title, show, signal, stage_response_redirect, stage_response_status, stream_slot,
+        submit, theme_css_vars, theme_switch, try_use_context, try_use_load, try_use_load_value,
+        upload, use_computed, use_computed_with_js, use_context, use_debounce, use_effect,
+        use_load, use_signal, use_store, use_task, use_theme, use_visible_task,
+        use_visible_task_with_captures, view, visible_task, with_view_transition, worker,
+        AttrValue, Child, ClientComponent, Component, Computed, CookieOptions, CspConfig, Effect,
+        FlowApp, FlowError, FlowPageRegistry, FlowPwaConfig, FlowRequest, FlowServeOptions,
+        FromFlowRequest, GestureOpts, HtmlTheme, IntoView, LoadValue, LoaderError, ModalOpts,
+        PageOptions, Path, PopupOpts, PublicAsset, PwaShortcut, Query, ReadSignal, Redirect,
+        Result, ResumaApp, ResumaError, SameSite, SecurityConfig, SeoKit, ServeOptions, Signal,
+        SlottedChild, Store, SubmitError, Theme, View, WriteSignal, CLIENT_SCRIPT_PREFIX,
+        CSRF_FIELD, CSRF_HEADER, OFFICIAL_PALETTE_CSS, OFFICIAL_THEME_DARK, OFFICIAL_THEME_IDS,
     };
+    pub use crate::flow::{I18n, LocaleScope};
 }
 
 /// Register a client-only visible task with automatic signal capture wiring.

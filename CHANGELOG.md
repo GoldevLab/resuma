@@ -6,6 +6,35 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Custom `/robots.txt` and `/llms.txt`:** `FlowApp::static_asset("/robots.txt", …)` (or
+  `/llms.txt`) now replaces the `SeoKit` route instead of panicking with `Overlapping method
+  route`. Without a kit, the same call replaces Flow's fallback `/robots.txt`.
+- **`SeoKit::with_robots_txt(body)`** serves a full custom `robots.txt`. New `with_disallow`,
+  `with_ai_agent` and `with_blocked_agent` tune the generated file; `AiCrawlerPolicy` gains
+  `extra_allow` and `block`.
+- **`ResumaApp::suppress_seo_kit_routes(robots, llms)`** to skip the kit routes explicitly.
+- **More AI crawlers in the default `robots.txt`:** `ClaudeBot`, `Claude-SearchBot`, `Claude-User`,
+  `Perplexity-User` and `Applebot-Extended` join `GPTBot`, `OAI-SearchBot`, `ChatGPT-User`,
+  `Google-Extended`, `Claude-Web` and `PerplexityBot`. The lists are exported as
+  `AI_SEARCH_AGENTS` and `AI_TRAINING_AGENTS`.
+
+### Changed
+
+- The generated `robots.txt` repeats the `Disallow` paths in every crawler group. A crawler with
+  its own group ignores `*`, so paths such as `/admin` were open to every AI crawler except
+  `GPTBot`.
+- User agents and paths written into `robots.txt` are validated; values with spaces, `*`, `:` or
+  line breaks are dropped so they cannot add directives.
+
+### Fixed
+
+- `static_asset` no longer sends `Cache-Control: immutable` for `/robots.txt`, `/llms.txt`,
+  `/ads.txt`, `/app-ads.txt`, `/humans.txt`, `/sitemap.xml` and `/.well-known/security.txt`. These
+  files change without a new URL, and a year-long immutable cache kept edits from reaching
+  crawlers and CDNs. They now use a 60 second revalidating cache.
+
 ## [2.1.1] - 2026-11-26
 
 ### Fixed

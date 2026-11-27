@@ -19,6 +19,32 @@ pub fn static_cache_control() -> &'static str {
     }
 }
 
+/// Root files that change without a new URL, so they must never be cached as immutable.
+const MUTABLE_ROOT_FILES: &[&str] = &[
+    "/robots.txt",
+    "/llms.txt",
+    "/ads.txt",
+    "/app-ads.txt",
+    "/humans.txt",
+    "/sitemap.xml",
+    "/.well-known/security.txt",
+];
+
+/// Cache-Control for a [`FlowApp::static_asset`](crate::flow::FlowApp::static_asset) at `path`.
+///
+/// Crawler and policy files (`robots.txt`, `llms.txt`, `ads.txt`, `security.txt`, …) get a short
+/// revalidating cache, because edits must reach crawlers and CDNs. Everything else keeps the
+/// long immutable cache, so give those paths a versioned URL.
+pub fn static_asset_cache_control(path: &str) -> &'static str {
+    if crate::server::dev::dev_mode_enabled() {
+        STATIC_DEV_CACHE
+    } else if MUTABLE_ROOT_FILES.contains(&path) {
+        STATIC_SOFT_CACHE
+    } else {
+        STATIC_IMMUTABLE_CACHE
+    }
+}
+
 /// Cache an embedded asset immutably only when its URL carries its current version.
 pub fn versioned_cache_control(uri: &Uri, version: &str) -> &'static str {
     versioned_cache_control_for(uri, version, crate::server::dev::dev_mode_enabled())
@@ -82,6 +108,34 @@ mod tests {
             Some(v) => std::env::set_var("RESUMA_DEV", v),
             None => std::env::remove_var("RESUMA_DEV"),
         }
+    }
+
+    #[test]
+    fn crawler_and_policy_files_are_never_immutable() {
+        if crate::server::dev::dev_mode_enabled() {
+            return;
+        }
+        for path in [
+            "/robots.txt",
+            "/llms.txt",
+            "/ads.txt",
+            "/sitemap.xml",
+            "/.well-known/security.txt",
+        ] {
+            assert_eq!(
+                static_asset_cache_control(path),
+                STATIC_SOFT_CACHE,
+                "{path}"
+            );
+        }
+        assert_eq!(
+            static_asset_cache_control("/static/app.js"),
+            STATIC_IMMUTABLE_CACHE
+        );
+        assert_eq!(
+            static_asset_cache_control("/icon.svg"),
+            STATIC_IMMUTABLE_CACHE
+        );
     }
 
     #[test]

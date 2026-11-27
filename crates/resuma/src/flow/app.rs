@@ -506,6 +506,17 @@ impl FlowApp {
             }
         }
 
+        // A static asset at `/robots.txt` or `/llms.txt` replaces the built-in route
+        // instead of overlapping it (axum panics on duplicate GET routes).
+        let custom_robots = self
+            .static_assets
+            .iter()
+            .any(|(p, _, _)| p == "/robots.txt");
+        let custom_llms = self.static_assets.iter().any(|(p, _, _)| p == "/llms.txt");
+        if custom_robots || custom_llms {
+            app = app.suppress_seo_kit_routes(custom_robots, custom_llms);
+        }
+
         let deferred_streaming = self.streaming;
         let not_found = self.not_found.clone();
         let global_extensions = self.extensions.clone();
@@ -528,8 +539,8 @@ impl FlowApp {
             });
         }
 
-        let skip_robots = self.pages.contains_key("/robots.txt");
-        let skip_llms = self.pages.contains_key("/llms.txt");
+        let skip_robots = custom_robots || self.pages.contains_key("/robots.txt");
+        let skip_llms = custom_llms || self.pages.contains_key("/llms.txt");
         let site_url = std::env::var("SITE_URL")
             .ok()
             .filter(|s| !s.is_empty())
@@ -575,6 +586,7 @@ impl FlowApp {
                     robots: !skip_robots,
                     llms: !skip_llms,
                 },
+                skip_default_robots: skip_robots,
                 sitemap_exclude: self.sitemap_exclude,
             },
         );
@@ -584,10 +596,15 @@ impl FlowApp {
         }
 
         for (path, body, content_type) in self.static_assets {
+            let cache = crate::server::static_assets::static_asset_cache_control(&path);
             router = router.route(
                 &path,
                 get(move || async move {
-                    crate::server::static_assets::static_asset_response(content_type, body)
+                    crate::server::static_assets::static_bytes_response(
+                        content_type,
+                        body.to_vec(),
+                        cache,
+                    )
                 }),
             );
         }

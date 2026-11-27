@@ -40,6 +40,9 @@ pub struct FlowSeoConfig {
     pub seo_kit: Option<SeoKit>,
     /// Which auto SEO kit routes to mount (skip paths already registered as pages).
     pub seo_kit_opts: SeoKitRouteOpts,
+    /// Do not mount the fallback `/robots.txt` used when no [`SeoKit`] is set, because the app
+    /// serves its own (a page or a static asset at that path).
+    pub skip_default_robots: bool,
     /// Static Flow paths omitted from `/sitemap.xml` (aliases, search, noindex URLs).
     pub sitemap_exclude: Vec<String>,
 }
@@ -359,7 +362,7 @@ async fn serve_favicon() -> impl IntoResponse {
 pub fn attach_flow_routes(router: Router, seo: FlowSeoConfig) -> Router {
     // `ResumaApp::into_router` already mounts SeoKit `/robots.txt` + `/llms.txt`.
     // Mounting them again panics (`Overlapping method route`).
-    let router = if seo.seo_kit.is_some() {
+    let router = if seo.seo_kit.is_some() || seo.skip_default_robots {
         router
     } else {
         let robots_seo = seo.clone();
@@ -438,6 +441,7 @@ mod tests {
                 paths: vec!["/".into()],
                 seo_kit: Some(kit),
                 seo_kit_opts: SeoKitRouteOpts::all(),
+                skip_default_robots: false,
                 sitemap_exclude: vec![],
             },
         );

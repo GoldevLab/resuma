@@ -131,7 +131,9 @@ resuma routes --generate --path src/pages   # → src/pages/_registry.rs
 
 Each page: `pub fn page(req: FlowRequest) -> View` in `src/pages/...` (owned `FlowRequest`, not a reference).
 
-`SeoKit` is in `resuma::prelude`. Kit routes stay on `ResumaApp::into_router`; Flow only adds a fallback `/robots.txt` when **no** kit is set. Do not remount robots yourself.
+`SeoKit` is in `resuma::prelude`. Kit routes stay on `ResumaApp::into_router`; Flow only adds a fallback `/robots.txt` when **no** kit is set. Do not remount robots yourself with `.route(...)`.
+
+To change `/robots.txt`: tune the generated file with `kit.with_disallow(path)`, `with_ai_agent(ua)`, `with_blocked_agent(ua)`; give the whole body with `kit.with_robots_txt(text)`; or serve a file with `FlowApp::static_asset("/robots.txt", bytes, "text/plain; charset=utf-8")` (same for `/llms.txt`). Flow skips its own route for that path. Disallow paths are repeated in every crawler group on purpose.
 
 ---
 
@@ -545,7 +547,7 @@ View::empty()
 | Sitemap | Discovery | Indexing |
 | `llms.txt` | Assistants / some AI crawlers | Google ranking (Google: neither helps nor harms, 2026-08) |
 
-**GEO crawler split (OpenAI):** `OAI-SearchBot` = ChatGPT Search discovery; `GPTBot` = possible training; `ChatGPT-User` = user-triggered fetch (robots may not apply the same way). Do not treat one directive as a switch for all three.
+**GEO crawler split (OpenAI):** `OAI-SearchBot` = ChatGPT Search discovery; `GPTBot` = possible training; `ChatGPT-User` = user-triggered fetch (robots may not apply the same way). Do not treat one directive as a switch for all three. Anthropic splits the same way: `ClaudeBot` = possible training, `Claude-SearchBot` = search quality, `Claude-User` = user-triggered fetch.
 
 **AEO:** one H1, a lead paragraph that answers before the first code sample, FAQ as H2+paragraph in SSR HTML. Do not hide the answer behind a client-only fetch.
 

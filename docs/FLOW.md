@@ -124,6 +124,33 @@ or `#[upload]`. Env knobs and auth for these routes are documented in
 
 Flow serves `/robots.txt` and `/sitemap.xml`. Configure via `FlowSeoConfig`.
 
+With `with_seo_kit`, `/robots.txt` is generated from the kit: a `*` group, one group per AI crawler
+(`GPTBot`, `OAI-SearchBot`, `ChatGPT-User`, `ClaudeBot`, `Claude-SearchBot`, `Claude-User`,
+`PerplexityBot`, `Perplexity-User`, `Google-Extended`, `Applebot-Extended`), and the sitemap line.
+Paths added with `with_disallow` are repeated in every group, because a crawler with its own group
+ignores the `*` group.
+
+Adjust the generated file, or replace it:
+
+```rust
+let kit = SeoKit::new("My App", "https://example.com")
+    .with_disallow("/admin")              // closed to every crawler group
+    .with_ai_agent("MistralAI-User")      // one more allowed AI agent
+    .with_blocked_agent("CCBot");         // Disallow: / for this agent
+
+// Own text for the whole file (you also write the Sitemap line):
+let kit = kit.with_robots_txt("User-agent: *\nDisallow: /private\n");
+
+// Or serve your own file from the app. Flow skips its route for that path:
+FlowApp::new()
+    .with_seo_kit(kit)
+    .static_asset("/robots.txt", ROBOTS_TXT.as_bytes(), "text/plain; charset=utf-8");
+```
+
+`static_asset` works the same for `/llms.txt`. `robots.txt`, `llms.txt`, `ads.txt`, `sitemap.xml`
+and `security.txt` are sent with a short revalidating `Cache-Control`; other static assets stay
+immutable, so give them a versioned URL.
+
 ## HTTP endpoints (Flow)
 
 | Method | Path | Handler |

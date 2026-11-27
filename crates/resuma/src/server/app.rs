@@ -62,6 +62,10 @@ pub struct ResumaApp {
     /// Paths that suppress the built-in `/health` / `/ready` probes so an app
     /// can mount its own axum handler (e.g. DB readiness) via [`FlowApp::route`].
     skip_default_ops: std::collections::HashSet<String>,
+    /// Skip the `SeoKit` `/robots.txt` route because the app serves its own.
+    skip_robots_route: bool,
+    /// Skip the `SeoKit` `/llms.txt` route because the app serves its own.
+    skip_llms_route: bool,
 }
 
 type PageFactory = dyn Fn(FlowRequest) -> View + Send + Sync;
@@ -107,6 +111,8 @@ impl ResumaApp {
             streaming: false,
             fallback: None,
             skip_default_ops: std::collections::HashSet::new(),
+            skip_robots_route: false,
+            skip_llms_route: false,
         }
     }
 
@@ -190,6 +196,15 @@ impl ResumaApp {
     /// [`crate::FlowApp::route`] handler can take its place without overlapping.
     pub fn suppress_default_ops(mut self, path: impl Into<String>) -> Self {
         self.skip_default_ops.insert(path.into());
+        self
+    }
+
+    /// Skip the `SeoKit` routes for `/robots.txt` and/or `/llms.txt` so the app can serve its
+    /// own at that path (for example with [`crate::FlowApp::static_asset`]) without
+    /// overlapping. Registering a page at the same path has the same effect.
+    pub fn suppress_seo_kit_routes(mut self, robots: bool, llms: bool) -> Self {
+        self.skip_robots_route |= robots;
+        self.skip_llms_route |= llms;
         self
     }
 
@@ -299,8 +314,8 @@ impl ResumaApp {
 
     pub fn into_router(self) -> Router {
         let seo_kit = self.page_options.seo_kit.clone();
-        let skip_robots = self.page_factories.contains_key("/robots.txt");
-        let skip_llms = self.page_factories.contains_key("/llms.txt");
+        let skip_robots = self.skip_robots_route || self.page_factories.contains_key("/robots.txt");
+        let skip_llms = self.skip_llms_route || self.page_factories.contains_key("/llms.txt");
         let security_cfg = security::config();
         let state = Arc::new(AppState {
             pages: self.page_factories,
@@ -504,8 +519,8 @@ fn render_page_response(
     // Match the HTML robots meta. A 200 with `noindex` must not also send
     // `X-Robots-Tag: index, follow`.
     let robots_tag = super::page_cache::response_robots_header(status_code == StatusCode::OK);
-    let robots_header = HeaderValue::from_str(&robots_tag)
-        .unwrap_or_else(|_| HeaderValue::from_static("noindex"));
+    let robots_header =
+        HeaderValue::from_str(&robots_tag).unwrap_or_else(|_| HeaderValue::from_static("noindex"));
     if state.streaming {
         use axum::body::Body;
         use futures_util::StreamExt;
